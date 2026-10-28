@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#26453B">
+<title>이온 신청하기</title>
+<meta name="description" content="이온 크리스천 로테이션 소개팅 참가 신청">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+/* ===== 이온 디자인 토큰 (매칭앱 index.html 과 동일) ===== */
+:root{
+  --green:#26453B; --green-2:#3A5C50; --green-ink:#1A3029;
+  --cream:#F6F1E7; --paper:#FFFDF8; --sand:#EFE7D6;
+  --line:#E9E1CF; --line-2:#E4DCCB; --line-3:#F0EADC;
+  --gold:#D9C8A0; --gold-d:#B08A3E; --gold-t:#7A5C22; --gold-soft:#EAD9A8; --gold-ink:#5A431A;
+  --muted:#5C6B63; --ink-2:#3F5249; --mint:#E3EAE6; --sub:#C9D6CF;
+  --danger:#9B3B2A;
+  --round:'Jua', 'Gowun Dodum', system-ui, sans-serif;
+  --body:'Gowun Dodum', system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--green);font-family:var(--body);-webkit-text-size-adjust:100%}
+button,input,textarea,select{font-family:inherit;font-size:16px;color:inherit}
+button{cursor:pointer}
+a{color:var(--green)}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;padding:20px 22px calc(28px + env(safe-area-inset-bottom))}
+.dark{background:var(--green);color:var(--cream)}
+.round{font-family:var(--round);font-weight:400}
+.brand{font-family:var(--round);font-size:20px;letter-spacing:.12em}
+.eyebrow{font-family:var(--round);font-size:13px;letter-spacing:.1em;color:var(--gold-t)}
+.dark .eyebrow{color:var(--gold)}
+.h1{font-family:var(--round);font-weight:400;font-size:30px;line-height:1.38;margin:0}
+.h2{font-family:var(--round);font-weight:400;font-size:22px;line-height:1.4;margin:0}
+.p{margin:0;font-size:15px;line-height:1.7;color:var(--muted)}
+.dark .p{color:var(--sub)}
+.small{font-size:13px;color:var(--muted);line-height:1.55}
+.dark .small{color:var(--sub)}
+.spacer{flex-grow:1}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:10px}
+.between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top{display:flex;align-items:center;justify-content:space-between;min-height:44px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;background:transparent;border-radius:12px;margin-left:-10px;color:inherit}
+.pill{padding:6px 14px;border:1px solid var(--gold);border-radius:999px;font-size:12px;color:var(--gold);letter-spacing:.04em}
+.pill.on-cream{border-color:var(--gold-d);color:var(--gold-t)}
+.center{text-align:center}
+
+/* 버튼 */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;border:0;border-radius:16px;background:var(--green);color:var(--cream);font-family:var(--round);font-size:17px;text-decoration:none;padding:0 18px}
+.btn:disabled{background:var(--line-2);color:var(--muted);cursor:not-allowed}
+.btn.gold{background:var(--gold);color:var(--green)}
+.btn.line{background:transparent;border:2px solid var(--green);color:var(--green)}
+.btn.soft{background:var(--sand);color:var(--green)}
+.btn:active{transform:translateY(1px)}
+.mini{min-height:34px;padding:0 12px;border:0;border-radius:10px;background:var(--sand);color:var(--green);font-family:var(--round);font-size:13px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+
+/* 입력 */
+.field{display:flex;flex-direction:column;gap:8px}
+.field > label,.field > .lab{font-size:14px;color:var(--ink-2)}
+.req{color:var(--gold-d);margin-left:2px}
+.input{height:54px;padding:0 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--paper);color:var(--green);width:100%}
+textarea.input{height:auto;min-height:110px;padding:14px 16px;line-height:1.6;resize:vertical}
+select.input{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2326453B' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px}
+.input:focus{outline:3px solid var(--gold);outline-offset:1px}
+.err{color:var(--danger);font-size:14px;min-height:20px;line-height:1.5}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+
+/* 선택 칩 */
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{min-height:46px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line-2);background:var(--paper);color:var(--green);font-size:15px}
+.opt.on{background:var(--green);border-color:var(--green);color:var(--cream)}
+.opts.two .opt{flex:1 1 0;font-family:var(--round);font-size:17px;min-height:54px}
+
+/* 타임 카드 */
+.slot{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:14px 16px;border-radius:16px;border:2px solid var(--line);background:var(--paper);color:var(--green);text-align:left}
+.slot .t{font-family:var(--round);font-size:17px}
+.slot .s{font-size:13px;color:var(--muted);margin-top:2px}
+.slot.on{border-color:var(--green);box-shadow:0 8px 20px rgba(38,69,59,.12)}
+.slot:disabled{opacity:.55;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-family:var(--round);font-size:12px;white-space:nowrap}
+.chip.ok{background:var(--mint);color:var(--green)}
+.chip.wait{background:var(--gold-soft);color:var(--gold-ink)}
+.chip.mute{background:var(--sand);color:var(--ink-2)}
+.chip.r1{background:var(--green);color:var(--cream)}
+
+/* 카드 */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:18px}
+.card.hero{background:var(--green-2);color:var(--cream);border:0}
+.notice{display:flex;gap:8px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--sand);font-size:13px;line-height:1.6;color:var(--ink-2)}
+.dark .notice{background:rgba(255,255,255,.07);color:var(--sub)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-3);font-size:14px}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted);flex-shrink:0}
+.kv span:last-child{text-align:right}
+
+/* 진행 표시 */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 4px}
+.steps i{height:6px;border-radius:999px;background:var(--line-2)}
+.steps i.on{background:var(--green)}
+
+/* 동의 */
+.agree{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;background:var(--paper);overflow:hidden}
+.agree-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line-3)}
+.agree-row:last-child{border-bottom:0}
+.agree-row input{width:22px;height:22px;accent-color:var(--green);flex-shrink:0}
+.agree-row label{flex-grow:1;font-size:14px;line-height:1.5}
+.agree-row .more{border:0;background:transparent;color:var(--gold-t);font-size:13px;text-decoration:underline;padding:4px}
+.agree-all{background:var(--sand)}
+.agree-all label{font-family:var(--round);font-size:15px}
+.terms{padding:12px 16px 14px 50px;font-size:13px;line-height:1.7;color:var(--ink-2);background:var(--line-3);white-space:pre-line;border-bottom:1px solid var(--line-3)}
+
+/* 티켓 */
+.ticket{background:var(--paper);border:2px solid var(--line);border-radius:22px;box-shadow:0 10px 30px rgba(38,69,59,.10);text-align:left}
+.ticket .perf{display:flex;align-items:center}
+.ticket .notch{width:14px;height:28px;background:var(--cream);border:2px solid var(--line)}
+.ticket .notch.l{margin-left:-2px;border-radius:0 14px 14px 0;border-left:0}
+.ticket .notch.r{margin-right:-2px;border-radius:14px 0 0 14px;border-right:0}
+.ticket .dash{flex-grow:1;border-top:2px dashed var(--line-2)}
+.ticket .tr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 22px}
+.ticket .tr > .small:first-child{white-space:nowrap;flex-shrink:0}
+.payname{font-family:var(--round);font-size:30px;letter-spacing:.02em;color:var(--green)}
+.check{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:999px;background:var(--green);margin:0 auto}
+.demo{position:sticky;top:0;z-index:5;background:var(--gold-soft);color:var(--gold-ink);font-size:13px;text-align:center;padding:8px 12px}
+.spin{width:28px;height:28px;border:3px solid var(--line-2);border-top-color:var(--green);border-radius:50%;animation:sp 0.8s linear infinite;margin:40vh auto 0}
+@keyframes sp{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--green-ink);color:var(--cream);padding:12px 18px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app"><div class="spin" aria-label="불러오는 중"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+   이온 신청 페이지 (단일 HTML)
+   ▶ API_URL 에 Apps Script 웹 앱 주소(…/exec)를 넣으세요.
+     비워두면 '데모 모드'(이 브라우저에만 저장)로 동작합니다.
+   ===================================================================== */
+const API_URL = '';
+
+/* ---------- 선택지 (네이버폼과 동일하게 맞춰 쓰세요) ---------- */
+const OPT = {
+  region: ['대전 동구', '대전 중구', '대전 서구', '대전 유성구', '대전 대덕구', '세종', '청주', '공주', '기타'],
+  denom: ['장로교', '감리교', '침례교', '성결교', '순복음', '기타'],
+  faithYears: ['모태신앙', '10년 이상', '5~10년', '1~5년', '1년 미만'],
+  attend: ['매주 출석', '격주·가끔 출석', '현재 쉬는 중'],
+  source: ['인스타그램', '지인 소개', '교회 광고', '기타']
+};
+const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 직업, 요청사항
+· 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 참여 후기 요청
+· 보유 기간: 행사 종료 후 6개월 (이후 파기, 다음 기수 소식 수신에 동의한 경우 이름·연락처만 동의 철회 시까지)
+· 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
+const FAITH = `· 수집 항목: 출석교회명, 교회 주소, 교단, 신앙생활 기간, 교회 출석 여부
+· 이용 목적: 크리스천 소개팅 참가 자격 확인 및 타임 배정
+· 보유 기간: 행사 종료 후 6개월
+· 종교 정보는 민감정보로, 일반 개인정보와 별도로 동의를 받습니다. 거부 시 참가 신청이 어렵습니다.`;
+const SHARE = `· 매칭이 성사된 경우에 한해, 상대방에게 이름과 연락처를 카카오톡으로 전달합니다.
+· 매칭되지 않은 분의 연락처는 누구에게도 전달되지 않습니다.`;
+
+/* ---------- 유틸 ---------- */
+const $app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const digits = s => String(s || '').replace(/\D/g, '');
+const fmtPhone = p => { const d = digits(p).slice(0, 11); return d.length > 7 ? `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}` : d.length > 3 ? `${d.slice(0,3)}-${d.slice(3)}` : d; };
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const GENDER = { M: '형제', F: '자매' };
+const DEMO = !API_URL;
+const ICON = {
+  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
+  info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>',
+  check: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D9C8A0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  clock: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D9C8A0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>'
+};
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (_) {} ta.remove(); }
+  toast('복사했어요');
+}
+function fmtDeadline(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); const w = '일월화수목금토'[d.getDay()];
+  return `${d.getMonth() + 1}/${d.getDate()}(${w}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}까지`;
+}
+
+/* ---------- API (데모 모드면 이 브라우저에 저장) ---------- */
+const DEMO_KEY = 'ion_apply_demo';
+function demoDB() {
+  let db = null; try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) {}
+  if (!db) db = { seq: 0, rows: [], conf: { open: true, fee: 40000, account: '토스뱅크 1000-0000-0000 (예금주 이온)', payHours: 24, contact: '인스타그램 @ion_christian (DM)',
+    refund: '· 행사 7일 전까지 취소: 전액 환불\n· 행사 3일 전까지 취소: 50% 환불\n· 그 이후 및 당일 불참: 환불 불가\n· 운영진 사정으로 취소 시 전액 환불' },
+    slots: [
+      { id: '3-1', cohort: '3기', date: '11/14(토)', time: '15:00~17:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } },
+      { id: '3-2', cohort: '3기', date: '11/14(토)', time: '17:00~19:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } },
+      { id: '4-1', cohort: '4기', date: '11/28(토)', time: '15:00~17:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 } },
+      { id: '4-2', cohort: '4기', date: '11/28(토)', time: '17:00~19:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 } }] };
+  return db;
+}
+function demoSave(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) {} }
+function demoHeld(db, slotId, g) { return db.rows.filter(r => r['슬롯ID'] === slotId && r['성별'] === GENDER[g] && ['입금대기', '확정'].includes(r['상태'])).length; }
+async function api(method, payload) {
+  if (DEMO) {
+    await new Promise(r => setTimeout(r, 400));
+    const db = demoDB();
+    if (method === 'GET') return { ok: true, open: db.conf.open, fee: db.conf.fee, refund: db.conf.refund, contact: db.conf.contact, payHours: db.conf.payHours,
+      slots: db.slots.map(s => ({ ...s, left: { M: Math.max(0, s.cap.M - demoHeld(db, s.id, 'M')), F: Math.max(0, s.cap.F - demoHeld(db, s.id, 'F')) } })) };
+    const d = payload.data; const s = db.slots.find(x => x.id === d.slotId);
+    if (db.rows.some(r => r['기수'] === s.cohort && digits(r['연락처']) === digits(d.phone) && ['입금대기', '확정', '대기'].includes(r['상태'])))
+      return { ok: false, error: `이 연락처로 이미 ${s.cohort} 신청이 되어 있어요.` };
+    const status = demoHeld(db, s.id, d.gender) < s.cap[d.gender] ? '입금대기' : '대기';
+    const seq = ++db.seq; const id = 'ION-' + String(seq).padStart(4, '0');
+    const payName = d.name.replace(/\s/g, '').slice(0, 4) + String(seq % 1000).padStart(3, '0');
+    const deadline = status === '입금대기' ? new Date(Date.now() + db.conf.payHours * 3600e3).toISOString() : '';
+    const waitNo = status === '대기' ? db.rows.filter(r => r['슬롯ID'] === s.id && r['성별'] === GENDER[d.gender] && r['상태'] === '대기').length + 1 : 0;
+    db.rows.push({ '신청번호': id, '신청일시': new Date().toISOString(), '상태': status, '기수': s.cohort, '행사일': s.date, '타임': s.time, '슬롯ID': s.id,
+      '성별': GENDER[d.gender], '이름': d.name, '출생연도': d.birthYear, '연락처': fmtPhone(d.phone), '거주지역': d.region, '직업': d.job,
+      '출석교회명': d.church, '교회주소': d.churchAddr, '교단': d.denom, '신앙생활기간': d.faithYears, '교회출석여부': d.attend, '유입경로': d.source,
+      '요청사항': d.note, '입금자명': status === '입금대기' ? payName : '', '입금기한': deadline, '확정일시': '', '수신동의': d.newsAgree, '발송기록': '', '메모': '' });
+    demoSave(db);
+    return { ok: true, id, status, payName: status === '입금대기' ? payName : '', waitNo, deadline, fee: db.conf.fee, account: db.conf.account,
+      cohort: s.cohort, date: s.date, time: s.time, place: s.place };
+  }
+  const res = method === 'GET'
+    ? await fetch(API_URL + '?action=config', { cache: 'no-store' })
+    : await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+  if (!res.ok) throw new Error('서버 응답 오류 (' + res.status + ')');
+  return res.json();
+}
+
+/* ---------- 상태 ---------- */
+const S = { phase: 'loading', step: 0, cfg: null, busy: false, err: '', open: {}, result: null,
+  d: { gender: '', slotId: '', name: '', birthYear: '', phone: '', region: '', regionEtc: '', job: '', church: '', churchAddr: '',
+    denom: '', denomEtc: '', faithYears: '', attend: '', source: '', sourceEtc: '', note: '', newsAgree: '',
+    refundOk: false, privacyOk: false, faithOk: false, shareOk: false, website: '' } };
+
+async function load() {
+  try {
+    const cfg = await api('GET');
+    if (!cfg.ok) throw new Error(cfg.error || '설정을 불러오지 못했어요');
+    S.cfg = cfg; S.phase = cfg.open && cfg.slots.length ? 'intro' : 'closed';
+  } catch (e) { S.phase = 'error'; S.err = e.message; }
+  render();
+}
+
+/* ---------- 화면 ---------- */
+function demoBanner() { return DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요 (API_URL 미설정)</div>' : ''; }
+
+function render() {
+  let html = '';
+  if (S.phase === 'loading') html = '<div class="spin" aria-label="불러오는 중"></div>';
+  else if (S.phase === 'error') html = viewMsg('잠시 문제가 생겼어요', esc(S.err) + '<br>잠시 후 새로고침해 주세요.');
+  else if (S.phase === 'closed') html = viewMsg('지금은 모집 기간이<br>아니에요', '다음 기수 소식은 인스타그램에서 가장 먼저 알려드려요.' + (S.cfg && S.cfg.contact ? `<br>${esc(S.cfg.contact)}` : ''));
+  else if (S.phase === 'intro') html = viewIntro();
+  else if (S.phase === 'form') html = [viewStep1, viewStep2, viewStep3][S.step]();
+  else if (S.phase === 'done') html = viewDone();
+  $app.innerHTML = demoBanner() + html;
+}
+
+function viewMsg(title, body) {
+  return `<div class="wrap dark"><div class="top"><span class="brand">ION</span></div><div class="spacer"></div>
+    <div class="stack center"><p class="h1">${title}</p><p class="p">${body}</p></div><div class="spacer"></div></div>`;
+}
+
+function groupSlots() {
+  const g = {};
+  S.cfg.slots.forEach(s => { (g[s.cohort] = g[s.cohort] || { date: s.date, place: s.place, slots: [] }).slots.push(s); });
+  return g;
+}
+
+function viewIntro() {
+  const groups = groupSlots();
+  const cards = Object.entries(groups).map(([cohort, g]) => `
+    <div class="card hero stack" style="gap:10px">
+      <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
+      ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}</span>
+        <span>형제 ${s.left.M ? `<b style="color:var(--gold)">${s.left.M}자리</b>` : '대기'} · 자매 ${s.left.F ? `<b style="color:var(--gold)">${s.left.F}자리</b>` : '대기'}</span></div>`).join('')}
+    </div>`).join('');
+  return `<div class="wrap dark">
+    <div class="top"><span class="brand">ION</span><span class="pill">참가 신청</span></div>
+    <div class="stack" style="margin-top:30px;gap:14px">
+      <span class="eyebrow">ION CHRISTIAN ROTATION</span>
+      <h1 class="h1" style="font-size:32px">믿음 안에서<br>좋은 인연을 만나요</h1>
+      <p class="p">대전 지역 크리스천 청년을 위한 소규모 로테이션 소개팅이에요. 신청 후 안내되는 계좌로 입금하시면 참가가 확정돼요.</p>
+    </div>
+    <div class="stack" style="margin-top:26px;gap:10px">${cards}</div>
+    <div class="notice" style="margin-top:14px">${ICON.info}<span>참가비 ${won(S.cfg.fee)}원 · 원활한 진행을 위해 참가자 연령(±7세 내외)을 고려해 운영진이 타임을 조정할 수 있어요.</span></div>
+    <div class="spacer" style="min-height:26px"></div>
+    <button class="btn gold" data-act="start">신청 시작하기</button>
+    <p class="small center" style="margin-top:12px">약 3분 걸려요 · 문의 ${esc(S.cfg.contact)}</p>
+  </div>`;
+}
+
+function head(title, sub) {
+  return `<div class="top"><button class="icon-btn" data-act="back" aria-label="이전으로">${ICON.back}</button><span class="brand" style="font-size:18px">ION</span><span class="small" style="width:34px;text-align:right">${S.step + 1}/3</span></div>
+    <div class="steps" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i <= S.step ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="stack" style="gap:6px;margin:14px 0 20px"><span class="eyebrow">STEP ${S.step + 1}</span><h1 class="h2" style="font-size:25px">${title}</h1>${sub ? `<p class="p" style="font-size:14px">${sub}</p>` : ''}</div>`;
+}
+function opts(key, list, cls = '') {
+  return `<div class="opts ${cls}" role="radiogroup">${list.map(v => `<button type="button" class="opt ${S.d[key] === v ? 'on' : ''}" role="radio" aria-checked="${S.d[key] === v}" data-act="opt" data-k="${key}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+}
+function inp(key, label, attrs = '', req = true) {
+  return `<div class="field"><label for="f-${key}">${label}${req ? '<span class="req">*</span>' : ''}</label><input id="f-${key}" class="input" data-k="${key}" value="${esc(S.d[key])}" ${attrs}></div>`;
+}
+function etc(key, list, label) {
+  return `<div class="field"><span class="lab">${label}<span class="req">*</span></span>${opts(key, list)}
+    ${S.d[key] === '기타' ? `<input class="input" data-k="${key}Etc" value="${esc(S.d[key + 'Etc'])}" placeholder="직접 입력" maxlength="30" aria-label="${label} 직접 입력">` : ''}</div>`;
+}
+function foot(label) {
+  return `<div class="spacer" style="min-height:24px"></div><div class="err" id="err">${esc(S.err)}</div>
+    <button class="btn" data-act="next" ${S.busy ? 'disabled' : ''}>${S.busy ? '신청하는 중…' : label}</button>`;
+}
+
+function viewStep1() {
+  const years = []; const maxY = new Date().getFullYear() - 19;
+  for (let y = maxY; y >= 1970; y--) years.push(y);
+  const g = S.d.gender;
+  const slotHtml = Object.entries(groupSlots()).map(([cohort, grp]) => `
+    <div class="small" style="margin-top:4px">${esc(cohort)} · ${esc(grp.date)} · ${esc(grp.place)}</div>
+    ${grp.slots.map(s => {
+      const left = g ? s.left[g] : null;
+      const chip = !g ? '<span class="chip mute">성별 먼저</span>' : left > 0 ? `<span class="chip ok">${left}자리 남음</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
+      return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
+        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}</span></span>${chip}</button>`;
+    }).join('')}`).join('');
+  return `<div class="wrap">${head('기본 정보를 알려주세요', '운영진만 확인하고, 다른 참가자에게는 공개되지 않아요.')}
+    <form class="stack" style="gap:20px" data-form="step" autocomplete="on" novalidate>
+      <input class="hp" tabindex="-1" autocomplete="off" data-k="website" aria-hidden="true">
+      <div class="field"><span class="lab">성별<span class="req">*</span></span>
+        <div class="opts two">${['M', 'F'].map(k => `<button type="button" class="opt ${g === k ? 'on' : ''}" data-act="gender" data-v="${k}" aria-pressed="${g === k}">${GENDER[k]}</button>`).join('')}</div></div>
+      <div class="field"><span class="lab">신청 기수·타임<span class="req">*</span></span><div class="stack" style="gap:8px">${slotHtml}</div></div>
+      ${inp('name', '이름', 'type="text" maxlength="20" autocomplete="name" placeholder="실명으로 적어주세요"')}
+      <div class="field"><label for="f-birthYear">출생 연도<span class="req">*</span></label>
+        <select id="f-birthYear" class="input" data-k="birthYear"><option value="">선택해 주세요</option>${years.map(y => `<option ${String(S.d.birthYear) === String(y) ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+      ${inp('phone', '연락처', 'type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" maxlength="13"')}
+      ${etc('region', OPT.region, '거주 지역')}
+      ${inp('job', '직업', 'type="text" maxlength="30" placeholder="예) 회사원(IT), 교사, 간호사"')}
+    </form>${foot('다음')}</div>`;
+}
+
+function viewStep2() {
+  return `<div class="wrap">${head('신앙 정보를 알려주세요', '크리스천 소개팅 참가 확인과 타임 배정에만 사용해요.')}
+    <form class="stack" style="gap:20px" data-form="step" novalidate>
+      ${inp('church', '출석교회명', 'type="text" maxlength="40" placeholder="예) ○○교회"')}
+      ${inp('churchAddr', '교회 위치', 'type="text" maxlength="60" placeholder="예) 대전 서구 (동네까지만 적어도 돼요)"', false)}
+      ${etc('denom', OPT.denom, '교단')}
+      <div class="field"><span class="lab">신앙생활 기간<span class="req">*</span></span>${opts('faithYears', OPT.faithYears)}</div>
+      <div class="field"><span class="lab">현재 교회 출석 여부<span class="req">*</span></span>${opts('attend', OPT.attend)}</div>
+      ${etc('source', OPT.source, '이온을 알게 된 경로')}
+    </form>${foot('다음')}</div>`;
+}
+
+function agreeRow(key, label, terms, required = true) {
+  return `<div class="agree-row"><input type="checkbox" id="a-${key}" data-k="${key}" ${S.d[key] ? 'checked' : ''}>
+    <label for="a-${key}">${required ? '<span style="color:var(--gold-d)">[필수]</span> ' : ''}${label}</label>
+    ${terms ? `<button type="button" class="more" data-act="terms" data-v="${key}" aria-expanded="${!!S.open[key]}">${S.open[key] ? '접기' : '보기'}</button>` : ''}</div>
+    ${terms && S.open[key] ? `<div class="terms">${esc(terms)}</div>` : ''}`;
+}
+function viewStep3() {
+  const s = S.cfg.slots.find(x => x.id === S.d.slotId) || {};
+  const all = S.d.refundOk && S.d.privacyOk && S.d.faithOk && S.d.shareOk;
+  return `<div class="wrap">${head('마지막으로 확인해 주세요')}
+    <form class="stack" style="gap:20px" data-form="step" novalidate>
+      <div class="card" style="padding:6px 18px">
+        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(s.time)}</span></div>
+        <div class="kv"><span>이름</span><span>${esc(S.d.name)} (${GENDER[S.d.gender]}, ${esc(S.d.birthYear)}년생)</span></div>
+        <div class="kv"><span>연락처</span><span>${esc(fmtPhone(S.d.phone))}</span></div>
+        <div class="kv"><span>참가비</span><span>${won(S.cfg.fee)}원</span></div>
+      </div>
+      <div class="field"><label for="f-note">요청사항 또는 운영진에게 하고 싶은 말</label>
+        <textarea id="f-note" class="input" data-k="note" maxlength="500" placeholder="자유롭게 적어주세요 (선택)">${esc(S.d.note)}</textarea></div>
+      <div class="field"><span class="lab">다음 기수 소식을 받아보실래요?<span class="req">*</span></span>${opts('newsAgree', ['동의합니다', '받지 않을게요'])}</div>
+      <div class="agree">
+        <div class="agree-row agree-all"><input type="checkbox" id="a-all" data-act="all" ${all ? 'checked' : ''}><label for="a-all">필수 항목 모두 동의</label></div>
+        ${agreeRow('refundOk', '입금 계좌 안내 및 환불 규정 확인', S.cfg.refund)}
+        ${agreeRow('privacyOk', '개인정보 수집 및 이용 동의', PRIVACY)}
+        ${agreeRow('faithOk', '신앙 정보(민감정보) 수집 동의', FAITH)}
+        ${agreeRow('shareOk', '매칭 성사 시 상대방에게 연락처 제공 동의', SHARE)}
+      </div>
+    </form>${foot('신청하기')}</div>`;
+}
+
+function viewDone() {
+  const r = S.result;
+  if (r.status === '대기') {
+    return `<div class="wrap center" style="gap:22px">
+      <div class="top" style="justify-content:center"><span class="brand" style="font-size:18px">ION</span></div>
+      <div class="stack" style="gap:12px"><div class="check">${ICON.clock}</div>
+        <h1 class="h1" style="font-size:27px">대기 ${r.waitNo}번으로<br>접수됐어요</h1>
+        <p class="p">선택하신 타임이 마감되어 대기로 등록했어요.<br>자리가 나면 운영진이 문자로 입금 안내를 드릴게요.</p></div>
+      <div class="ticket">
+        <div class="tr" style="padding-top:18px"><span class="eyebrow" style="font-size:12px">WAITING</span><span class="small">${esc(r.id)}</span></div>
+        <div class="perf"><div class="notch l"></div><div class="dash"></div><div class="notch r"></div></div>
+        <div class="tr"><span class="small">신청</span><span class="round">${esc(r.cohort)} · ${esc(r.date)} ${esc(r.time)}</span></div>
+        <div class="tr" style="padding-bottom:18px"><span class="small">대기 순번</span><span class="round" style="font-size:22px">${r.waitNo}번</span></div>
+      </div>
+      <div class="notice" style="text-align:left">${ICON.info}<span>지금은 입금하지 마세요. 자리가 확보되면 입금자명과 기한을 함께 안내드려요.</span></div>
+      <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span></div>`;
+  }
+  const all = `${r.account}\n${won(r.fee)}원\n입금자명: ${r.payName}`;
+  return `<div class="wrap center" style="gap:22px">
+    <div class="top" style="justify-content:center"><span class="brand" style="font-size:18px">ION</span></div>
+    <div class="stack" style="gap:12px"><div class="check">${ICON.check}</div>
+      <h1 class="h1" style="font-size:27px">신청이 접수됐어요</h1>
+      <p class="p">아래 입금자명으로 입금해 주시면<br>확인 후 운영진이 확정 문자를 보내드려요.</p></div>
+    <div class="ticket">
+      <div class="tr" style="padding-top:18px"><span class="eyebrow" style="font-size:12px">PAYMENT</span><span class="small">${esc(r.id)} · ${esc(r.cohort)} ${esc(r.date)} ${esc(r.time)}</span></div>
+      <div class="perf"><div class="notch l"></div><div class="dash"></div><div class="notch r"></div></div>
+      <div class="tr" style="flex-direction:column;align-items:flex-start;gap:6px;padding-top:16px">
+        <span class="chip r1">입금자명 · 꼭 이대로</span>
+        <div class="between" style="width:100%"><span class="payname">${esc(r.payName)}</span><button class="mini" data-act="copy" data-v="${esc(r.payName)}">${ICON.copy}복사</button></div></div>
+      <div class="tr"><span class="small">입금 계좌</span><span style="display:flex;align-items:center;gap:8px;text-align:right;font-size:14px">${esc(r.account)}<button class="mini" data-act="copy" data-v="${esc(r.account)}" aria-label="계좌 복사">${ICON.copy}</button></span></div>
+      <div class="tr"><span class="small">금액</span><span class="round" style="font-size:20px">${won(r.fee)}원</span></div>
+      <div class="tr" style="padding-bottom:18px"><span class="small">입금 기한</span><span class="round" style="color:var(--gold-t)">${esc(fmtDeadline(r.deadline))}</span></div>
+    </div>
+    <button class="btn soft" data-act="copy" data-v="${esc(all)}">${ICON.copy}계좌·금액·입금자명 한 번에 복사</button>
+    <div class="notice" style="text-align:left">${ICON.info}<span>기한까지 입금이 확인되지 않으면 자동으로 취소돼요. 이 화면을 캡처해 두시면 편해요.</span></div>
+    <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span></div>`;
+}
+
+/* ---------- 검증 ---------- */
+function val(k) { return S.d[k] === '기타' ? (S.d[k + 'Etc'] || '').trim() : S.d[k]; }
+function check(step) {
+  const d = S.d;
+  if (step === 0) {
+    if (!d.gender) return '성별을 선택해 주세요.';
+    if (!d.slotId) return '신청할 기수·타임을 선택해 주세요.';
+    if (!/^[가-힣a-zA-Z\s]{2,20}$/.test(d.name.trim())) return '이름을 확인해 주세요. (한글·영문 2자 이상)';
+    if (!d.birthYear) return '출생 연도를 선택해 주세요.';
+    if (!/^01\d{8,9}$/.test(digits(d.phone))) return '연락처를 확인해 주세요. (010으로 시작하는 번호)';
+    if (!val('region')) return '거주 지역을 입력해 주세요.';
+    if (!d.job.trim()) return '직업을 입력해 주세요.';
+  }
+  if (step === 1) {
+    if (!d.church.trim()) return '출석교회명을 입력해 주세요.';
+    if (!val('denom')) return '교단을 선택해 주세요.';
+    if (!d.faithYears) return '신앙생활 기간을 선택해 주세요.';
+    if (!d.attend) return '교회 출석 여부를 선택해 주세요.';
+    if (!val('source')) return '알게 된 경로를 선택해 주세요.';
+  }
+  if (step === 2) {
+    if (!d.newsAgree) return '다음 기수 소식 수신 여부를 선택해 주세요.';
+    if (!(d.refundOk && d.privacyOk && d.faithOk && d.shareOk)) return '필수 동의 항목을 모두 체크해 주세요.';
+  }
+  return '';
+}
+
+async function submit() {
+  S.busy = true; S.err = ''; render();
+  const d = S.d;
+  const data = { ...d, name: d.name.trim(), phone: digits(d.phone), region: val('region'), denom: val('denom'), source: val('source'),
+    job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), note: d.note.trim() };
+  try {
+    const r = await api('POST', { action: 'apply', data });
+    if (!r.ok) throw new Error(r.error || '신청에 실패했어요');
+    S.result = r; S.phase = 'done';
+    window.scrollTo(0, 0);
+  } catch (e) { S.err = e.message; }
+  S.busy = false; render();
+}
+
+/* ---------- 이벤트 ---------- */
+document.addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.k; if (!k) return;
+  if (e.target.type === 'checkbox') { S.d[k] = e.target.checked; render(); return; }
+  if (k === 'phone') { const pos = e.target.value.length; e.target.value = fmtPhone(e.target.value); if (pos === e.target.value.length) {} }
+  S.d[k] = e.target.value;
+  if (S.err) { S.err = ''; const el = document.getElementById('err'); if (el) el.textContent = ''; }
+});
+document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (k && e.target.tagName === 'SELECT') S.d[k] = e.target.value; });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, v = b.dataset.v;
+  if (act === 'start') { S.phase = 'form'; S.step = 0; S.err = ''; render(); window.scrollTo(0, 0); }
+  else if (act === 'back') { S.err = ''; if (S.step === 0) S.phase = 'intro'; else S.step--; render(); window.scrollTo(0, 0); }
+  else if (act === 'gender') { S.d.gender = v; render(); }
+  else if (act === 'slot') { S.d.slotId = v; render(); }
+  else if (act === 'opt') { S.d[b.dataset.k] = v; render(); }
+  else if (act === 'terms') { S.open[v] = !S.open[v]; render(); }
+  else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'shareOk'].forEach(k => { S.d[k] = on; }); render(); }
+  else if (act === 'copy') copyText(v);
+  else if (act === 'next') {
+    const msg = check(S.step);
+    if (msg) { S.err = msg; const el = document.getElementById('err'); if (el) el.textContent = msg; return; }
+    S.err = '';
+    if (S.step < 2) { S.step++; render(); window.scrollTo(0, 0); } else submit();
+  }
+});
+document.addEventListener('submit', e => e.preventDefault());
+
+load();
+</script>
+</body>
+</html>

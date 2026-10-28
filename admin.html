@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#26453B">
+<meta name="robots" content="noindex,nofollow">
+<title>이온 신청관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+/* ===== 이온 디자인 토큰 (매칭앱 index.html 과 동일) ===== */
+:root{
+  --green:#26453B; --green-2:#3A5C50; --green-ink:#1A3029;
+  --cream:#F6F1E7; --paper:#FFFDF8; --sand:#EFE7D6;
+  --line:#E9E1CF; --line-2:#E4DCCB; --line-3:#F0EADC;
+  --gold:#D9C8A0; --gold-d:#B08A3E; --gold-t:#7A5C22; --gold-soft:#EAD9A8; --gold-ink:#5A431A;
+  --muted:#5C6B63; --ink-2:#3F5249; --mint:#E3EAE6; --sub:#C9D6CF;
+  --danger:#9B3B2A;
+  --round:'Jua', 'Gowun Dodum', system-ui, sans-serif;
+  --body:'Gowun Dodum', system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--green);font-family:var(--body);-webkit-text-size-adjust:100%}
+button,input,textarea,select{font-family:inherit;font-size:16px;color:inherit}
+button{cursor:pointer}
+a{color:var(--green)}
+.wrap{max-width:600px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;padding:16px 18px calc(28px + env(safe-area-inset-bottom))}
+.wrap.narrow{max-width:480px;padding:20px 22px}
+.dark{background:var(--green);color:var(--cream)}
+.round{font-family:var(--round);font-weight:400}
+.brand{font-family:var(--round);font-size:20px;letter-spacing:.12em}
+.eyebrow{font-family:var(--round);font-size:13px;letter-spacing:.1em;color:var(--gold-t)}
+.dark .eyebrow,.card.hero .eyebrow{color:var(--gold)}
+.h1{font-family:var(--round);font-weight:400;font-size:30px;line-height:1.38;margin:0}
+.p{margin:0;font-size:15px;line-height:1.7;color:var(--muted)}
+.dark .p{color:var(--sub)}
+.small{font-size:13px;color:var(--muted);line-height:1.55}
+.card.hero .small{color:var(--sub)}
+.spacer{flex-grow:1}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top{display:flex;align-items:center;justify-content:space-between;min-height:44px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;background:transparent;border-radius:12px;color:inherit}
+.pill{padding:6px 14px;border:1px solid var(--gold);border-radius:999px;font-size:12px;color:var(--gold);letter-spacing:.04em}
+.pill.on-cream{border-color:var(--gold-d);color:var(--gold-t)}
+.center{text-align:center}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;border:0;border-radius:16px;background:var(--green);color:var(--cream);font-family:var(--round);font-size:17px;text-decoration:none;padding:0 18px}
+.btn:disabled{background:var(--line-2);color:var(--muted);cursor:not-allowed}
+.btn.gold{background:var(--gold);color:var(--green)}
+.btn.line{background:transparent;border:2px solid var(--green);color:var(--green)}
+.btn.soft{background:var(--sand);color:var(--green)}
+.btn.danger{background:transparent;border:2px solid var(--danger);color:var(--danger)}
+.btn.sm{min-height:42px;font-size:14px;border-radius:12px;width:auto;padding:0 14px}
+.btn:active{transform:translateY(1px)}
+.mini{min-height:38px;padding:0 12px;border:0;border-radius:10px;background:var(--sand);color:var(--green);font-family:var(--round);font-size:13px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.mini.go{background:var(--green);color:var(--cream)}
+.mini.gold{background:var(--gold);color:var(--green)}
+.mini.del{background:transparent;color:var(--danger)}
+.mini.on-dark{background:rgba(255,255,255,.12);color:var(--cream)}
+
+.field{display:flex;flex-direction:column;gap:8px}
+.field label{font-size:13px;color:var(--ink-2)}
+.dark .field label{color:#E4E9E5}
+.input{height:50px;padding:0 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--paper);color:var(--green);width:100%}
+.dark .input{border:0}
+textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;resize:vertical}
+.input:focus{outline:3px solid var(--gold);outline-offset:1px}
+.err{color:#F3C6BC;font-size:14px;min-height:20px}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:16px}
+.card.hero{background:var(--green);color:var(--cream);border:0}
+.chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-family:var(--round);font-size:12px;white-space:nowrap}
+.chip.r1{background:var(--green);color:var(--cream)}
+.chip.ok{background:var(--mint);color:var(--green)}
+.chip.wait{background:var(--gold-soft);color:var(--gold-ink)}
+.chip.mute{background:var(--sand);color:var(--ink-2)}
+.chip.bad{background:#F3DED8;color:var(--danger)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.chipbtn{min-height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-2);background:var(--paper);font-family:var(--round);font-size:14px;color:var(--ink-2);white-space:nowrap}
+.chipbtn.on{background:var(--green);border-color:var(--green);color:var(--cream)}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand)}
+.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:13px;color:var(--ink-2)}
+.tab.on{background:var(--green);color:var(--cream)}
+.bar{height:8px;border-radius:999px;background:var(--green-2);overflow:hidden;display:flex}
+.bar>i{display:block;height:8px;background:var(--gold)}
+.bar>b{display:block;height:8px;background:rgba(217,200,160,.45)}
+.slotline{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid rgba(255,255,255,.12)}
+.slotline:first-of-type{border-top:0;padding-top:4px}
+.gline{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px;font-size:13px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line-3);font-size:14px}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted);flex-shrink:0}
+.kv span:last-child{text-align:right;word-break:break-all}
+.pn{font-family:var(--round);font-size:21px}
+.late{color:var(--danger)}
+.log{font-size:12px;color:var(--muted);line-height:1.5}
+.empty{padding:28px 18px;text-align:center;color:var(--muted);font-size:14px}
+.demo{position:sticky;top:0;z-index:5;background:var(--gold-soft);color:var(--gold-ink);font-size:13px;text-align:center;padding:8px 12px}
+.spin{width:28px;height:28px;border:3px solid var(--line-2);border-top-color:var(--green);border-radius:50%;animation:sp 0.8s linear infinite;margin:40vh auto 0}
+@keyframes sp{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--green-ink);color:var(--cream);padding:12px 18px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+.modal-bg{position:fixed;inset:0;background:rgba(26,48,41,.45);display:flex;align-items:flex-end;justify-content:center;z-index:40;padding:16px}
+.modal{width:100%;max-width:460px;max-height:92vh;overflow:auto;background:var(--cream);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px;margin-bottom:env(safe-area-inset-bottom)}
+@media (min-width:600px){.modal-bg{align-items:center}}
+</style>
+</head>
+<body>
+<div id="app"><div class="spin" aria-label="불러오는 중"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="modal"></div>
+
+<script>
+/* =====================================================================
+   이온 신청관리 (운영진 전용 · 휴대폰용)
+   ▶ API_URL 에 Apps Script 웹 앱 주소(…/exec)를 넣으세요. (apply.html 과 같은 주소)
+     비워두면 데모 모드 — apply.html 데모에서 넣은 신청이 여기 보입니다.
+   ▶ 관리자 키는 시트 메뉴 '이온 > 관리자 키 보기'에서 확인
+   ===================================================================== */
+const API_URL = '';
+
+/* ---------- 문자 문구 (자유롭게 고쳐 쓰세요) ---------- */
+const TPL = {
+  pay: { label: '입금 안내', for: ['입금대기'], make: (r, x) => `[이온] ${r['이름']}님, ${x.when} 신청 감사합니다 🙂
+
+입금 계좌: ${x.account}
+금액: ${x.fee}원
+입금자명: ${r['입금자명']} (꼭 이대로 적어주세요)
+입금 기한: ${x.deadline}
+
+기한까지 입금이 확인되지 않으면 자동 취소돼요.` },
+  promote: { label: '자리 확보(승격)', for: ['입금대기'], make: (r, x) => `[이온] ${r['이름']}님, 기다려 주셔서 감사해요! ${x.when} 자리가 생겼어요 🙌
+
+입금 계좌: ${x.account}
+금액: ${x.fee}원
+입금자명: ${r['입금자명']}
+입금 기한: ${x.deadline}
+
+기한이 지나면 다음 대기자분께 순서가 넘어가요.` },
+  confirm: { label: '참가 확정', for: ['확정'], make: (r, x) => `[이온] ${r['이름']}님, 입금 확인되어 참가가 확정되었어요 🎉
+
+일정: ${x.when}
+장소: ${x.place}
+신청번호: ${r['신청번호']}
+
+자세한 장소와 안내는 행사 전날 다시 보내드릴게요.` },
+  d1: { label: 'D-1 안내', for: ['확정'], make: (r, x) => `[이온] ${r['이름']}님, 내일 뵙겠습니다 🙂
+
+일정: ${x.when}
+장소: ${x.place}
+
+· 10분 전까지 도착해 주세요. 입구에서 번호표를 드려요.
+· 마지막에 테이블 QR로 마음에 남은 분을 골라주시면 돼요.
+· 늦거나 못 오시게 되면 이 번호로 꼭 연락 주세요.` },
+  wait: { label: '대기 안내', for: ['대기'], make: (r, x) => `[이온] ${r['이름']}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
+
+자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
+  cancel: { label: '취소 안내', for: ['취소'], make: (r, x) => `[이온] ${r['이름']}님, 입금 기한이 지나 ${x.when} 신청이 취소되었어요.
+
+다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
+};
+
+/* ---------- 유틸 ---------- */
+const $app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const digits = s => String(s || '').replace(/\D/g, '');
+const won = n => Number(n || 0).toLocaleString('ko-KR');
+const DEMO = !API_URL;
+const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const KEY_LS = 'ion_admin_key';
+const ICON = {
+  refresh: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>',
+  out: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+  copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+  msg: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-5.6A8 8 0 1 1 21 12z"/></svg>',
+  ok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+};
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+async function copyText(text, msg = '복사했어요') {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (_) {} ta.remove(); }
+  toast(msg);
+}
+function dt(iso, withDay = false) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d)) return String(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}${withDay ? '(' + '일월화수목금토'[d.getDay()] + ')' : ''} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function leftText(iso) {
+  const ms = new Date(iso) - Date.now();
+  if (!iso || isNaN(ms)) return '';
+  if (ms <= 0) return '기한 지남';
+  const h = Math.floor(ms / 3600e3), m = Math.floor(ms % 3600e3 / 60e3);
+  return h ? `${h}시간 ${m}분 남음` : `${m}분 남음`;
+}
+function confirmBox(title, body, okText = '확인', danger = false) {
+  return new Promise(resolve => {
+    const m = document.getElementById('modal');
+    m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <p class="round" style="margin:0;font-size:19px">${esc(title)}</p>${body ? `<p class="p" style="font-size:14px">${esc(body)}</p>` : ''}
+      <div class="row" style="flex-wrap:nowrap"><button class="btn soft" data-c="0">취소</button><button class="btn ${danger ? 'danger' : ''}" data-c="1">${esc(okText)}</button></div></div></div>`;
+    m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { m.innerHTML = ''; resolve(b.dataset.c === '1'); });
+  });
+}
+
+/* ---------- API (데모 모드면 apply.html 데모 데이터 사용) ---------- */
+const DEMO_KEY = 'ion_apply_demo';
+function demoDB() {
+  let db = null; try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) {}
+  return db || { seq: 0, rows: [], conf: { open: true, fee: 40000, account: '토스뱅크 1000-0000-0000 (예금주 이온)', payHours: 24, contact: '' }, slots: [
+    { id: '3-1', cohort: '3기', date: '11/14(토)', time: '15:00~17:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } },
+    { id: '3-2', cohort: '3기', date: '11/14(토)', time: '17:00~19:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } }] };
+}
+function demoSave(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) {} }
+function demoSeed() {
+  const db = demoDB();
+  const people = [['M', '김도윤', 1994, '입금대기'], ['M', '박서준', 1991, '확정'], ['F', '이하은', 1996, '확정'], ['F', '최지우', 1993, '입금대기'],
+    ['M', '정민재', 1990, '확정'], ['F', '한서연', 1995, '확정'], ['F', '오유나', 1997, '대기'], ['M', '윤시우', 1992, '입금대기']];
+  people.forEach(([g, name, y, st], i) => {
+    const seq = ++db.seq; const s = db.slots[i % 2];
+    db.rows.push({ '신청번호': 'ION-' + String(seq).padStart(4, '0'), '신청일시': new Date(Date.now() - (10 - i) * 3600e3).toISOString(), '상태': st,
+      '기수': s.cohort, '행사일': s.date, '타임': s.time, '슬롯ID': s.id, '성별': g === 'M' ? '형제' : '자매', '이름': name, '출생연도': y,
+      '연락처': '010-1234-' + String(1000 + seq), '거주지역': '대전 서구', '직업': '회사원', '출석교회명': '예시교회', '교회주소': '', '교단': '장로교',
+      '신앙생활기간': '10년 이상', '교회출석여부': '매주 출석', '유입경로': '인스타그램', '요청사항': '', '입금자명': st === '대기' ? '' : name + String(seq).padStart(3, '0'),
+      '입금기한': st === '입금대기' ? new Date(Date.now() + (i + 2) * 3600e3).toISOString() : '', '확정일시': st === '확정' ? new Date().toISOString() : '',
+      '수신동의': '동의합니다', '발송기록': '', '메모': '' });
+  });
+  demoSave(db);
+}
+async function api(payload) {
+  if (DEMO) {
+    await new Promise(r => setTimeout(r, 250));
+    const db = demoDB();
+    if (payload.action === 'admin.list') return { ok: true, rows: db.rows, conf: { ...db.conf, promoteHours: 12 }, slots: db.slots.map(s => ({ ...s, public: true })) };
+    const r = db.rows.find(x => x['신청번호'] === payload.id);
+    if (!r) return { ok: false, error: '신청번호를 찾을 수 없어요' };
+    const promoted = [];
+    if (payload.action === 'admin.update') {
+      const prev = r['상태'];
+      if (payload.status) {
+        r['상태'] = payload.status;
+        if (payload.status === '확정' && !r['확정일시']) r['확정일시'] = new Date().toISOString();
+        if (payload.status === '입금대기') { r['입금기한'] = new Date(Date.now() + 12 * 3600e3).toISOString(); if (!r['입금자명']) r['입금자명'] = r['이름'].slice(0, 4) + digits(r['신청번호']).slice(-3); if (prev === '대기') r['발송기록'] += (r['발송기록'] ? ' / ' : '') + dt(new Date()) + ' 승격'; }
+        if (['입금대기', '확정'].includes(prev) && !['입금대기', '확정'].includes(payload.status)) {
+          const s = db.slots.find(x => x.id === r['슬롯ID']); const g = r['성별'] === '형제' ? 'M' : 'F';
+          const held = db.rows.filter(x => x['슬롯ID'] === r['슬롯ID'] && x['성별'] === r['성별'] && ['입금대기', '확정'].includes(x['상태'])).length;
+          const w = db.rows.filter(x => x['슬롯ID'] === r['슬롯ID'] && x['성별'] === r['성별'] && x['상태'] === '대기').sort((a, b) => new Date(a['신청일시']) - new Date(b['신청일시']))[0];
+          if (w && s && held < s.cap[g]) { w['상태'] = '입금대기'; w['입금기한'] = new Date(Date.now() + 12 * 3600e3).toISOString(); w['입금자명'] = w['이름'].slice(0, 4) + digits(w['신청번호']).slice(-3); w['발송기록'] += (w['발송기록'] ? ' / ' : '') + dt(new Date()) + ' 승격'; promoted.push(w['신청번호'] + ' ' + w['이름']); }
+        }
+      }
+      if (payload.memo != null) r['메모'] = payload.memo;
+    }
+    if (payload.action === 'admin.log') r['발송기록'] += (r['발송기록'] ? ' / ' : '') + dt(new Date()) + ' ' + payload.what;
+    demoSave(db);
+    return { ok: true, promoted };
+  }
+  const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...payload, key: A.key }) });
+  if (!res.ok) throw new Error('서버 응답 오류 (' + res.status + ')');
+  return res.json();
+}
+
+/* ---------- 상태 ---------- */
+const A = { key: lsGet(KEY_LS) || '', phase: 'login', busy: false, err: '', data: null, cohort: lsGet('ion_admin_cohort') || '', tab: '입금대기', q: '', open: {} };
+
+async function refresh(silent) {
+  if (!silent) { A.busy = true; render(); }
+  try {
+    const r = await api({ action: 'admin.list' });
+    if (!r.ok) { if (r.auth === false) { A.phase = 'login'; A.err = r.error; lsSet(KEY_LS, null); } else throw new Error(r.error); }
+    else {
+      A.data = r; A.phase = 'main';
+      const cohorts = cohortList();
+      if (!cohorts.includes(A.cohort)) A.cohort = cohorts[0] || '';
+    }
+  } catch (e) { A.err = e.message; if (A.phase !== 'main') A.phase = 'login'; else toast(e.message); }
+  A.busy = false; render();
+}
+function cohortList() {
+  const set = []; (A.data.slots || []).forEach(s => { if (!set.includes(s.cohort)) set.push(s.cohort); });
+  (A.data.rows || []).forEach(r => { if (r['기수'] && !set.includes(r['기수'])) set.push(r['기수']); });
+  return set;
+}
+
+/* ---------- 화면 ---------- */
+function render() {
+  const banner = DEMO ? '<div class="demo">데모 모드 · apply.html 데모에서 넣은 신청이 보여요</div>' : '';
+  if (A.phase === 'login') { $app.innerHTML = banner + viewLogin(); return; }
+  $app.innerHTML = banner + viewMain();
+}
+
+function viewLogin() {
+  return `<div class="wrap narrow dark">
+    <div class="top"><span class="brand">ION</span><span class="pill">신청관리</span></div>
+    <div class="stack" style="margin-top:40px;gap:12px"><span class="eyebrow">ION ADMIN</span><h1 class="h1">운영진 로그인</h1>
+      <p class="p">${DEMO ? '데모 모드에서는 아무 값으로나 들어갈 수 있어요.' : '시트 메뉴 이온 › 관리자 키 보기에서 확인한 키를 입력해 주세요. 이 기기에 저장돼요.'}</p></div>
+    <form class="stack" style="margin-top:28px;gap:16px" data-form="login">
+      <div class="field"><label for="k">관리자 키</label><input id="k" class="input" type="password" autocomplete="current-password" value="${esc(A.key)}" ${DEMO ? '' : 'required'}></div>
+      <div class="err">${esc(A.err)}</div>
+      <button class="btn gold" type="submit" ${A.busy ? 'disabled' : ''}>${A.busy ? '확인 중…' : '들어가기'}</button>
+    </form></div>`;
+}
+
+function slotsOf(cohort) { return (A.data.slots || []).filter(s => s.cohort === cohort); }
+function rowsOf(cohort) { return (A.data.rows || []).filter(r => r['기수'] === cohort); }
+function waitNo(r) {
+  return rowsOf(r['기수']).filter(x => x['슬롯ID'] === r['슬롯ID'] && x['성별'] === r['성별'] && x['상태'] === '대기')
+    .sort((a, b) => new Date(a['신청일시']) - new Date(b['신청일시'])).findIndex(x => x['신청번호'] === r['신청번호']) + 1;
+}
+
+function viewMain() {
+  const cohorts = cohortList();
+  const rows = rowsOf(A.cohort);
+  const cnt = st => rows.filter(r => st === '취소' ? ['취소', '환불'].includes(r['상태']) : r['상태'] === st).length;
+  const q = A.q.trim().toLowerCase();
+  const list = rows.filter(r => (A.tab === '취소' ? ['취소', '환불'].includes(r['상태']) : r['상태'] === A.tab))
+    .filter(r => !q || [r['이름'], r['입금자명'], r['신청번호'], r['연락처']].some(v => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => A.tab === '입금대기' ? new Date(a['입금기한']) - new Date(b['입금기한']) : new Date(a['신청일시']) - new Date(b['신청일시']));
+  return `<div class="wrap">
+    <div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">신청관리</span></div>
+      <div class="row" style="gap:0"><button class="icon-btn" data-act="refresh" aria-label="새로고침">${ICON.refresh}</button><button class="icon-btn" data-act="logout" aria-label="로그아웃">${ICON.out}</button></div></div>
+    ${A.data.conf && A.data.conf.open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 모집상태가 <b>닫힘</b>이에요 (시트 설정 탭)</div>' : ''}
+    <div class="chips" style="margin:8px 0 12px">${cohorts.map(c => `<button class="chipbtn ${c === A.cohort ? 'on' : ''}" data-act="cohort" data-v="${esc(c)}">${esc(c)}</button>`).join('') || '<span class="small">타임 탭에 기수를 먼저 등록해 주세요</span>'}</div>
+    ${viewStatus()}
+    <input class="input" style="margin-top:14px" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 번호로 찾기 (예: 017)" aria-label="검색" inputmode="search">
+    <div class="tabs" style="margin-top:12px">${['입금대기', '확정', '대기', '취소'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === '취소' ? '취소·환불' : t} ${cnt(t)}</button>`).join('')}</div>
+    <div class="stack" style="margin-top:12px;gap:10px">${list.length ? list.map(card).join('') : `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>`}</div>
+    ${DEMO ? '<div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="seed">예시 데이터 채우기</button><button class="mini del" data-act="wipe">데모 데이터 지우기</button></div>' : ''}
+    <div class="spacer" style="min-height:20px"></div>
+  </div>`;
+}
+
+function viewStatus() {
+  const slots = slotsOf(A.cohort); const rows = rowsOf(A.cohort);
+  if (!slots.length) return '';
+  return `<div class="card hero">
+    <div class="between"><span class="eyebrow">${esc(A.cohort)} · ${esc(slots[0].date)} 현황</span><span class="small">확정 / 정원</span></div>
+    ${slots.map(s => {
+      const g = (lab, key) => {
+        const mine = rows.filter(r => r['슬롯ID'] === s.id && r['성별'] === lab);
+        const ok = mine.filter(r => r['상태'] === '확정').length, pend = mine.filter(r => r['상태'] === '입금대기').length, wait = mine.filter(r => r['상태'] === '대기').length;
+        const cap = s.cap[key] || 0;
+        return `<div class="gline"><span class="round">${lab}</span>
+          <div class="bar" aria-hidden="true"><i style="width:${cap ? Math.min(100, ok / cap * 100) : 0}%"></i><b style="width:${cap ? Math.min(100 - Math.min(100, ok / cap * 100), pend / cap * 100) : 0}%"></b></div>
+          <span class="small" style="color:var(--cream)"><b class="round">${ok}</b>/${cap}${pend ? ` · 입금대기 ${pend}` : ''}${wait ? ` · 대기 ${wait}` : ''}</span></div>`;
+      };
+      return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}</span>
+        <button class="mini on-dark" data-act="roster" data-v="${esc(s.id)}">${ICON.copy}매칭앱 명단</button></div>${g('형제', 'M')}${g('자매', 'F')}</div>`;
+    }).join('')}
+  </div>`;
+}
+
+function card(r) {
+  const id = r['신청번호']; const st = r['상태']; const open = A.open[id];
+  const chip = { '입금대기': 'wait', '확정': 'ok', '대기': 'mute', '취소': 'bad', '환불': 'bad' }[st] || 'mute';
+  const age = r['출생연도'] ? `${String(r['출생연도']).slice(2)}년생` : '';
+  const left = st === '입금대기' ? leftText(r['입금기한']) : '';
+  const late = st === '입금대기' && (new Date(r['입금기한']) - Date.now() < 3 * 3600e3);
+  const actions = [];
+  if (st === '입금대기') actions.push(`<button class="mini gold" data-act="confirm" data-v="${id}">${ICON.ok}입금확인</button>`);
+  if (st === '대기') actions.push(`<button class="mini go" data-act="promote" data-v="${id}">자리 배정</button>`);
+  actions.push(`<button class="mini" data-act="msg" data-v="${id}">${ICON.msg}문자·카톡</button>`);
+  actions.push(`<button class="mini" data-act="toggle" data-v="${id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
+  return `<div class="card stack" style="gap:8px">
+    <div class="between"><div class="row"><span class="pn">${esc(r['입금자명'] || r['이름'])}</span><span class="chip ${chip}">${esc(st)}${st === '대기' ? ' ' + waitNo(r) + '번' : ''}</span></div><span class="small">${esc(id)}</span></div>
+    <div class="small" style="color:var(--ink-2)">${esc(r['이름'])} · ${esc(r['성별'])} · ${esc(age)} · ${esc(r['타임'])}</div>
+    <div class="between small"><a href="tel:${digits(r['연락처'])}" style="color:var(--ink-2)">${esc(r['연락처'])}</a>
+      ${st === '입금대기' ? `<span class="${late ? 'late' : ''}">${esc(dt(r['입금기한']))} · ${esc(left)}</span>` : st === '확정' ? `<span>확정 ${esc(dt(r['확정일시']))}</span>` : `<span>신청 ${esc(dt(r['신청일시']))}</span>`}</div>
+    ${r['발송기록'] ? `<div class="log">✉ ${esc(r['발송기록'])}</div>` : ''}
+    <div class="row" style="margin-top:2px">${actions.join('')}</div>
+    ${open ? detail(r) : ''}
+  </div>`;
+}
+
+function detail(r) {
+  const id = r['신청번호']; const st = r['상태'];
+  const kv = [['출생연도', r['출생연도']], ['거주지역', r['거주지역']], ['직업', r['직업']], ['출석교회', r['출석교회명']], ['교회 위치', r['교회주소']],
+    ['교단', r['교단']], ['신앙생활', r['신앙생활기간']], ['출석', r['교회출석여부']], ['알게 된 경로', r['유입경로']], ['소식 수신', r['수신동의']],
+    ['신청일시', dt(r['신청일시'], true)], ['요청사항', r['요청사항']]].filter(x => x[1] !== '' && x[1] != null);
+  const danger = [];
+  if (['입금대기', '확정', '대기'].includes(st)) danger.push(`<button class="mini del" data-act="cancel" data-v="${id}">취소 처리</button>`);
+  if (st === '확정') danger.push(`<button class="mini del" data-act="refund" data-v="${id}">환불 처리</button>`);
+  if (['취소', '환불'].includes(st)) danger.push(`<button class="mini" data-act="restore" data-v="${id}">입금대기로 되돌리기</button>`);
+  if (st === '확정') danger.push(`<button class="mini" data-act="unconfirm" data-v="${id}">확정 취소(입금대기로)</button>`);
+  return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
+    ${kv.map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}
+    <div class="field" style="margin-top:10px"><label for="m-${id}">운영진 메모</label>
+      <textarea id="m-${id}" class="input" style="min-height:70px" data-memo="${id}">${esc(r['메모'])}</textarea></div>
+    <div class="row" style="margin-top:8px"><button class="mini go" data-act="memo" data-v="${id}">메모 저장</button>${danger.join('')}</div>
+  </div>`;
+}
+
+/* ---------- 문자·카톡 모달 ---------- */
+function ctx(r) {
+  const s = (A.data.slots || []).find(x => x.id === r['슬롯ID']) || {};
+  return { when: `${r['기수']} ${r['행사일']} ${r['타임']}`, place: s.place || '추후 안내', account: A.data.conf.account, fee: won(A.data.conf.fee),
+    deadline: dt(r['입금기한'], true) + '까지', waitNo: waitNo(r) };
+}
+function openMsg(id, pick) {
+  const r = A.data.rows.find(x => x['신청번호'] === id); if (!r) return;
+  const keys = Object.keys(TPL).filter(k => TPL[k].for.includes(r['상태']));
+  if (!keys.length) keys.push('cancel');
+  let k = pick || (r['상태'] === '입금대기' && String(r['발송기록']).includes('승격') && !String(r['발송기록']).includes('자리 확보') ? 'promote' : keys[0]);
+  const text = TPL[k].make(r, ctx(r));
+  const href = `sms:${digits(r['연락처'])}${IOS ? '&' : '?'}body=${encodeURIComponent(text)}`;
+  const m = document.getElementById('modal');
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="문자 보내기">
+    <div class="between"><span class="round" style="font-size:19px">${esc(r['이름'])}님께 보내기</span><span class="small">${esc(r['연락처'])}</span></div>
+    <div class="chips">${keys.map(x => `<button class="chipbtn ${x === k ? 'on' : ''}" data-tpl="${x}">${TPL[x].label}</button>`).join('')}</div>
+    <textarea class="input" id="msg-text" aria-label="보낼 문구">${esc(text)}</textarea>
+    <a class="btn" id="msg-sms" href="${esc(href)}" data-log="${esc(TPL[k].label)} 문자">${ICON.msg}문자 앱으로 보내기</a>
+    <button class="btn soft" id="msg-copy" data-log="${esc(TPL[k].label)} 카톡">${ICON.copy}문구 복사 (카톡용)</button>
+    <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
+  const ta = m.querySelector('#msg-text');
+  const sync = () => { m.querySelector('#msg-sms').href = `sms:${digits(r['연락처'])}${IOS ? '&' : '?'}body=${encodeURIComponent(ta.value)}`; };
+  ta.addEventListener('input', sync);
+  m.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => openMsg(id, b.dataset.tpl));
+  m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
+  m.querySelector('#msg-sms').addEventListener('click', () => { logSend(id, TPL[k].label + ' 문자'); setTimeout(() => { m.innerHTML = ''; }, 300); });
+  m.querySelector('#msg-copy').onclick = async () => { await copyText(ta.value, '복사했어요 · 카톡에 붙여넣어 주세요'); logSend(id, TPL[k].label + ' 카톡'); m.innerHTML = ''; };
+}
+async function logSend(id, what) {
+  const r = A.data.rows.find(x => x['신청번호'] === id);
+  if (r) r['발송기록'] = (r['발송기록'] ? r['발송기록'] + ' / ' : '') + dt(new Date()) + ' ' + what;
+  render();
+  try { const res = await api({ action: 'admin.log', id, what }); if (!res.ok) toast(res.error); } catch (e) { toast('발송 기록 저장 실패: ' + e.message); }
+}
+
+async function update(id, status, extra = {}) {
+  A.busy = true;
+  try {
+    const r = await api({ action: 'admin.update', id, status, ...extra });
+    if (!r.ok) throw new Error(r.error);
+    if (r.promoted && r.promoted.length) toast(`대기 ${r.promoted.length}명이 자리 배정됐어요 · 입금 안내를 보내주세요`);
+    await refresh(true);
+    return true;
+  } catch (e) { toast(e.message); A.busy = false; return false; }
+}
+
+function rosterText(slotId) {
+  const rows = (A.data.rows || []).filter(r => r['슬롯ID'] === slotId && r['상태'] === '확정')
+    .sort((a, b) => (a['성별'] === b['성별'] ? new Date(a['신청일시']) - new Date(b['신청일시']) : a['성별'] === '형제' ? -1 : 1));
+  return { n: rows.length, text: rows.map(r => `${r['성별']}\t${r['이름']}\t${r['연락처']}`).join('\n') };
+}
+
+/* ---------- 이벤트 ---------- */
+document.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (e.target.dataset.form === 'login') {
+    A.key = (document.getElementById('k').value || '').trim(); A.err = '';
+    lsSet(KEY_LS, A.key); await refresh();
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.dataset.k === 'q') { A.q = e.target.value; const pos = e.target.selectionStart; render(); const el = document.querySelector('[data-k="q"]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); } }
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, v = b.dataset.v;
+  const row = id => A.data.rows.find(x => x['신청번호'] === id);
+  if (act === 'refresh') { await refresh(); toast('새로고침했어요'); }
+  else if (act === 'logout') { lsSet(KEY_LS, null); A.key = ''; A.phase = 'login'; render(); }
+  else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }
+  else if (act === 'tab') { A.tab = v; render(); }
+  else if (act === 'toggle') { A.open[v] = !A.open[v]; render(); }
+  else if (act === 'msg') openMsg(v);
+  else if (act === 'confirm') {
+    const r = row(v);
+    if (!(await confirmBox(`${r['입금자명']} 입금확인`, `${r['이름']}님을 확정으로 바꿀까요? 확정 문자 창이 이어서 열려요.`, '입금확인'))) return;
+    if (await update(v, '확정')) { A.tab = '확정'; render(); openMsg(v, 'confirm'); }
+  }
+  else if (act === 'promote') {
+    const r = row(v);
+    if (!(await confirmBox(`${r['이름']}님 자리 배정`, '대기에서 입금대기로 올리고 입금자명과 입금 기한을 새로 만들어요. 정원을 넘길 수 있으니 현황을 확인해 주세요.', '자리 배정'))) return;
+    if (await update(v, '입금대기')) { A.tab = '입금대기'; render(); openMsg(v, 'promote'); }
+  }
+  else if (act === 'cancel') { const r = row(v); if (await confirmBox(`${r['이름']}님 취소 처리`, '자리가 비면 같은 타임 대기 1번이 자동으로 입금대기가 돼요.', '취소 처리', true)) update(v, '취소'); }
+  else if (act === 'refund') { const r = row(v); if (await confirmBox(`${r['이름']}님 환불 처리`, '계좌이체로 환불한 뒤 눌러주세요. 상태가 환불로 바뀌고 대기자가 자동 배정돼요.', '환불 처리', true)) update(v, '환불'); }
+  else if (act === 'restore' || act === 'unconfirm') { if (await confirmBox('입금대기로 되돌릴까요?', '입금 기한이 새로 잡혀요.', '되돌리기')) update(v, '입금대기'); }
+  else if (act === 'memo') { const ta = document.querySelector(`[data-memo="${v}"]`); if (await update(v, '', { memo: ta ? ta.value : '' })) toast('메모를 저장했어요'); }
+  else if (act === 'roster') {
+    const { n, text } = rosterText(v);
+    if (!n) return toast('이 타임에 확정자가 아직 없어요');
+    copyText(text, `확정 ${n}명 복사 · 매칭앱 참가자 탭 › 붙여넣기에 넣어주세요`);
+  }
+  else if (act === 'seed') { demoSeed(); await refresh(); }
+  else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저에 저장된 데모 신청만 지워져요.', '지우기', true)) { lsSet(DEMO_KEY, null); await refresh(); } }
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && A.phase === 'main') refresh(true); });
+
+if (A.key || DEMO) refresh(); else render();
+</script>
+</body>
+</html>
