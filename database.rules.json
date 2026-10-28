@@ -28,6 +28,44 @@
           }
         }
       }
+    },
+    "apply": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "config": {
+        ".read": true
+      },
+      "slots": {
+        ".read": true
+      },
+      "counts": {
+        ".read": true,
+        "$slot": {
+          "$g": {
+            ".write": "auth != null && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && (root.child('admins').child(auth.uid).val() === true || newData.val() <= root.child('apply/slots').child($slot).child('cap').child($g).val())"
+          }
+        }
+      },
+      "seq": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))",
+        ".validate": "newData.isNumber()"
+      },
+      "phones": {
+        "$cohort": {
+          "$key": {
+            ".write": "auth != null && !data.exists()",
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          }
+        }
+      },
+      "apps": {
+        "$id": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "root.child('admins').child(auth.uid).val() === true || (newData.child('uid').val() === auth.uid && newData.child('id').val() === $id && newData.child('status').isString() && newData.child('status').val().matches(/^(pending|waiting)$/) && newData.child('name').isString() && newData.child('name').val().length >= 2 && newData.child('name').val().length <= 20 && newData.child('phone').isString() && newData.child('phone').val().matches(/^01[0-9]-[0-9]{3,4}-[0-9]{4}$/) && newData.child('slotId').isString() && root.child('apply/slots').child(newData.child('slotId').val()).child('public').val() === true && root.child('apply/config/open').val() === true && newData.child('note').val().length <= 500)"
+        }
+      }
     }
   }
 }

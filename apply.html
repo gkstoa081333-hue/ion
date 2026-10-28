@@ -134,13 +134,15 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <div id="app"><div class="spin" aria-label="불러오는 중"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="ion-store.js"></script>
 <script>
 /* =====================================================================
-   이온 신청 페이지 (단일 HTML)
-   ▶ API_URL 에 Apps Script 웹 앱 주소(…/exec)를 넣으세요.
-     비워두면 '데모 모드'(이 브라우저에만 저장)로 동작합니다.
+   이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
+   ▶ 주소 끝에 ?demo 를 붙이면 데모 모드(이 브라우저에만 저장)
    ===================================================================== */
-const API_URL = '';
 
 /* ---------- 선택지 (네이버폼과 동일하게 맞춰 쓰세요) ---------- */
 const OPT = {
@@ -168,7 +170,7 @@ const digits = s => String(s || '').replace(/\D/g, '');
 const fmtPhone = p => { const d = digits(p).slice(0, 11); return d.length > 7 ? `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}` : d.length > 3 ? `${d.slice(0,3)}-${d.slice(3)}` : d; };
 const won = n => Number(n || 0).toLocaleString('ko-KR');
 const GENDER = { M: '형제', F: '자매' };
-const DEMO = !API_URL;
+const DEMO = IonStore.demo;
 const ICON = {
   back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
   info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>',
@@ -192,48 +194,47 @@ function fmtDeadline(iso) {
   return `${d.getMonth() + 1}/${d.getDate()}(${w}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}까지`;
 }
 
-/* ---------- API (데모 모드면 이 브라우저에 저장) ---------- */
-const DEMO_KEY = 'ion_apply_demo';
-function demoDB() {
-  let db = null; try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) {}
-  if (!db) db = { seq: 0, rows: [], conf: { open: true, fee: 40000, account: '토스뱅크 1000-0000-0000 (예금주 이온)', payHours: 24, contact: '인스타그램 @ion_christian (DM)',
-    refund: '· 행사 7일 전까지 취소: 전액 환불\n· 행사 3일 전까지 취소: 50% 환불\n· 그 이후 및 당일 불참: 환불 불가\n· 운영진 사정으로 취소 시 전액 환불' },
-    slots: [
-      { id: '3-1', cohort: '3기', date: '11/14(토)', time: '15:00~17:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } },
-      { id: '3-2', cohort: '3기', date: '11/14(토)', time: '17:00~19:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 } },
-      { id: '4-1', cohort: '4기', date: '11/28(토)', time: '15:00~17:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 } },
-      { id: '4-2', cohort: '4기', date: '11/28(토)', time: '17:00~19:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 } }] };
-  return db;
+/* ---------- 데이터 ---------- */
+async function loadConfig() {
+  const [config, slots, counts] = await Promise.all([IonStore.get('apply/config'), IonStore.get('apply/slots'), IonStore.get('apply/counts')]);
+  if (!config) return { open: false, slots: [] };
+  const list = Object.entries(slots || {}).filter(([, s]) => s && s.public)
+    .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
+    .map(([id, s]) => {
+      const c = (counts || {})[id] || {};
+      return { id, ...s, left: { M: Math.max(0, (s.cap?.M || 0) - (c.M || 0)), F: Math.max(0, (s.cap?.F || 0) - (c.F || 0)) } };
+    });
+  return { ...config, slots: list };
 }
-function demoSave(db) { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) {} }
-function demoHeld(db, slotId, g) { return db.rows.filter(r => r['슬롯ID'] === slotId && r['성별'] === GENDER[g] && ['입금대기', '확정'].includes(r['상태'])).length; }
-async function api(method, payload) {
-  if (DEMO) {
-    await new Promise(r => setTimeout(r, 400));
-    const db = demoDB();
-    if (method === 'GET') return { ok: true, open: db.conf.open, fee: db.conf.fee, refund: db.conf.refund, contact: db.conf.contact, payHours: db.conf.payHours,
-      slots: db.slots.map(s => ({ ...s, left: { M: Math.max(0, s.cap.M - demoHeld(db, s.id, 'M')), F: Math.max(0, s.cap.F - demoHeld(db, s.id, 'F')) } })) };
-    const d = payload.data; const s = db.slots.find(x => x.id === d.slotId);
-    if (db.rows.some(r => r['기수'] === s.cohort && digits(r['연락처']) === digits(d.phone) && ['입금대기', '확정', '대기'].includes(r['상태'])))
-      return { ok: false, error: `이 연락처로 이미 ${s.cohort} 신청이 되어 있어요.` };
-    const status = demoHeld(db, s.id, d.gender) < s.cap[d.gender] ? '입금대기' : '대기';
-    const seq = ++db.seq; const id = 'ION-' + String(seq).padStart(4, '0');
-    const payName = d.name.replace(/\s/g, '').slice(0, 4) + String(seq % 1000).padStart(3, '0');
-    const deadline = status === '입금대기' ? new Date(Date.now() + db.conf.payHours * 3600e3).toISOString() : '';
-    const waitNo = status === '대기' ? db.rows.filter(r => r['슬롯ID'] === s.id && r['성별'] === GENDER[d.gender] && r['상태'] === '대기').length + 1 : 0;
-    db.rows.push({ '신청번호': id, '신청일시': new Date().toISOString(), '상태': status, '기수': s.cohort, '행사일': s.date, '타임': s.time, '슬롯ID': s.id,
-      '성별': GENDER[d.gender], '이름': d.name, '출생연도': d.birthYear, '연락처': fmtPhone(d.phone), '거주지역': d.region, '직업': d.job,
-      '출석교회명': d.church, '교회주소': d.churchAddr, '교단': d.denom, '신앙생활기간': d.faithYears, '교회출석여부': d.attend, '유입경로': d.source,
-      '요청사항': d.note, '입금자명': status === '입금대기' ? payName : '', '입금기한': deadline, '확정일시': '', '수신동의': d.newsAgree, '발송기록': '', '메모': '' });
-    demoSave(db);
-    return { ok: true, id, status, payName: status === '입금대기' ? payName : '', waitNo, deadline, fee: db.conf.fee, account: db.conf.account,
-      cohort: s.cohort, date: s.date, time: s.time, place: s.place };
-  }
-  const res = method === 'GET'
-    ? await fetch(API_URL + '?action=config', { cache: 'no-store' })
-    : await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
-  if (!res.ok) throw new Error('서버 응답 오류 (' + res.status + ')');
-  return res.json();
+
+async function createApplication(d) {
+  const cfg = S.cfg;
+  const slot = cfg.slots.find(x => x.id === d.slotId);
+  if (!slot) throw new Error('선택한 타임을 찾을 수 없어요. 새로고침 후 다시 선택해 주세요.');
+  const uid = await IonStore.ensureAnon();
+  // 1) 신청번호
+  const seq = (await IonStore.txn('apply/seq', cur => (cur || 0) + 1)).value;
+  const id = 'ION-' + String(seq).padStart(4, '0');
+  // 2) 같은 기수 + 같은 연락처 중복 방지 (번호는 해시로만 저장)
+  const phoneKey = (await ionSha(slot.cohort + '|' + d.phone)).slice(0, 32);
+  try { await IonStore.set(`apply/phones/${slot.cohort}/${phoneKey}`, id); }
+  catch (e) { throw new Error(`이 연락처로 이미 ${slot.cohort} 신청이 되어 있어요. 확인이 필요하면 ${cfg.contact || '운영진'}으로 문의해 주세요.`); }
+  // 3) 자리 잡기 (정원 안이면 입금대기, 아니면 대기)
+  const cap = slot.cap?.[d.gender] || 0;
+  let got = false;
+  try { got = (await IonStore.txn(`apply/counts/${slot.id}/${d.gender}`, cur => ((cur || 0) >= cap ? undefined : (cur || 0) + 1))).committed; }
+  catch (e) { got = false; }
+  const status = got ? 'pending' : 'waiting';
+  const payName = got ? d.name.replace(/\s/g, '').slice(0, 4) + String(seq % 1000).padStart(3, '0') : '';
+  const deadline = got ? Date.now() + (Number(cfg.payHours) || 24) * 3600e3 : 0;
+  // 4) 신청서 저장
+  await IonStore.set('apply/apps/' + id, {
+    id, uid, at: Date.now(), status, cohort: slot.cohort, slotId: slot.id, date: slot.date, time: slot.time, place: slot.place || '',
+    gender: d.gender, name: d.name, birthYear: Number(d.birthYear), phone: fmtPhone(d.phone), region: d.region, job: d.job,
+    church: d.church, churchAddr: d.churchAddr, denom: d.denom, faithYears: d.faithYears, attend: d.attend, source: d.source,
+    note: d.note, newsAgree: d.newsAgree, payName, deadline, phoneKey, log: '', memo: ''
+  });
+  return { id, status, payName, deadline, fee: cfg.fee, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
 }
 
 /* ---------- 상태 ---------- */
@@ -244,15 +245,15 @@ const S = { phase: 'loading', step: 0, cfg: null, busy: false, err: '', open: {}
 
 async function load() {
   try {
-    const cfg = await api('GET');
-    if (!cfg.ok) throw new Error(cfg.error || '설정을 불러오지 못했어요');
+    if (DEMO && !(await IonStore.get('apply/config'))) { await IonStore.set('apply/config', ION_DEFAULTS.config); await IonStore.set('apply/slots', ION_DEFAULTS.slots); }
+    const cfg = await loadConfig();
     S.cfg = cfg; S.phase = cfg.open && cfg.slots.length ? 'intro' : 'closed';
   } catch (e) { S.phase = 'error'; S.err = e.message; }
   render();
 }
 
 /* ---------- 화면 ---------- */
-function demoBanner() { return DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요 (API_URL 미설정)</div>' : ''; }
+function demoBanner() { return DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요</div>' : ''; }
 
 function render() {
   let html = '';
@@ -390,17 +391,17 @@ function viewStep3() {
 
 function viewDone() {
   const r = S.result;
-  if (r.status === '대기') {
+  if (r.status === 'waiting') {
     return `<div class="wrap center" style="gap:22px">
       <div class="top" style="justify-content:center"><span class="brand" style="font-size:18px">ION</span></div>
       <div class="stack" style="gap:12px"><div class="check">${ICON.clock}</div>
-        <h1 class="h1" style="font-size:27px">대기 ${r.waitNo}번으로<br>접수됐어요</h1>
+        <h1 class="h1" style="font-size:27px">대기 명단으로<br>접수됐어요</h1>
         <p class="p">선택하신 타임이 마감되어 대기로 등록했어요.<br>자리가 나면 운영진이 문자로 입금 안내를 드릴게요.</p></div>
       <div class="ticket">
         <div class="tr" style="padding-top:18px"><span class="eyebrow" style="font-size:12px">WAITING</span><span class="small">${esc(r.id)}</span></div>
         <div class="perf"><div class="notch l"></div><div class="dash"></div><div class="notch r"></div></div>
         <div class="tr"><span class="small">신청</span><span class="round">${esc(r.cohort)} · ${esc(r.date)} ${esc(r.time)}</span></div>
-        <div class="tr" style="padding-bottom:18px"><span class="small">대기 순번</span><span class="round" style="font-size:22px">${r.waitNo}번</span></div>
+        <div class="tr" style="padding-bottom:18px"><span class="small">상태</span><span class="round" style="font-size:20px">대기 · 순서대로 연락</span></div>
       </div>
       <div class="notice" style="text-align:left">${ICON.info}<span>지금은 입금하지 마세요. 자리가 확보되면 입금자명과 기한을 함께 안내드려요.</span></div>
       <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span></div>`;
@@ -459,11 +460,11 @@ async function submit() {
   const data = { ...d, name: d.name.trim(), phone: digits(d.phone), region: val('region'), denom: val('denom'), source: val('source'),
     job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), note: d.note.trim() };
   try {
-    const r = await api('POST', { action: 'apply', data });
-    if (!r.ok) throw new Error(r.error || '신청에 실패했어요');
+    if (data.website) throw new Error('신청을 처리할 수 없어요.');
+    const r = await createApplication(data);
     S.result = r; S.phase = 'done';
     window.scrollTo(0, 0);
-  } catch (e) { S.err = e.message; }
+  } catch (e) { console.error(e); S.err = /PERMISSION|permission/.test(e.message) ? '신청이 저장되지 않았어요. 모집이 마감됐거나 입력값에 문제가 있어요. 새로고침 후 다시 시도해 주세요.' : e.message; }
   S.busy = false; render();
 }
 
