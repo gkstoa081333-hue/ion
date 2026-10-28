@@ -224,7 +224,7 @@ const payNameOf = r => String(r.name).replace(/\s/g, '').slice(0, 4) + String(Nu
 const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' + what;
 
 /* ---------- 상태 ---------- */
-const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null };
+const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, rCohort: '' };
 const apps = () => Object.values((A.data && A.data.apps) || {});
 const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const conf = () => (A.data && A.data.config) || {};
@@ -232,9 +232,11 @@ const conf = () => (A.data && A.data.config) || {};
 function start() {
   IonStore.onAuth(st => {
     if (st.admin) {
+      if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews') render(); });
       if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
+      if (A.unsubR) { A.unsubR(); A.unsubR = null; }
       A.phase = 'login';
       if (st.user && !st.user.isAnonymous) A.authErr = '운영진으로 등록되지 않은 계정이에요.';
       render();
@@ -327,7 +329,7 @@ function render() {
   const v = A.phase === 'loading' ? '<div class="spin" aria-label="불러오는 중"></div>'
     : A.phase === 'login' ? viewLogin()
     : A.phase === 'setup' ? viewSetup()
-    : A.view === 'settings' ? viewSettings() : viewMain();
+    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : viewMain();
   const q = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
   const pos = q ? document.activeElement.selectionStart : 0;
   $app.innerHTML = banner + v;
@@ -371,7 +373,7 @@ function viewMain() {
     .sort((a, b) => A.tab === 'pending' ? a.deadline - b.deadline : a.at - b.at);
   return `<div class="wrap">
     <div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">신청관리</span></div>
-      <div class="row" style="gap:0"><button class="icon-btn" data-act="settings" aria-label="설정">${ICON.gear}</button><button class="icon-btn" data-act="logout" aria-label="로그아웃">${ICON.out}</button></div></div>
+      <div class="row" style="gap:0"><button class="mini" data-act="reviews" style="margin-right:4px">후기</button><button class="icon-btn" data-act="settings" aria-label="설정">${ICON.gear}</button><button class="icon-btn" data-act="logout" aria-label="로그아웃">${ICON.out}</button></div></div>
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
     <div class="chips" style="margin:8px 0 12px">${cohortList().map(c => `<button class="chipbtn ${c === A.cohort ? 'on' : ''}" data-act="cohort" data-v="${esc(c)}">${esc(c)}</button>`).join('') || '<span class="small">설정에서 타임을 먼저 추가해 주세요</span>'}</div>
     ${viewStatus()}
@@ -439,6 +441,61 @@ function detail(r) {
       <textarea id="m-${r.id}" class="input" style="min-height:70px" data-memo="${r.id}">${esc(r.memo)}</textarea></div>
     <div class="row" style="margin-top:8px"><button class="mini go" data-act="memo" data-v="${r.id}">메모 저장</button>${more.join('')}</div>
   </div>`;
+}
+
+/* ---------- 후기 ---------- */
+const REV_URL = (c, t) => `${location.origin}${location.pathname.replace(/[^/]*$/, '')}review.html?c=${encodeURIComponent(c)}&t=${encodeURIComponent(t)}`;
+const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+function reviewList() { return Object.values(A.reviews || {}).sort((a, b) => b.at - a.at); }
+function viewReviews() {
+  const all = reviewList();
+  const cs = []; all.forEach(r => { if (!cs.includes(r.cohort)) cs.push(r.cohort); }); cohortList().forEach(c => { if (!cs.includes(c)) cs.push(c); });
+  if (!cs.includes(A.rCohort)) A.rCohort = cs.includes(A.cohort) ? A.cohort : (cs[0] || '');
+  const rs = all.filter(r => r.cohort === A.rCohort); const n = rs.length;
+  const avg = n ? (rs.reduce((t, r) => t + r.sat, 0) / n).toFixed(1) : '-';
+  const again = n ? Math.round(rs.filter(r => String(r.again).startsWith('다음')).length / n * 100) : 0;
+  const nps = n ? Math.round((rs.filter(r => r.nps >= 9).length - rs.filter(r => r.nps <= 6).length) / n * 100) : 0;
+  const tally = k => { const m = {}; rs.forEach(r => { m[r[k]] = (m[r[k]] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+  const ss = slots().filter(s => s.cohort === A.rCohort);
+  return `<div class="wrap">
+    <div class="top"><button class="icon-btn" data-act="back" aria-label="목록으로" style="margin-left:-10px">${ICON.back}</button><span class="brand" style="font-size:18px">참여 후기</span><span style="width:40px"></span></div>
+    <div class="chips" style="margin:8px 0 12px">${cs.map(c => `<button class="chipbtn ${c === A.rCohort ? 'on' : ''}" data-act="rcohort" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div class="card hero stack" style="gap:12px">
+      <div class="between"><span class="eyebrow">${esc(A.rCohort)} 후기 요약</span><span class="small">응답 ${n}명</span></div>
+      <div class="sgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div><div class="small">평균 만족도</div><div class="round" style="font-size:26px;color:var(--gold)">${avg}<span class="small"> / 5</span></div></div>
+        <div><div class="small">재참여 의향</div><div class="round" style="font-size:26px;color:var(--gold)">${again}<span class="small">%</span></div></div>
+        <div><div class="small">추천 지수(NPS)</div><div class="round" style="font-size:26px;color:var(--gold)">${n ? nps : '-'}</div></div>
+      </div>
+      ${n ? `<div class="small" style="line-height:1.8">걱정됐던 점: ${tally('worry').slice(0, 3).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}<br>소규모 진행: ${tally('size').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}</div>` : ''}
+      ${ss.length ? `<div class="row">${ss.map(s => `<button class="mini on-dark" data-act="revlink" data-v="${esc(s.id)}">${ICON.copy}${esc(s.time)} 후기 링크</button>`).join('')}</div>` : ''}
+    </div>
+    <div class="stack" style="margin-top:12px;gap:10px">${n ? rs.map(reviewCard).join('') : '<div class="card empty">아직 후기가 없어요. 매칭앱 투표 완료 화면의 후기 버튼이나 위 링크로 받을 수 있어요.</div>'}</div>
+    ${n ? `<div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="rcsv">${ICON.down}${esc(A.rCohort)} 후기 CSV</button></div>` : ''}
+    <div class="spacer" style="min-height:20px"></div></div>`;
+}
+function reviewCard(r) {
+  return `<div class="card stack" style="gap:8px">
+    <div class="between"><span class="round" style="color:var(--gold-d);font-size:18px;letter-spacing:.05em">${stars(r.sat)}</span><span class="small">${esc(r.time)} · ${esc(dt(r.at))}</span></div>
+    <div class="row">${r.share ? `<span class="chip ok">홍보 동의 · ${esc(r.label)}</span>` : '<span class="chip mute">운영진만</span>'}<span class="chip mute">${esc(r.again)}</span><span class="chip mute">추천 ${r.nps}점</span></div>
+    <div class="kv"><span>걱정</span><span>${esc(r.worry)}</span></div>
+    <div class="kv"><span>참여해 보니</span><span>${esc(r.felt)}</span></div>
+    <div class="kv"><span>기억에 남는 순간</span><span>${esc(r.moment)}</span></div>
+    <div class="kv"><span>소규모 진행</span><span>${esc(r.size)}</span></div>
+    <div class="kv"><span>바라는 점</span><span>${esc(r.improve)}</span></div>
+    ${r.share ? `<div class="row"><button class="mini go" data-act="rcopy" data-v="${esc(r.id)}">${ICON.copy}홍보 문구 복사</button></div>` : ''}
+  </div>`;
+}
+function reviewCSV() {
+  const cols = [['작성일시', r => dt(r.at, true)], ['기수', 'cohort'], ['타임', 'time'], ['만족도', 'sat'], ['걱정됐던 점', 'worry'], ['참여해 보니', 'felt'], ['기억에 남는 순간', 'moment'],
+    ['소규모 진행', 'size'], ['바라는 점', 'improve'], ['재참여 의향', 'again'], ['추천 점수', 'nps'], ['홍보 동의', r => (r.share ? '동의' : '비동의')], ['표기', 'label']];
+  const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rs = reviewList().filter(r => r.cohort === A.rCohort);
+  const csv = '﻿' + [cols.map(c => cell(c[0])).join(',')].concat(rs.map(r => cols.map(([, f]) => cell(typeof f === 'function' ? f(r) : r[f])).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `이온_${A.rCohort}_참여후기_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 
 /* ---------- 설정 ---------- */
@@ -587,6 +644,11 @@ document.addEventListener('click', async e => {
   if (act === 'logout') { await IonStore.signOut(); }
   else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); toast('준비됐어요'); }
   else if (act === 'settings') openSettings();
+  else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
+  else if (act === 'rcohort') { A.rCohort = v; render(); }
+  else if (act === 'revlink') { const s = slots().find(x => x.id === v); copyText(REV_URL(s.cohort, s.time), '후기 링크를 복사했어요'); }
+  else if (act === 'rcopy') { const r = A.reviews[v]; copyText(`"${r.felt}"\n\n기억에 남는 순간: ${r.moment}\n\n— ${r.label}, 이온 ${r.cohort} 참가자`, '홍보 문구를 복사했어요'); }
+  else if (act === 'rcsv') reviewCSV();
   else if (act === 'back') { A.view = 'list'; render(); }
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'addslot') { const last = A.draft.slots[A.draft.slots.length - 1] || {}; A.draft.slots.push({ id: 's' + Date.now().toString(36), cohort: last.cohort || '', date: last.date || '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render(); }

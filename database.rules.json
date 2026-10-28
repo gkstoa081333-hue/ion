@@ -66,6 +66,14 @@
           ".validate": "root.child('admins').child(auth.uid).val() === true || (newData.child('uid').val() === auth.uid && newData.child('id').val() === $id && newData.child('status').isString() && newData.child('status').val().matches(/^(pending|waiting)$/) && newData.child('name').isString() && newData.child('name').val().length >= 2 && newData.child('name').val().length <= 20 && newData.child('phone').isString() && newData.child('phone').val().matches(/^01[0-9]-[0-9]{3,4}-[0-9]{4}$/) && newData.child('slotId').isString() && root.child('apply/slots').child(newData.child('slotId').val()).child('public').val() === true && root.child('apply/config/open').val() === true && newData.child('note').val().length <= 500)"
         }
       }
+    },
+    "reviews": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$id": {
+        ".write": "auth != null && !data.exists()",
+        ".validate": "auth != null && root.child('admins').child(auth.uid).val() === true || (newData.child('uid').val() === auth.uid && newData.child('sat').isNumber() && newData.child('sat').val() >= 1 && newData.child('sat').val() <= 5 && newData.child('nps').isNumber() && newData.child('nps').val() >= 0 && newData.child('nps').val() <= 10 && newData.child('cohort').isString() && newData.child('cohort').val().length <= 20 && newData.child('felt').isString() && newData.child('felt').val().length <= 1000 && newData.child('moment').isString() && newData.child('moment').val().length <= 1000 && newData.child('improve').isString() && newData.child('improve').val().length <= 1000 && newData.child('at').isNumber())"
+      }
     }
   }
 }
