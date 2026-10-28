@@ -391,7 +391,7 @@ function renderP() {
   let html = '';
   if (P.phase === 'loading') html = `<div class="spin" aria-label="불러오는 중"></div>`;
   else if (P.phase === 'nosession' || P.phase === 'error') {
-    html = `<div class="wrap dark"><div class="top"><span class="brand">EON</span></div>
+    html = `<div class="wrap dark"><div class="top"><span class="brand">ION</span></div>
       <div class="spacer"></div>
       <div class="stack center"><p class="h1">${P.phase === 'error' ? '잠시 문제가 생겼어요' : '테이블의 QR로<br>들어와 주세요'}</p>
       <p class="p">${P.phase === 'error' ? esc(P.err) : '현장에 있는 QR 코드를 찍으면 오늘 타임으로 바로 연결돼요.'}</p></div>
@@ -399,7 +399,7 @@ function renderP() {
   }
   else if (P.phase === 'done') html = viewDone(tag);
   else if (pub.status === 'closed') {
-    html = `<div class="wrap dark"><div class="top"><span class="brand">EON</span><span class="pill">${tag}</span></div>
+    html = `<div class="wrap dark"><div class="top"><span class="brand">ION</span><span class="pill">${tag}</span></div>
       <div class="spacer"></div><div class="stack center"><p class="h1">투표가 마감됐어요</p>
       <p class="p">결과는 오늘 중으로 카카오톡으로 안내드릴게요.<br>함께해 주셔서 감사합니다.</p></div><div class="spacer"></div></div>`;
   }
@@ -411,7 +411,7 @@ function renderP() {
 
 function viewEntry(tag) {
   return `<div class="wrap dark">
-    <div class="top"><span class="brand">EON</span><span class="pill">${tag}</span></div>
+    <div class="top"><span class="brand">ION</span><span class="pill">${tag}</span></div>
     <div class="stack" style="margin-top:36px;gap:14px">
       <span class="eyebrow">오늘의 시그널</span>
       <h1 class="h1" style="font-size:33px">오늘 마음에 남은 분을<br>알려주세요</h1>
@@ -429,7 +429,7 @@ function viewEntry(tag) {
 }
 
 function viewWaiting(tag) {
-  return `<div class="wrap dark"><div class="top"><span class="brand">EON</span><span class="pill">${tag}</span></div>
+  return `<div class="wrap dark"><div class="top"><span class="brand">ION</span><span class="pill">${tag}</span></div>
     <div class="spacer"></div>
     <div class="stack center"><span class="eyebrow">${esc(P.me.name)}님 · ${label(P.me.id)}</span>
     <p class="h1">곧 투표가 시작돼요</p>
@@ -448,7 +448,7 @@ function viewPick(tag) {
       ${r ? `<span class="chip r${r}">${r}순위</span>` : ''}</button>`);
   }
   return `<div class="wrap">
-    <div class="top"><button class="icon-btn" data-act="p-logout" aria-label="처음으로">${ICON.back}</button><span class="brand" style="font-size:18px">EON</span><span style="width:34px"></span></div>
+    <div class="top"><button class="icon-btn" data-act="p-logout" aria-label="처음으로">${ICON.back}</button><span class="brand" style="font-size:18px">ION</span><span style="width:34px"></span></div>
     <div class="stack" style="gap:8px;margin-top:6px">
       <span class="eyebrow">${tag}</span>
       <h1 class="h1" style="font-size:25px">마음에 남은 분의<br>번호를 골라주세요</h1>
@@ -469,7 +469,7 @@ function viewPick(tag) {
 
 function viewDone(tag) {
   return `<div class="wrap" style="text-align:center;gap:24px">
-    <div class="top" style="justify-content:center"><span class="brand" style="font-size:18px">EON</span></div>
+    <div class="top" style="justify-content:center"><span class="brand" style="font-size:18px">ION</span></div>
     <div class="stack" style="gap:12px;margin-top:8px">
       <div class="check">${ICON.check}</div>
       <h1 class="h1" style="font-size:27px;margin-top:6px">마음이 잘 전달됐어요</h1>
@@ -578,8 +578,8 @@ function renderA() {
 
 function viewLogin() {
   return `<div class="wrap dark">
-    <div class="top"><span class="brand">EON</span><span class="pill">관리자</span></div>
-    <div class="stack" style="margin-top:40px;gap:12px"><span class="eyebrow">EON SIGNAL</span><h1 class="h1">관리자 로그인</h1>
+    <div class="top"><span class="brand">ION</span><span class="pill">관리자</span></div>
+    <div class="stack" style="margin-top:40px;gap:12px"><span class="eyebrow">ION SIGNAL</span><h1 class="h1">관리자 로그인</h1>
     <p class="p">${USE_FB ? '운영진 계정으로 로그인해 주세요.' : '데모 모드에서는 아무 값으로나 들어갈 수 있어요.'}</p></div>
     <form class="stack" style="margin-top:28px;gap:16px" data-form="login">
       <div class="field"><label for="em">이메일</label><input id="em" class="input" type="email" autocomplete="username" ${USE_FB ? 'required' : ''}></div>
@@ -611,7 +611,7 @@ function viewHome() {
         </button>`; }).join('')}</div>`;
   }).join('');
   return `<div class="wrap wide">
-    <div class="between" style="min-height:44px"><div class="stack" style="gap:2px"><span class="eyebrow" style="font-size:12px">EON 관리자</span><span class="h2">기수 · 타임 관리</span></div>
+    <div class="between" style="min-height:44px"><div class="stack" style="gap:2px"><span class="eyebrow" style="font-size:12px">ION 관리자</span><span class="h2">기수 · 타임 관리</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
     <div class="stack" style="margin-top:16px;gap:12px">${items || '<div class="card empty">아직 만든 타임이 없어요. 아래에서 첫 타임을 만들어 보세요.</div>'}</div>
     <span class="section-t" style="margin-top:22px">새 타임 만들기</span>
