@@ -119,7 +119,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js"></script>
+<script src="ion-store.js?v=20261029b"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -653,7 +653,7 @@ document.addEventListener('click', async e => {
   else if (act === 'reset') {
     const em = (document.getElementById('em').value || '').trim();
     if (!em) { A.authErr = '이메일을 먼저 입력해 주세요.'; render(); return; }
-    try { await IonStore.resetPassword(em); A.authErr = em + ' 으로 재설정 메일을 보냈어요. 메일의 링크에서 새 비밀번호를 정한 뒤 로그인해 주세요. (스팸함도 확인)'; }
+    try { await (IonStore.resetPassword ? IonStore.resetPassword(em) : firebase.auth().sendPasswordResetEmail(em)); A.authErr = em + ' 으로 재설정 메일을 보냈어요. 메일의 링크에서 새 비밀번호를 정한 뒤 로그인해 주세요. (스팸함도 확인)'; }
     catch (e) { A.authErr = '재설정 메일을 보내지 못했어요 (' + (e.code || e.message) + ')'; }
     render(); const el = document.getElementById('em'); if (el) el.value = em;
   }
