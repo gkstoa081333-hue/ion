@@ -687,7 +687,7 @@ function viewHome() {
     <nav class="nav" aria-label="운영 메뉴"><a href="admin.html">신청</a><a class="on" href="index.html#admin">매칭</a><a href="admin.html#reviews">후기</a><a href="admin.html#settings">설정</a></nav>
     <span class="h2" style="margin-top:4px">매칭 · 기수 · 타임 관리</span>
     <div class="stack" style="margin-top:16px;gap:12px">${items || '<div class="card empty">아직 만든 타임이 없어요. 아래에서 첫 타임을 만들어 보세요.</div>'}</div>
-    <span class="section-t" style="margin-top:22px">새 타임 만들기</span>
+    <span class="section-t" style="margin-top:22px">따로 타임 만들기 (선택)</span>
     <form class="card stack" style="margin-top:12px" data-form="new-session">
       <div class="field"><label for="ns-cohort">기수 이름</label><input id="ns-cohort" data-keep class="input" placeholder="예: 크리스천 3기" required maxlength="30"></div>
       <div class="grid2">
@@ -695,7 +695,7 @@ function viewHome() {
         <div class="field"><label for="ns-slot">타임</label><input id="ns-slot" data-keep class="input" placeholder="예: 15시" required maxlength="12"></div>
       </div>
       <button class="btn" type="submit">타임 만들기</button>
-      <p class="small">기수 하나에 타임이 두 개면 같은 기수 이름·날짜로 두 번 만드세요. 매칭은 타임 안에서만 이뤄져요.</p>
+      <p class="small">신청관리 › 설정에서 만든 타임은 위 목록에 <b>자동으로 생겨요</b>. 신청 없이 따로 진행하는 타임만 여기서 직접 만드세요.</p>
     </form>
     ${USE_FB ? '' : `<div class="grid2" style="margin-top:16px"><button class="btn soft sm" style="width:100%" data-act="demo-seed">예시 데이터 채우기</button><button class="btn danger sm" style="width:100%" data-act="demo-reset">데모 초기화</button></div>`}
   </div>`;
