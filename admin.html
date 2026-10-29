@@ -6,6 +6,13 @@
 <meta name="theme-color" content="#26453B">
 <meta name="robots" content="noindex,nofollow">
 <title>이온 신청관리</title>
+<link rel="manifest" href="admin.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="이온관리">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -375,6 +382,7 @@ function viewMain() {
   return `<div class="wrap">
     <div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">신청관리</span></div>
       <div class="row" style="gap:0"><button class="mini" data-act="reviews" style="margin-right:4px">후기</button><button class="icon-btn" data-act="settings" aria-label="설정">${ICON.gear}</button><button class="icon-btn" data-act="logout" aria-label="로그아웃">${ICON.out}</button></div></div>
+    ${installHint()}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
     <div class="chips" style="margin:8px 0 12px">${cohortList().map(c => `<button class="chipbtn ${c === A.cohort ? 'on' : ''}" data-act="cohort" data-v="${esc(c)}">${esc(c)}</button>`).join('') || '<span class="small">설정에서 타임을 먼저 추가해 주세요</span>'}</div>
     ${viewStatus()}
@@ -385,6 +393,22 @@ function viewMain() {
       ${DEMO ? '<button class="mini" data-act="seed">예시 데이터</button><button class="mini del" data-act="wipe">데모 초기화</button>' : ''}</div>
     <div class="spacer" style="min-height:20px"></div>
   </div>`;
+}
+
+/* ---------- 홈 화면 설치 안내 ---------- */
+let INSTALL_EVT = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALL_EVT = e; if (A.phase === 'main') render(); });
+const STANDALONE = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function installHint() {
+  if (STANDALONE() || lsGet('ion_install_hide') === '1') return '';
+  const how = INSTALL_EVT ? '아래 버튼을 누르면 홈 화면에 앱으로 설치돼요.'
+    : IOS ? '사파리 하단 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b>를 누르세요.'
+    : '브라우저 메뉴(⋮) → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누르세요.';
+  return `<div class="card" style="display:flex;gap:12px;align-items:flex-start;margin:4px 0 10px;background:var(--sand);border-color:var(--gold)">
+    <img src="icons/icon-192.png" alt="" width="44" height="44" style="border-radius:12px;flex-shrink:0">
+    <div class="stack" style="gap:6px;flex-grow:1"><span class="round" style="font-size:15px">홈 화면에 '이온관리' 앱으로 추가하기</span>
+      <span class="small">${how} 앱처럼 바로 열리고 로그인도 오래 유지돼요.</span>
+      <div class="row">${INSTALL_EVT ? '<button class="mini go" data-act="install">앱 설치</button>' : ''}<button class="mini" data-act="hideinstall" style="background:var(--paper)">다음에 할게요</button></div></div></div>`;
 }
 
 function viewStatus() {
@@ -653,6 +677,8 @@ document.addEventListener('click', async e => {
   const act = b.dataset.act, v = b.dataset.v;
   const row = id => (A.data.apps || {})[id];
   if (act === 'logout') { await IonStore.signOut(); }
+  else if (act === 'install') { if (INSTALL_EVT) { INSTALL_EVT.prompt(); try { await INSTALL_EVT.userChoice; } catch (e) {} INSTALL_EVT = null; render(); } }
+  else if (act === 'hideinstall') { lsSet('ion_install_hide', '1'); render(); }
   else if (act === 'reset') {
     const em = (document.getElementById('em').value || '').replace(/\s/g, ''); A.email = em;
     if (!em) { A.authErr = '이메일을 먼저 입력해 주세요.'; render(); return; }

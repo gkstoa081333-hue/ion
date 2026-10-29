@@ -1,0 +1,17 @@
+{
+  "name": "이온 신청관리",
+  "short_name": "이온관리",
+  "description": "이온 크리스천 로테이션 소개팅 운영진 신청관리",
+  "start_url": "./admin.html?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F1E7",
+  "theme_color": "#26453B",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
