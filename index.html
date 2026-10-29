@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#26453B">
 <title>이온 시그널</title>
-<link rel="apple-touch-icon" href="icons/signal-180.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/signal-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="이온시그널">
+<meta name="apple-mobile-web-app-title" content="이온관리">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -145,6 +145,10 @@ select.input{appearance:none;-webkit-appearance:none}
 .modal{width:100%;max-width:440px;background:var(--cream);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:14px;margin-bottom:env(safe-area-inset-bottom)}
 @media (min-width:600px){.modal-bg{align-items:center}}
 @media print{.noprint{display:none!important} body{background:#fff}}
+.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
+.nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
+.nav .on{background:var(--green);color:var(--cream)}
+
 </style>
 </head>
 <body>
@@ -573,7 +577,7 @@ function installHint() {
 }
 
 function startAdmin() {
-  if (!document.querySelector('link[rel="manifest"]')) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'signal.webmanifest'; document.head.appendChild(l); }
+  if (!document.querySelector('link[rel="manifest"]')) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'admin.webmanifest'; document.head.appendChild(l); }
   AUTH.onChange(st => {
     A.checked = true; A.authed = !!st.admin;
     A.notAdmin = !!(st.user && !st.user.isAnonymous && !st.admin && USE_FB);
@@ -640,9 +644,10 @@ function viewHome() {
         </button>`; }).join('')}</div>`;
   }).join('');
   return `<div class="wrap wide">
-    <div class="between" style="min-height:44px"><div class="stack" style="gap:2px"><span class="eyebrow" style="font-size:12px">ION 관리자</span><span class="h2">기수 · 타임 관리</span></div>
+    <div class="between" style="min-height:44px"><div class="row"><span class="brand">ION</span><span class="pill" style="border-color:var(--gold-d);color:var(--gold-t)">운영</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
-    ${installHint()}
+    <nav class="nav" aria-label="운영 메뉴"><a href="admin.html">신청</a><a class="on" href="index.html#admin">매칭</a><a href="admin.html#reviews">후기</a><a href="admin.html#settings">설정</a></nav>
+    <span class="h2" style="margin-top:4px">매칭 · 기수 · 타임 관리</span>
     <div class="stack" style="margin-top:16px;gap:12px">${items || '<div class="card empty">아직 만든 타임이 없어요. 아래에서 첫 타임을 만들어 보세요.</div>'}</div>
     <span class="section-t" style="margin-top:22px">새 타임 만들기</span>
     <form class="card stack" style="margin-top:12px" data-form="new-session">
@@ -676,6 +681,36 @@ function rosterList(s) {
   const r = s.roster || {}; return Object.keys(r).sort(sortIds).map(id => ({ id, ...r[id] }));
 }
 
+/* ---------- 신청관리(apply) 확정자 바로 불러오기 ---------- */
+async function loadApply() {
+  A.applyLoading = true;
+  try { const [slots, apps] = await Promise.all([DB.get('apply/slots'), DB.get('apply/apps')]); A.applyCache = { slots: slots || {}, apps: apps || {} }; }
+  catch (e) { console.error(e); A.applyCache = { slots: {}, apps: {}, err: true }; }
+  A.applyLoading = false; renderA();
+}
+function applyConfirmed(slotId) {
+  const G = { M: 0, F: 1 };
+  return Object.values((A.applyCache && A.applyCache.apps) || {}).filter(r => r.slotId === slotId && r.status === 'confirmed')
+    .sort((a, b) => G[a.gender] - G[b.gender] || a.at - b.at);
+}
+function guessSlot(slots, pub) {
+  const num = String(pub.cohort || '').match(/\d+/); const hour = String(pub.slot || '').match(/\d+/);
+  const hit = slots.find(([, s]) => num && String(s.cohort).includes(num[0]) && hour && String(s.time).startsWith(hour[0].padStart(2, '0')));
+  return hit ? hit[0] : (slots[0] || [])[0];
+}
+function importBox(s) {
+  if (!A.applyCache) { if (!A.applyLoading) setTimeout(loadApply, 0); return '<p class="small">신청 명단을 불러오는 중…</p>'; }
+  const slots = Object.entries(A.applyCache.slots).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+  if (!slots.length) return `<p class="small">${A.applyCache.err ? '신청 명단을 읽지 못했어요.' : '신청관리에 등록된 타임이 없어요.'}</p>`;
+  const pick = A.importSlot && A.applyCache.slots[A.importSlot] ? A.importSlot : guessSlot(slots, s.pub || {});
+  const sel = applyConfirmed(pick); const m = sel.filter(r => r.gender === 'M').length;
+  return `<div class="field"><label for="imp-slot">신청관리 타임</label>
+      <select id="imp-slot" class="input" data-act-change="imp-slot">${slots.map(([id, x]) => `<option value="${id}" ${id === pick ? 'selected' : ''}>${esc(x.cohort)} ${esc(x.date)} ${esc(x.time)} · 확정 ${applyConfirmed(id).length}명</option>`).join('')}</select></div>
+    <p class="small">확정자 ${sel.length}명 (형제 ${m} · 자매 ${sel.length - m}) · 이미 명단에 있는 번호는 건너뛰어요.</p>
+    <div class="grid2"><button class="btn sm" style="width:100%" data-act="import" data-slot="${pick}" ${sel.length ? '' : 'disabled'}>확정자 불러오기</button>
+      <button class="btn soft sm" style="width:100%" data-act="import-refresh">새로고침</button></div>`;
+}
+
 function tabPeople(s) {
   const people = rosterList(s); const hasVotes = Object.keys(s.votes || {}).length > 0;
   const locked = hasVotes;
@@ -684,6 +719,8 @@ function tabPeople(s) {
   return `<div class="list">${rows || '<div class="empty">참가자를 추가해 주세요</div>'}</div>
     <p class="small">형제 ${+s.pub.M || 0}명 · 자매 ${+s.pub.F || 0}명 · 번호는 성별마다 추가한 순서대로 매겨져요. 번호표도 같은 번호로 나눠주세요.</p>
     ${locked ? `<div class="notice">${ICON.info}<span>투표가 시작돼 명단을 고칠 수 없어요. 고쳐야 하면 투표 탭에서 제출 기록을 초기화해 주세요.</span></div>` : `
+    <span class="section-t">신청 명단에서 불러오기</span>
+    <div class="card stack">${importBox(s)}</div>
     <span class="section-t">한 명씩 추가</span>
     <form class="card stack" data-form="add-person">
       <div class="grid2">
@@ -887,6 +924,7 @@ document.addEventListener('submit', async e => {
   } catch (err) { console.error(err); toast(err.message && err.message.length < 60 ? err.message : '저장하지 못했어요. 권한과 연결을 확인해 주세요'); }
 });
 
+document.addEventListener('change', e => { if (e.target.id === 'imp-slot') { A.importSlot = e.target.value; renderA(); } });
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
@@ -896,6 +934,15 @@ document.addEventListener('click', async e => {
       case 'submit': return onSubmit();
       case 'p-logout': sessionStorage.removeItem('eon-signal-me-' + P.sid); P.me = null; P.first = P.second = null; P.phase = 'entry'; P.err = ''; return renderP();
       case 'logout': return AUTH.signOut();
+      case 'import-refresh': A.applyCache = null; return loadApply();
+      case 'import': {
+        const list = applyConfirmed(b.dataset.slot); const have = new Set(rosterList(A.cur).map(p => digits(p.phone)));
+        const add = list.filter(r => !have.has(digits(r.phone))).map(r => ({ gender: r.gender, name: r.name, phone: r.phone }));
+        if (!add.length) return toast('새로 불러올 확정자가 없어요');
+        if (!(await confirmBox(`확정자 ${add.length}명을 불러올까요?`, `형제 ${add.filter(r => r.gender === 'M').length}명 · 자매 ${add.filter(r => r.gender === 'F').length}명이 신청 순서대로 번호를 받아요.`, '불러오기'))) return;
+        await writeRoster([...rosterList(A.cur), ...add]);
+        toast(`${add.length}명을 불러왔어요${list.length - add.length ? ` (이미 있는 ${list.length - add.length}명 제외)` : ''}`); return;
+      }
       case 'install': if (INSTALL_EVT) { INSTALL_EVT.prompt(); try { await INSTALL_EVT.userChoice; } catch (_) {} INSTALL_EVT = null; renderA(); } return;
       case 'hideinstall': lsSet('ion_signal_install_hide', true); renderA(); return;
       case 'open': return openSession(b.dataset.sid);

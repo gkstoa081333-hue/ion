@@ -114,6 +114,10 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .modal-bg{position:fixed;inset:0;background:rgba(26,48,41,.45);display:flex;align-items:flex-end;justify-content:center;z-index:40;padding:16px}
 .modal{width:100%;max-width:460px;max-height:92vh;overflow:auto;background:var(--cream);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px;margin-bottom:env(safe-area-inset-bottom)}
 @media (min-width:600px){.modal-bg{align-items:center}}
+.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
+.nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
+.nav .on{background:var(--green);color:var(--cream)}
+
 .sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sgrid .input{height:46px;padding:0 12px}
 </style>
@@ -126,7 +130,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261029d"></script>
+<script src="ion-store.js?v=20261029e"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -231,6 +235,7 @@ const payNameOf = r => String(r.name).replace(/\s/g, '').slice(0, 4) + String(Nu
 const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' + what;
 
 /* ---------- 상태 ---------- */
+let START_HASH = (location.hash || '').replace('#', '');
 const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, rCohort: '' };
 const apps = () => Object.values((A.data && A.data.apps) || {});
 const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -240,7 +245,7 @@ function start() {
   IonStore.onAuth(st => {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews') render(); });
-      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
+      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
       if (A.unsubR) { A.unsubR(); A.unsubR = null; }
@@ -395,8 +400,7 @@ function viewMain() {
     .filter(r => !q || [r.name, r.payName, r.id, r.phone].some(v => String(v || '').toLowerCase().includes(q)))
     .sort((a, b) => A.tab === 'pending' ? a.deadline - b.deadline : a.at - b.at);
   return `<div class="wrap">
-    <div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">신청관리</span></div>
-      <div class="row" style="gap:0"><button class="mini" data-act="reviews" style="margin-right:4px">후기</button><button class="icon-btn" data-act="settings" aria-label="설정">${ICON.gear}</button><button class="icon-btn" data-act="logout" aria-label="로그아웃">${ICON.out}</button></div></div>
+    ${appHead('apply')}
     ${installHint()}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
     <div class="chips" style="margin:8px 0 12px">${cohortList().map(c => `<button class="chipbtn ${c === A.cohort ? 'on' : ''}" data-act="cohort" data-v="${esc(c)}">${esc(c)}</button>`).join('') || '<span class="small">설정에서 타임을 먼저 추가해 주세요</span>'}</div>
@@ -409,6 +413,21 @@ function viewMain() {
       ${DEMO ? '<button class="mini" data-act="seed">예시 데이터</button><button class="mini del" data-act="wipe">데모 초기화</button>' : ''}</div>
     <div class="spacer" style="min-height:20px"></div>
   </div>`;
+}
+
+/* ---------- 공통 머리글 + 메뉴 (신청 · 매칭 · 후기 · 설정) ---------- */
+function appHead(active) {
+  const item = (k, label) => k === 'match'
+    ? `<a href="index.html#admin" class="${active === k ? 'on' : ''}">${label}</a>`
+    : `<button type="button" data-act="nav" data-v="${k}" class="${active === k ? 'on' : ''}">${label}</button>`;
+  return `<div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">운영</span></div>
+      <button class="icon-btn" data-act="logout" aria-label="로그아웃" style="margin-right:-8px">${ICON.out}</button></div>
+    <nav class="nav" aria-label="운영 메뉴">${item('apply', '신청')}${item('match', '매칭')}${item('reviews', '후기')}${item('settings', '설정')}</nav>`;
+}
+function goView(v) {
+  if (v === 'settings') return openSettings();
+  A.view = v === 'apply' ? 'list' : v; render(); window.scrollTo(0, 0);
+  try { history.replaceState(null, '', v === 'apply' ? location.pathname : '#' + v); } catch (e) {}
 }
 
 /* ---------- 홈 화면 설치 안내 ---------- */
@@ -500,7 +519,7 @@ function viewReviews() {
   const tally = k => { const m = {}; rs.forEach(r => { m[r[k]] = (m[r[k]] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
   const ss = slots().filter(s => s.cohort === A.rCohort);
   return `<div class="wrap">
-    <div class="top"><button class="icon-btn" data-act="back" aria-label="목록으로" style="margin-left:-10px">${ICON.back}</button><span class="brand" style="font-size:18px">참여 후기</span><span style="width:40px"></span></div>
+    ${appHead('reviews')}
     <div class="chips" style="margin:8px 0 12px">${cs.map(c => `<button class="chipbtn ${c === A.rCohort ? 'on' : ''}" data-act="rcohort" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="card hero stack" style="gap:12px">
       <div class="between"><span class="eyebrow">${esc(A.rCohort)} 후기 요약</span><span class="small">응답 ${n}명</span></div>
@@ -509,7 +528,7 @@ function viewReviews() {
         <div><div class="small">재참여 의향</div><div class="round" style="font-size:26px;color:var(--gold)">${again}<span class="small">%</span></div></div>
         <div><div class="small">추천 지수(NPS)</div><div class="round" style="font-size:26px;color:var(--gold)">${n ? nps : '-'}</div></div>
       </div>
-      ${n ? `<div class="small" style="line-height:1.8">걱정됐던 점: ${tally('worry').slice(0, 3).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}<br>소규모 진행: ${tally('size').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}</div>` : ''}
+      ${n ? `<div class="small" style="line-height:1.8">걱정됐던 점: ${tally('worry').slice(0, 3).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}<br>소규모 진행: ${tally('size').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}${rs.some(r => r.pace) ? `<br>대화 시간: ${tally('pace').filter(([k]) => k && k !== 'undefined').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}` : ''}</div>` : ''}
       ${ss.length ? `<div class="row">${ss.map(s => `<button class="mini on-dark" data-act="revlink" data-v="${esc(s.id)}">${ICON.copy}${esc(s.time)} 후기 링크</button>`).join('')}</div>` : ''}
     </div>
     <div class="stack" style="margin-top:12px;gap:10px">${n ? rs.map(reviewCard).join('') : '<div class="card empty">아직 후기가 없어요. 매칭앱 투표 완료 화면의 후기 버튼이나 위 링크로 받을 수 있어요.</div>'}</div>
@@ -524,13 +543,14 @@ function reviewCard(r) {
     <div class="kv"><span>참여해 보니</span><span>${esc(r.felt)}</span></div>
     <div class="kv"><span>기억에 남는 순간</span><span>${esc(r.moment)}</span></div>
     <div class="kv"><span>소규모 진행</span><span>${esc(r.size)}</span></div>
+    ${r.pace ? `<div class="kv"><span>대화 시간</span><span>${esc(r.pace)}</span></div>` : ''}
     <div class="kv"><span>바라는 점</span><span>${esc(r.improve)}</span></div>
-    ${r.share ? `<div class="row"><button class="mini go" data-act="rcopy" data-v="${esc(r.id)}">${ICON.copy}홍보 문구 복사</button></div>` : ''}
+    <div class="row">${r.share ? `<button class="mini go" data-act="rcopy" data-v="${esc(r.id)}">${ICON.copy}홍보 문구 복사</button>` : ''}<button class="mini del" data-act="rdel" data-v="${esc(r.id)}">삭제</button></div>
   </div>`;
 }
 function reviewCSV() {
   const cols = [['작성일시', r => dt(r.at, true)], ['기수', 'cohort'], ['타임', 'time'], ['만족도', 'sat'], ['걱정됐던 점', 'worry'], ['참여해 보니', 'felt'], ['기억에 남는 순간', 'moment'],
-    ['소규모 진행', 'size'], ['바라는 점', 'improve'], ['재참여 의향', 'again'], ['추천 점수', 'nps'], ['홍보 동의', r => (r.share ? '동의' : '비동의')], ['표기', 'label']];
+    ['소규모 진행', 'size'], ['대화 시간', 'pace'], ['바라는 점', 'improve'], ['재참여 의향', 'again'], ['추천 점수', 'nps'], ['홍보 동의', r => (r.share ? '동의' : '비동의')], ['표기', 'label']];
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rs = reviewList().filter(r => r.cohort === A.rCohort);
   const csv = '﻿' + [cols.map(c => cell(c[0])).join(',')].concat(rs.map(r => cols.map(([, f]) => cell(typeof f === 'function' ? f(r) : r[f])).join(','))).join('\r\n');
@@ -554,7 +574,7 @@ function viewSettings() {
       <div class="row" style="justify-content:flex-end">${hasApps(s.id) ? '<span class="small">신청자가 있어 삭제할 수 없어요 (비공개로 바꾸세요)</span>' : `<button class="mini del" data-act="delslot" data-v="${i}">이 타임 삭제</button>`}</div>
     </div>`).join('');
   return `<div class="wrap">
-    <div class="top"><button class="icon-btn" data-act="back" aria-label="목록으로" style="margin-left:-10px">${ICON.back}</button><span class="brand" style="font-size:18px">설정</span><span style="width:40px"></span></div>
+    ${appHead('settings')}
     <div class="stack" style="gap:16px;margin-top:8px">
       <div class="card stack" style="gap:14px">
         <div class="between"><span class="round" style="font-size:17px">모집 상태</span>
@@ -577,6 +597,7 @@ const hasApps = sid => apps().some(r => r.slotId === sid);
 function openSettings() {
   A.draft = { config: { ...ION_DEFAULTS.config, ...conf() }, slots: slots().map(s => ({ ...s, cap: { M: s.cap?.M || 0, F: s.cap?.F || 0 } })) };
   A.view = 'settings'; render(); window.scrollTo(0, 0);
+  try { history.replaceState(null, '', '#settings'); } catch (e) {}
 }
 async function saveSettings() {
   const d = A.draft; const c = d.config;
@@ -589,7 +610,7 @@ async function saveSettings() {
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   removed.forEach(id => { up['slots/' + id] = null; up['counts/' + id] = null; });
   A.busy = true; render();
-  try { await IonStore.update('apply', up); toast('저장했어요'); A.view = 'list'; A.lastMaint = 0; maintain(true); }
+  try { await IonStore.update('apply', up); toast('저장했어요'); A.lastMaint = 0; maintain(true); goView('apply'); }
   catch (e) { toast('저장하지 못했어요: ' + e.message); }
   A.busy = false; render();
 }
@@ -705,12 +726,19 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); toast('준비됐어요'); }
   else if (act === 'settings') openSettings();
+  else if (act === 'nav') goView(v);
   else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
   else if (act === 'rcohort') { A.rCohort = v; render(); }
   else if (act === 'revlink') { const s = slots().find(x => x.id === v); copyText(REV_URL(s.cohort, s.time), '후기 링크를 복사했어요'); }
   else if (act === 'rcopy') { const r = A.reviews[v]; copyText(`"${r.felt}"\n\n기억에 남는 순간: ${r.moment}\n\n— ${r.label}, 이온 ${r.cohort} 참가자`, '홍보 문구를 복사했어요'); }
   else if (act === 'rcsv') reviewCSV();
-  else if (act === 'back') { A.view = 'list'; render(); }
+  else if (act === 'rdel') {
+    const r = A.reviews[v];
+    if (await confirmBox('이 후기를 삭제할까요?', `${r.cohort} ${r.time} · ${'★'.repeat(r.sat)} · "${String(r.felt).slice(0, 30)}…" — 삭제하면 되돌릴 수 없고 요약 숫자에서도 빠져요.`, '삭제', true)) {
+      try { await IonStore.update('reviews', { [v]: null }); toast('후기를 삭제했어요'); } catch (e) { toast('삭제하지 못했어요: ' + e.message); }
+    }
+  }
+  else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'addslot') { const last = A.draft.slots[A.draft.slots.length - 1] || {}; A.draft.slots.push({ id: 's' + Date.now().toString(36), cohort: last.cohort || '', date: last.date || '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render(); }
   else if (act === 'delslot') { A.draft.slots.splice(Number(v), 1); render(); }
@@ -746,6 +774,7 @@ document.addEventListener('click', async e => {
   else if (act === 'seed') demoSeed();
   else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저의 데모 데이터만 지워져요.', '지우기', true)) IonStore.resetDemo(); }
 });
+window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'settings'].includes(want)) goView(want); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maintain(true); });
 setInterval(() => { if (A.phase === 'main' && A.view === 'list' && document.visibilityState === 'visible' && !document.getElementById('modal').innerHTML) { maintain(); render(); } }, 60000);
 

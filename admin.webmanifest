@@ -1,7 +1,7 @@
 {
-  "name": "이온 신청관리",
+  "name": "이온 운영 관리",
   "short_name": "이온관리",
-  "description": "이온 크리스천 로테이션 소개팅 운영진 신청관리",
+  "description": "이온 크리스천 로테이션 소개팅 운영진 — 신청·매칭·후기·설정",
   "start_url": "./admin.html?source=app",
   "scope": "./",
   "display": "standalone",

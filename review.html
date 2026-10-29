@@ -139,7 +139,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261029d"></script>
+<script src="ion-store.js?v=20261029e"></script>
 <script>
 /* =====================================================================
    이온 참여 후기 — 익명으로 Firebase에 저장 (운영진만 열람)
@@ -147,7 +147,8 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
    ▶ 주소 끝에 &demo 를 붙이면 데모 모드
    ===================================================================== */
 const OPT = {
-  worry: ['처음 보는 사람과 어색할까 봐', '대화가 끊길까 봐', '나와 맞는 분이 없을까 봐', '진행 방식이 낯설까 봐', '특별히 걱정 없었어요', '기타'],
+  worry: ['처음 보는 사람과 어색할까 봐', '대화 주제가 없을까 봐', '나와 맞는 분이 없을까 봐', '같은 교회 지인을 만날까 봐', '로테이션 방식이 낯설어서', '특별히 걱정 없었어요', '기타'],
+  pace: ['짧았어요', '적당했어요', '길었어요'],
   size: ['딱 좋았어요', '조금 적었어요', '조금 많았어요'],
   again: ['다음 기수에도 참여하고 싶어요', '고민 중이에요', '아니요'],
   share: ['네, 소개해도 좋아요', '아니요, 운영진만 봐 주세요'],
@@ -169,7 +170,7 @@ const SAT = ['', '아쉬웠어요', '조금 아쉬웠어요', '보통이었어�
 
 const FIXED = !!(qs.get('c') && qs.get('t'));
 const S = { phase: 'loading', step: 0, slots: [], err: '', busy: false, edit: false,
-  d: { cohort: qs.get('c') || '', time: qs.get('t') || '', sat: 0, worry: '', worryEtc: '', felt: '', moment: '', size: '', improve: '', again: '', nps: -1, share: '', age: '', gender: '', agree: false } };
+  d: { cohort: qs.get('c') || '', time: qs.get('t') || '', sat: 0, worry: '', worryEtc: '', felt: '', moment: '', size: '', pace: '', improve: '', again: '', nps: -1, share: '', age: '', gender: '', agree: false } };
 
 async function load() {
   try {
@@ -226,6 +227,7 @@ function viewStep2() {
       ${ta('felt', '실제로 참여해 보니 어떠셨나요? 걱정과 비교해 편하게 적어주세요.', '예) 처음엔 어색했는데 진행자분 덕분에 금방 편해졌어요')}
       ${ta('moment', '오늘 가장 기억에 남는 순간 한 가지는?', '예) 같은 교회 수련회 얘기로 웃었던 순간')}
       <div class="field"><span class="lab">소규모 진행은 어떠셨나요?<span class="req">*</span></span>${opts('size', OPT.size)}</div>
+      <div class="field"><span class="lab">한 분과 대화하는 시간은 어땠나요?<span class="req">*</span></span>${opts('pace', OPT.pace)}</div>
       ${ta('improve', '다음에 더 좋아졌으면 하는 점이 있다면?', '없으면 "없음"이라고 적어주세요')}
     </div>${foot('다음')}</div>`;
 }
@@ -270,6 +272,7 @@ function check(step) {
     if (d.felt.trim().length < 2) return '참여해 보신 느낌을 적어주세요.';
     if (d.moment.trim().length < 2) return '기억에 남는 순간을 적어주세요.';
     if (!d.size) return '소규모 진행에 대한 생각을 선택해 주세요.';
+    if (!d.pace) return '대화 시간이 어땠는지 선택해 주세요.';
     if (!d.improve.trim()) return '더 좋아졌으면 하는 점을 적어주세요. 없으면 "없음"도 괜찮아요.';
   }
   if (step === 2) {
@@ -288,7 +291,7 @@ async function submit() {
     const uid = await IonStore.ensureAnon();
     const id = IonStore.newId('reviews');
     await IonStore.set('reviews/' + id, { id, uid, at: Date.now(), cohort: d.cohort, time: d.time, sat: d.sat,
-      worry: d.worry === '기타' ? d.worryEtc.trim() : d.worry, felt: d.felt.trim(), moment: d.moment.trim(), size: d.size, improve: d.improve.trim(),
+      worry: d.worry === '기타' ? d.worryEtc.trim() : d.worry, felt: d.felt.trim(), moment: d.moment.trim(), size: d.size, pace: d.pace, improve: d.improve.trim(),
       again: d.again, nps: d.nps, share: ok, label: ok ? `${d.age} · ${d.gender}` : '' });
     try { localStorage.setItem('ion_review_done_' + d.cohort + d.time, '1'); } catch (e) {}
     S.phase = 'done'; window.scrollTo(0, 0);
