@@ -362,6 +362,7 @@ function initStore() {
   if (USE_FB) {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
     DB = makeFirebaseDB(app.database());
+    app.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {}); // 로그아웃 전까지 자동 로그인
     AUTH = makeFirebaseAuth(app.auth());
   } else { DB = makeLocalDB(); AUTH = makeLocalAuth(); }
 }

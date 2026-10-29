@@ -119,7 +119,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261029c"></script>
+<script src="ion-store.js?v=20261029d"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -340,7 +340,7 @@ function viewLogin() {
   return `<div class="wrap narrow dark">
     <div class="top"><span class="brand">ION</span><span class="pill">신청관리</span></div>
     <div class="stack" style="margin-top:40px;gap:12px"><span class="eyebrow">ION ADMIN</span><h1 class="h1">운영진 로그인</h1>
-      <p class="p">${DEMO ? '데모 모드에서는 아무 값으로나 들어갈 수 있어요.' : '매칭앱 관리자와 같은 계정으로 로그인해 주세요.'}</p></div>
+      <p class="p">${DEMO ? '데모 모드에서는 아무 값으로나 들어갈 수 있어요.' : '매칭앱 관리자와 같은 계정으로 로그인해 주세요. 한 번 로그인하면 이 기기에서는 로그아웃 전까지 자동으로 로그인돼요.'}</p></div>
     <form class="stack" style="margin-top:28px;gap:16px" data-form="login">
       <div class="field"><label for="em">이메일</label><input id="em" class="input" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(A.email || '')}" ${DEMO ? '' : 'required'}></div>
       <div class="field"><label for="pw">비밀번호</label><input id="pw" class="input" type="password" autocomplete="current-password" ${DEMO ? '' : 'required'}></div>

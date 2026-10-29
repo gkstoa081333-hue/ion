@@ -42,6 +42,8 @@ const IonStore = (() => {
   if (!ION_DEMO) {
     const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(ION_FIREBASE);
     const db = app.database(), auth = app.auth();
+    // 로그인 상태를 이 기기에 저장 → 로그아웃 전까지 자동 로그인
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
     const store = {
       demo: false,
       async get(p) { const s = await db.ref(p).get(); return s.exists() ? s.val() : null; },
