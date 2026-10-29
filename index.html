@@ -671,16 +671,24 @@ function viewHome() {
     .sort((a, b) => (b[1].pub.date || '').localeCompare(a[1].pub.date || '') || (a[1].pub.slot || '').localeCompare(b[1].pub.slot || ''));
   const groups = {};
   list.forEach(([sid, s]) => { const k = `${s.pub.cohort}||${s.pub.date}`; (groups[k] = groups[k] || []).push([sid, s]); });
-  const items = Object.entries(groups).map(([k, arr]) => {
+  const t = new Date(); const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const ents = Object.entries(groups);
+  const upcoming = ents.filter(([k]) => (k.split('||')[1] || '') >= today).sort((a, b) => a[0].split('||')[1].localeCompare(b[0].split('||')[1]));
+  const past = ents.filter(([k]) => (k.split('||')[1] || '') < today);
+  const render1 = ([k, arr]) => {
     const [cohort, date] = k.split('||');
     return `<span class="section-t">${esc(cohort)} · ${esc(date)}</span>
       <div class="list">${arr.map(([sid, s]) => { const st = sessionStats(s); return `
         <button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left" data-act="open" data-sid="${sid}">
-          <span class="no">${esc(st.pub.slot)}</span>
-          <span class="meta">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span>
+          <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1">
+            <span class="round" style="font-size:16px">${esc(st.pub.slot)}</span>
+            <span class="meta" style="white-space:normal">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span></span>
           <span class="chip ${st.pub.status === 'open' ? 'wait' : st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span>
         </button>`; }).join('')}</div>`;
-  }).join('');
+  };
+  const items = upcoming.map(render1).join('') + (past.length ? `
+    <button class="btn soft sm" style="width:100%;margin-top:4px" data-act="toggle-past">${A.showPast ? '지난 기수 접기' : `지난 기수 ${past.length}개 보기`}</button>
+    ${A.showPast ? past.map(render1).join('') : ''}` : '');
   return `<div class="wrap wide">
     <div class="between" style="min-height:44px"><div class="row"><span class="brand">ION</span><span class="pill" style="border-color:var(--gold-d);color:var(--gold-t)">운영</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
@@ -993,6 +1001,7 @@ document.addEventListener('click', async e => {
       case 'submit': return onSubmit();
       case 'p-logout': sessionStorage.removeItem('eon-signal-me-' + P.sid); P.me = null; P.first = P.second = null; P.phase = 'entry'; P.err = ''; return renderP();
       case 'logout': return AUTH.signOut();
+      case 'toggle-past': A.showPast = !A.showPast; renderA(); return;
       case 'import-refresh': A.applyCache = null; return loadApply();
       case 'import': {
         const list = applyConfirmed(b.dataset.slot); const have = new Set(rosterList(A.cur).map(p => digits(p.phone)));

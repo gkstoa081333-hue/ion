@@ -198,7 +198,9 @@ function fmtDeadline(iso) {
 async function loadConfig() {
   const [config, slots, counts] = await Promise.all([IonStore.get('apply/config'), IonStore.get('apply/slots'), IonStore.get('apply/counts')]);
   if (!config) return { open: false, slots: [] };
-  const list = Object.entries(slots || {}).filter(([, s]) => s && s.public)
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const notPast = s => { const m = String(s.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return true; let y = today.getFullYear(); let d = new Date(y, +m[1] - 1, +m[2]); if (d < new Date(y, today.getMonth() - 2, 1)) d = new Date(y + 1, +m[1] - 1, +m[2]); return d >= today; };
+  const list = Object.entries(slots || {}).filter(([, s]) => s && s.public && notPast(s))
     .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
     .map(([id, s]) => {
       const c = (counts || {})[id] || {};

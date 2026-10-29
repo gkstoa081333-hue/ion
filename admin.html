@@ -118,6 +118,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
 .nav .on{background:var(--green);color:var(--cream)}
 
+.pastsel{min-height:38px;border-radius:999px;border:1.5px dashed var(--line-2);background:var(--paper);padding:0 12px;font-family:var(--round);font-size:14px;color:var(--muted)}
+.pastsel.on{background:var(--green);color:var(--cream);border:1.5px solid var(--green)}
 .sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sgrid .input{height:46px;padding:0 12px}
 </style>
@@ -260,7 +262,27 @@ function cohortList() {
   apps().forEach(r => { if (r.cohort && !out.includes(r.cohort)) out.push(r.cohort); });
   return out;
 }
-function fixCohort() { const c = cohortList(); if (!c.includes(A.cohort)) A.cohort = c[0] || ''; }
+/* ---------- 기수 정리: 행사일이 지난 기수는 '지난 기수'로 자동 분류 ---------- */
+const TODAY = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function cohortDate(c) {
+  const ds = slots().filter(s => s.cohort === c).map(s => slotIsoDate(s.date));
+  if (!ds.length) apps().filter(r => r.cohort === c && r.date).forEach(r => ds.push(slotIsoDate(r.date)));
+  return ds.sort()[0] || '';
+}
+function cohortGroups(extra = []) {
+  const all = [...new Set([...cohortList(), ...extra])]; const t = TODAY();
+  const cur = all.filter(c => !cohortDate(c) || cohortDate(c) >= t).sort((a, b) => cohortDate(a).localeCompare(cohortDate(b)));
+  const past = all.filter(c => cohortDate(c) && cohortDate(c) < t).sort((a, b) => cohortDate(b).localeCompare(cohortDate(a)));
+  return { cur, past };
+}
+function cohortPicker(active, act, extra = []) {
+  const { cur, past } = cohortGroups(extra);
+  if (!cur.length && !past.length) return '<div class="small" style="margin:8px 0 12px">설정에서 타임을 먼저 추가해 주세요</div>';
+  return `<div class="chips" style="margin:8px 0 12px;align-items:center">
+    ${cur.map(c => `<button class="chipbtn ${c === active ? 'on' : ''}" data-act="${act}" data-v="${esc(c)}">${esc(c)}</button>`).join('')}
+    ${past.length ? `<select class="pastsel ${past.includes(active) ? 'on' : ''}" data-pick="${act}" aria-label="지난 기수 보기"><option value="">지난 기수 ${past.length}개 ▾</option>${past.map(c => `<option value="${esc(c)}" ${c === active ? 'selected' : ''}>${esc(c)} · ${cohortDate(c).slice(5).replace('-', '/')}</option>`).join('')}</select>` : ''}</div>`;
+}
+function fixCohort() { const c = cohortList(); if (!c.includes(A.cohort)) { const g = cohortGroups(); A.cohort = g.cur[0] || g.past[0] || ''; } }
 
 /* ---------- 자동 정리: 미입금 취소 · 대기 배정 · 정원 재계산 ---------- */
 function plan(list, extra = {}) {
@@ -403,7 +425,7 @@ function viewMain() {
     ${appHead('apply')}
     ${installHint()}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
-    <div class="chips" style="margin:8px 0 12px">${cohortList().map(c => `<button class="chipbtn ${c === A.cohort ? 'on' : ''}" data-act="cohort" data-v="${esc(c)}">${esc(c)}</button>`).join('') || '<span class="small">설정에서 타임을 먼저 추가해 주세요</span>'}</div>
+    ${cohortPicker(A.cohort, 'cohort')}
     ${viewStatus()}
     <input class="input" style="margin-top:14px" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 번호로 찾기 (예: 017)" aria-label="검색" inputmode="search">
     <div class="tabs" style="margin-top:12px">${['pending', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>
@@ -511,7 +533,7 @@ function reviewList() { return Object.values(A.reviews || {}).sort((a, b) => b.a
 function viewReviews() {
   const all = reviewList();
   const cs = []; all.forEach(r => { if (!cs.includes(r.cohort)) cs.push(r.cohort); }); cohortList().forEach(c => { if (!cs.includes(c)) cs.push(c); });
-  if (!cs.includes(A.rCohort)) A.rCohort = cs.includes(A.cohort) ? A.cohort : (cs[0] || '');
+  if (!cs.includes(A.rCohort)) { const g = cohortGroups(cs); const withRev = [...g.cur, ...g.past].find(c => all.some(r => r.cohort === c)); A.rCohort = cs.includes(A.cohort) && all.some(r => r.cohort === A.cohort) ? A.cohort : (withRev || g.cur[0] || g.past[0] || ''); }
   const rs = all.filter(r => r.cohort === A.rCohort); const n = rs.length;
   const avg = n ? (rs.reduce((t, r) => t + r.sat, 0) / n).toFixed(1) : '-';
   const again = n ? Math.round(rs.filter(r => String(r.again).startsWith('다음')).length / n * 100) : 0;
@@ -520,7 +542,7 @@ function viewReviews() {
   const ss = slots().filter(s => s.cohort === A.rCohort);
   return `<div class="wrap">
     ${appHead('reviews')}
-    <div class="chips" style="margin:8px 0 12px">${cs.map(c => `<button class="chipbtn ${c === A.rCohort ? 'on' : ''}" data-act="rcohort" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    ${cohortPicker(A.rCohort, 'rcohort', cs)}
     <div class="card hero stack" style="gap:12px">
       <div class="between"><span class="eyebrow">${esc(A.rCohort)} 후기 요약</span><span class="small">응답 ${n}명</span></div>
       <div class="sgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -563,7 +585,8 @@ function reviewCSV() {
 /* ---------- 설정 ---------- */
 function viewSettings() {
   const d = A.draft;
-  const sl = d.slots.map((s, i) => `<div class="card stack" style="gap:10px;padding:14px">
+  const t = TODAY(); const isPastSlot = s => s.id && s.date && slotIsoDate(s.date) < t && !s._new;
+  const card = (s, i) => `<div class="card stack" style="gap:10px;padding:14px">
       <div class="between"><span class="round">${esc(s.cohort || '새 타임')} · ${esc(s.time || '')}</span>
         <label class="row small" style="gap:6px"><input type="checkbox" data-s="${i}" data-f="public" ${s.public ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--green)">신청 페이지에 공개</label></div>
       <div class="sgrid">
@@ -572,7 +595,12 @@ function viewSettings() {
         ${sf(i, 'capM', '형제 정원', s.cap.M, '6', 'number')}${sf(i, 'capF', '자매 정원', s.cap.F, '6', 'number')}
       </div>
       <div class="row" style="justify-content:flex-end">${hasApps(s.id) ? '<span class="small">신청자가 있어 삭제할 수 없어요 (비공개로 바꾸세요)</span>' : `<button class="mini del" data-act="delslot" data-v="${i}">이 타임 삭제</button>`}</div>
-    </div>`).join('');
+    </div>`;
+  const curIdx = d.slots.map((s, i) => i).filter(i => !isPastSlot(d.slots[i]));
+  const pastIdx = d.slots.map((s, i) => i).filter(i => isPastSlot(d.slots[i]));
+  const sl = curIdx.map(i => card(d.slots[i], i)).join('') + (pastIdx.length ? `
+      <button class="btn soft sm" style="width:100%" data-act="togglepastslots">${A.showPastSlots ? '지난 기수 타임 접기' : `지난 기수 타임 ${pastIdx.length}개 보기`}</button>
+      ${A.showPastSlots ? pastIdx.map(i => card(d.slots[i], i)).join('') : ''}` : '');
   return `<div class="wrap">
     ${appHead('settings')}
     <div class="stack" style="gap:16px;margin-top:8px">
@@ -779,7 +807,8 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
-  else if (act === 'addslot') { const last = A.draft.slots[A.draft.slots.length - 1] || {}; A.draft.slots.push({ id: 's' + Date.now().toString(36), cohort: last.cohort || '', date: last.date || '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render(); }
+  else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
+  else if (act === 'addslot') { const last = A.draft.slots[A.draft.slots.length - 1] || {}; A.draft.slots.push({ _new: true, id: 's' + Date.now().toString(36), cohort: last.cohort || '', date: last.date || '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render(); }
   else if (act === 'delslot') { A.draft.slots.splice(Number(v), 1); render(); }
   else if (act === 'save') saveSettings();
   else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }
@@ -814,6 +843,7 @@ document.addEventListener('click', async e => {
   else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저의 데모 데이터만 지워져요.', '지우기', true)) IonStore.resetDemo(); }
 });
 window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'settings'].includes(want)) goView(want); });
+document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.pick; if (!k || !e.target.value) return; if (k === 'cohort') { A.cohort = e.target.value; lsSet('ion_admin_cohort', A.cohort); } else A.rCohort = e.target.value; render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maintain(true); });
 setInterval(() => { if (A.phase === 'main' && A.view === 'list' && document.visibilityState === 'visible' && !document.getElementById('modal').innerHTML) { maintain(); render(); } }, 60000);
 
