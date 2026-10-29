@@ -710,6 +710,8 @@ document.addEventListener('input', e => {
     }
   }
 });
+// 메뉴 링크는 확실하게 이동 (일부 인앱 브라우저 대비)
+document.addEventListener('click', e => { const a = e.target.closest('.nav a[href]'); if (a) { e.preventDefault(); location.href = a.getAttribute('href'); } });
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
