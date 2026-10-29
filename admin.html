@@ -330,6 +330,21 @@ async function changeStatus(id, to, memo) {
   } catch (e) { console.error(e); toast('저장하지 못했어요: ' + e.message); return false; }
 }
 
+/* ---------- 영구삭제 (취소·환불 건만) ---------- */
+async function purge(ids) {
+  const up = {};
+  ids.forEach(id => {
+    const r = (A.data.apps || {})[id];
+    if (!r || !['cancelled', 'refunded'].includes(r.status)) return;   // 진행 중인 신청은 절대 삭제하지 않음
+    up['apps/' + id] = null;
+    if (r.phoneKey && (((A.data.phones || {})[r.cohort] || {})[r.phoneKey] === id)) up[`phones/${r.cohort}/${r.phoneKey}`] = null;
+  });
+  const n = Object.keys(up).filter(k => k.startsWith('apps/')).length;
+  if (!n) return toast('삭제할 취소·환불 건이 없어요');
+  try { await IonStore.update('apply', up); toast(`${n}건을 영구삭제했어요`); }
+  catch (e) { toast('삭제하지 못했어요: ' + e.message); }
+}
+
 /* ---------- 화면 ---------- */
 function render() {
   const banner = DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요</div>' : '';
@@ -388,6 +403,7 @@ function viewMain() {
     ${viewStatus()}
     <input class="input" style="margin-top:14px" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 번호로 찾기 (예: 017)" aria-label="검색" inputmode="search">
     <div class="tabs" style="margin-top:12px">${['pending', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>
+    ${A.tab === 'cancelled' && list.length ? `<div class="between" style="margin-top:12px"><span class="small">취소·환불 내역은 정원에 영향이 없어요. 필요 없으면 영구삭제하세요.</span><button class="mini del" data-act="purgeall">${esc(A.cohort)} 취소·환불 ${list.length}건 모두 삭제</button></div>` : ''}
     <div class="stack" style="margin-top:12px;gap:10px">${list.length ? list.map(card).join('') : `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>`}</div>
     <div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="csv">${ICON.down}${esc(A.cohort)} 엑셀(CSV) 내려받기</button>
       ${DEMO ? '<button class="mini" data-act="seed">예시 데이터</button><button class="mini del" data-act="wipe">데모 초기화</button>' : ''}</div>
@@ -439,6 +455,7 @@ function card(r) {
   if (st === 'pending') actions.push(`<button class="mini gold" data-act="confirm" data-v="${r.id}">${ICON.ok}입금확인</button>`);
   if (st === 'waiting') actions.push(`<button class="mini go" data-act="promote" data-v="${r.id}">자리 배정</button>`);
   actions.push(`<button class="mini" data-act="msg" data-v="${r.id}">${ICON.msg}문자·카톡</button>`);
+  if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
     <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span></div><span class="small">${esc(r.id)}</span></div>
@@ -459,7 +476,7 @@ function detail(r) {
   const more = [];
   if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
-  if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`);
+  if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
     ${kv.map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}
     <div class="field" style="margin-top:10px"><label for="m-${r.id}">운영진 메모</label>
@@ -718,6 +735,14 @@ document.addEventListener('click', async e => {
   else if (act === 'memo') { const ta = document.querySelector(`[data-memo="${v}"]`); if (await changeStatus(v, '', ta ? ta.value : '')) toast('메모를 저장했어요'); }
   else if (act === 'roster') { const { n, text } = rosterText(v); if (!n) return toast('이 타임에 확정자가 아직 없어요'); copyText(text, `확정 ${n}명 복사 · 매칭앱 참가자 탭 › 붙여넣기에 넣어주세요`); }
   else if (act === 'csv') downloadCSV();
+  else if (act === 'purge') {
+    const r = row(v);
+    if (await confirmBox(`${r.name}님 신청을 영구삭제할까요?`, `${r.id} · ${ION_STATUS[r.status]} · 삭제하면 되돌릴 수 없고 엑셀(CSV)에도 남지 않아요. 기록이 필요하면 먼저 CSV를 내려받으세요.`, '영구삭제', true)) purge([v]);
+  }
+  else if (act === 'purgeall') {
+    const ids = rowsOf(A.cohort).filter(r => ['cancelled', 'refunded'].includes(r.status)).map(r => r.id);
+    if (await confirmBox(`${A.cohort} 취소·환불 ${ids.length}건을 모두 삭제할까요?`, '삭제하면 되돌릴 수 없어요. 기록이 필요하면 먼저 CSV를 내려받으세요.', `${ids.length}건 영구삭제`, true)) purge(ids);
+  }
   else if (act === 'seed') demoSeed();
   else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저의 데모 데이터만 지워져요.', '지우기', true)) IonStore.resetDemo(); }
 });
