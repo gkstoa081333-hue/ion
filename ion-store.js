@@ -51,7 +51,12 @@ const IonStore = (() => {
       newId: p => db.ref(p).push().key,
       async txn(p, fn) { const r = await db.ref(p).transaction(fn, undefined, false); return { committed: r.committed, value: r.snapshot.val() }; },
       watch(p, cb, onErr) { const r = db.ref(p); const h = s => cb(s.val()); r.on('value', h, e => { console.error(e); onErr && onErr(e); }); return () => r.off('value', h); },
-      async ensureAnon() { if (!auth.currentUser) await auth.signInAnonymously(); return auth.currentUser.uid; },
+      async ensureAnon() {
+        // 저장된 로그인(운영진 등)이 복원될 때까지 기다린 뒤, 없을 때만 익명 로그인
+        await new Promise(r => { const off = auth.onAuthStateChanged(() => { off(); r(); }); });
+        if (!auth.currentUser) await auth.signInAnonymously();
+        return auth.currentUser.uid;
+      },
       signIn: (e, pw) => auth.signInWithEmailAndPassword(e, pw),
       signOut: () => auth.signOut(),
       resetPassword: e => auth.sendPasswordResetEmail(e),

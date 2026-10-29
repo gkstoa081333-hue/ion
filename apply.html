@@ -137,7 +137,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261029b"></script>
+<script src="ion-store.js?v=20261029c"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -283,7 +283,7 @@ function viewIntro() {
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
       ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}</span>
-        <span>형제 ${s.left.M ? `<b style="color:var(--gold)">${s.left.M}자리</b>` : '대기'} · 자매 ${s.left.F ? `<b style="color:var(--gold)">${s.left.F}자리</b>` : '대기'}</span></div>`).join('')}
+        <span>형제 ${s.left.M ? `<b style="color:var(--gold)">${s.left.M}자리</b>` : '마감·대기'} · 자매 ${s.left.F ? `<b style="color:var(--gold)">${s.left.F}자리</b>` : '마감·대기'}</span></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
     <div class="top"><span class="brand">ION</span><span class="pill">참가 신청</span></div>
