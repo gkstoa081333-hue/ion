@@ -621,9 +621,11 @@ async function demoSeed() {
 document.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.dataset.form === 'login') {
-    A.busy = true; A.authErr = ''; render();
+    // 화면을 다시 그리기 전에 입력값을 먼저 읽어야 함 (다시 그리면 입력칸이 비워짐)
     A.email = (document.getElementById('em').value || '').replace(/\s/g, '');
-    try { await IonStore.signIn(A.email, document.getElementById('pw').value); }
+    const pw = document.getElementById('pw').value;
+    A.busy = true; A.authErr = ''; render();
+    try { await IonStore.signIn(A.email, pw); }
     catch (err) {
       const c = err.code || '';
       A.authErr = c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found') || c.includes('invalid-login') ? '이메일 또는 비밀번호가 맞지 않아요. 기억이 안 나면 아래 재설정 메일을 받아주세요.'
