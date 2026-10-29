@@ -167,7 +167,8 @@ const ICON = {
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
 const SAT = ['', '아쉬웠어요', '조금 아쉬웠어요', '보통이었어요', '좋았어요', '정말 좋았어요'];
 
-const S = { phase: 'loading', step: 0, slots: [], err: '', busy: false,
+const FIXED = !!(qs.get('c') && qs.get('t'));
+const S = { phase: 'loading', step: 0, slots: [], err: '', busy: false, edit: false,
   d: { cohort: qs.get('c') || '', time: qs.get('t') || '', sat: 0, worry: '', worryEtc: '', felt: '', moment: '', size: '', improve: '', again: '', nps: -1, share: '', age: '', gender: '', agree: false } };
 
 async function load() {
@@ -178,7 +179,7 @@ async function load() {
   S.phase = 'form'; render();
 }
 const cohorts = () => { const o = []; S.slots.forEach(s => { if (!o.includes(s.cohort)) o.push(s.cohort); }); if (S.d.cohort && !o.includes(S.d.cohort)) o.unshift(S.d.cohort); return o; };
-const times = () => { const o = S.slots.filter(s => s.cohort === S.d.cohort).map(s => s.time); if (S.d.time && !o.includes(S.d.time)) o.unshift(S.d.time); return o; };
+const times = () => S.slots.filter(s => s.cohort === S.d.cohort).map(s => s.time);
 
 function demoBanner() { return DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요</div>' : ''; }
 function render() {
@@ -207,8 +208,10 @@ function foot(label) {
 function viewStep1() {
   return `<div class="wrap">${head('오늘 소개팅 어떠셨어요?', '솔직한 후기가 다음 기수를 더 좋게 만들어요. 이름 없이 익명으로 받아요.')}
     <div class="stack" style="gap:20px">
+      ${FIXED && !S.edit ? `<div class="card between" style="padding:14px 16px"><span><span class="small">참여한 소개팅</span><br><span class="round" style="font-size:18px">${esc(S.d.cohort)} · ${esc(S.d.time)}</span></span>
+          <button type="button" class="mini" data-act="edit">다른 타임이에요</button></div>` : `
       <div class="field"><span class="lab">참여 기수<span class="req">*</span></span>${opts('cohort', cohorts())}</div>
-      ${S.d.cohort ? `<div class="field"><span class="lab">참여 타임<span class="req">*</span></span>${opts('time', times())}</div>` : ''}
+      ${S.d.cohort ? `<div class="field"><span class="lab">참여 타임<span class="req">*</span></span>${opts('time', times())}</div>` : ''}`}
       <div class="field"><span class="lab">전반적으로 얼마나 만족하셨나요?<span class="req">*</span></span>
         <div class="card center" style="padding:16px 10px">
           <div class="row" style="justify-content:center;gap:4px" role="radiogroup" aria-label="만족도">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="icon-btn" style="width:52px;height:52px;margin:0" data-act="sat" data-v="${n}" role="radio" aria-checked="${S.d.sat === n}" aria-label="${n}점">${ICON.star(S.d.sat >= n)}</button>`).join('')}</div>
@@ -303,6 +306,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
   if (act === 'opt') { S.d[b.dataset.k] = v; if (b.dataset.k === 'cohort' && !times().includes(S.d.time)) S.d.time = ''; render(); }
+  else if (act === 'edit') { S.edit = true; if (!times().includes(S.d.time)) S.d.time = ''; render(); }
   else if (act === 'sat') { S.d.sat = Number(v); render(); }
   else if (act === 'nps') { S.d.nps = Number(v); render(); }
   else if (act === 'back') { S.err = ''; S.step--; render(); window.scrollTo(0, 0); }
