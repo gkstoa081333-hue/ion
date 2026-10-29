@@ -346,6 +346,7 @@ function viewLogin() {
       <div class="field"><label for="pw">비밀번호</label><input id="pw" class="input" type="password" autocomplete="current-password" ${DEMO ? '' : 'required'}></div>
       <div class="err">${esc(A.authErr)}</div>
       <button class="btn gold" type="submit" ${A.busy ? 'disabled' : ''}>${A.busy ? '확인 중…' : '로그인'}</button>
+      <button type="button" class="btn line" style="border-color:var(--gold);color:var(--gold);min-height:48px" data-act="reset">비밀번호 재설정 메일 받기</button>
     </form></div>`;
 }
 
@@ -622,7 +623,14 @@ document.addEventListener('submit', async e => {
   if (e.target.dataset.form === 'login') {
     A.busy = true; A.authErr = ''; render();
     try { await IonStore.signIn(document.getElementById('em').value.trim(), document.getElementById('pw').value); }
-    catch (err) { A.authErr = '이메일 또는 비밀번호를 확인해 주세요.'; }
+    catch (err) {
+      const c = err.code || '';
+      A.authErr = c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found') || c.includes('invalid-login') ? '이메일 또는 비밀번호가 맞지 않아요. 기억이 안 나면 아래 재설정 메일을 받아주세요.'
+        : c.includes('too-many-requests') ? '로그인 시도가 많아 잠시 막혔어요. 몇 분 뒤 다시 시도하거나 비밀번호를 재설정해 주세요.'
+        : c.includes('invalid-email') ? '이메일 형식을 확인해 주세요.'
+        : c.includes('network') ? '인터넷 연결을 확인해 주세요.'
+        : '로그인하지 못했어요 (' + (c || err.message) + ')';
+    }
     A.busy = false; render();
   }
 });
@@ -642,6 +650,13 @@ document.addEventListener('click', async e => {
   const act = b.dataset.act, v = b.dataset.v;
   const row = id => (A.data.apps || {})[id];
   if (act === 'logout') { await IonStore.signOut(); }
+  else if (act === 'reset') {
+    const em = (document.getElementById('em').value || '').trim();
+    if (!em) { A.authErr = '이메일을 먼저 입력해 주세요.'; render(); return; }
+    try { await IonStore.resetPassword(em); A.authErr = em + ' 으로 재설정 메일을 보냈어요. 메일의 링크에서 새 비밀번호를 정한 뒤 로그인해 주세요. (스팸함도 확인)'; }
+    catch (e) { A.authErr = '재설정 메일을 보내지 못했어요 (' + (e.code || e.message) + ')'; }
+    render(); const el = document.getElementById('em'); if (el) el.value = em;
+  }
   else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); toast('준비됐어요'); }
   else if (act === 'settings') openSettings();
   else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }

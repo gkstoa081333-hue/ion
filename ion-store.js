@@ -54,6 +54,7 @@ const IonStore = (() => {
       async ensureAnon() { if (!auth.currentUser) await auth.signInAnonymously(); return auth.currentUser.uid; },
       signIn: (e, pw) => auth.signInWithEmailAndPassword(e, pw),
       signOut: () => auth.signOut(),
+      resetPassword: e => auth.sendPasswordResetEmail(e),
       onAuth(cb) {
         auth.onAuthStateChanged(async u => {
           if (!u || u.isAnonymous) return cb({ user: u, admin: false });
@@ -98,6 +99,7 @@ const IonStore = (() => {
     watch(p, cb) { const s = { p, cb, last: null }; subs.push(s); setTimeout(() => { s.last = JSON.stringify(getAt(p)); cb(getAt(p)); }, 0); return () => subs.splice(subs.indexOf(s), 1); },
     async ensureAnon() { return 'demo-user'; },
     async signIn() { try { localStorage.setItem(AKEY, '1'); } catch (e) {} authSubs.forEach(cb => cb({ user: { uid: 'demo' }, admin: true })); },
+    async resetPassword() {},
     async signOut() { try { localStorage.removeItem(AKEY); } catch (e) {} authSubs.forEach(cb => cb({ user: null, admin: false })); },
     onAuth(cb) { authSubs.push(cb); setTimeout(() => cb({ user: isAdmin() ? { uid: 'demo' } : null, admin: isAdmin() }), 0); },
     resetDemo() { tree = {}; save(); }
