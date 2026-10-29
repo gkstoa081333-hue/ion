@@ -610,9 +610,46 @@ async function saveSettings() {
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   removed.forEach(id => { up['slots/' + id] = null; up['counts/' + id] = null; });
   A.busy = true; render();
-  try { await IonStore.update('apply', up); toast('저장했어요'); A.lastMaint = 0; maintain(true); goView('apply'); }
+  try { await IonStore.update('apply', up); await syncSessions(removed); toast('저장했어요 · 매칭 타임도 함께 맞췄어요'); A.lastMaint = 0; maintain(true); goView('apply'); }
   catch (e) { toast('저장하지 못했어요: ' + e.message); }
   A.busy = false; render();
+}
+
+
+/* ---------- 신청관리 타임 → 매칭 타임 자동 연동 ---------- */
+// 신청관리의 타임(apply/slots/{id})마다 매칭 타임(sessions/slot-{id})을 하나씩 자동으로 만들고,
+// 투표 시작 전이면 기수·날짜·시간 변경도 따라 바꿔요. 투표가 시작된 타임은 건드리지 않아요.
+function slotIsoDate(txt) {
+  const m = String(txt || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/);
+  const now = new Date();
+  if (!m) return now.toISOString().slice(0, 10);
+  const mo = +m[1], d = +m[2]; let y = now.getFullYear();
+  if (new Date(y, mo - 1, d) < new Date(y, now.getMonth() - 2, 1)) y++;   // 지난 달보다 한참 이전이면 내년
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function sessionSyncUpdates(slots, sessions, removedSlotIds) {
+  const up = {};
+  Object.entries(slots || {}).forEach(([id, s]) => {
+    const sid = 'slot-' + id; const cur = (sessions || {})[sid];
+    const pub = { cohort: s.cohort, date: slotIsoDate(s.date), slot: s.time };
+    if (!cur || !cur.pub) up[sid + '/pub'] = { ...pub, status: 'ready', M: 0, F: 0, createdAt: Date.now(), applySlot: id };
+    else if (cur.pub.status === 'ready') {
+      ['cohort', 'date', 'slot'].forEach(k => { if (cur.pub[k] !== pub[k]) up[`${sid}/pub/${k}`] = pub[k]; });
+      if (cur.pub.applySlot !== id) up[`${sid}/pub/applySlot`] = id;
+    }
+  });
+  (removedSlotIds || []).forEach(id => {   // 삭제된 타임: 아직 명단·투표가 없을 때만 함께 삭제
+    const cur = (sessions || {})['slot-' + id];
+    if (cur && !cur.roster && !cur.votes) up['slot-' + id] = null;
+  });
+  return up;
+}
+async function syncSessions(removed) {
+  try {
+    const [slotsNow, sessions] = await Promise.all([IonStore.get('apply/slots'), IonStore.get('sessions')]);
+    const up = sessionSyncUpdates(slotsNow, sessions, removed);
+    if (Object.keys(up).length) await IonStore.update('sessions', up);
+  } catch (e) { console.error('매칭 타임 연동 실패', e); }
 }
 
 /* ---------- 문자·카톡 모달 ---------- */
@@ -726,7 +763,7 @@ document.addEventListener('click', async e => {
     catch (e) { A.authErr = '재설정 메일을 보내지 못했어요 (' + (e.code || e.message) + ')'; }
     render(); const el = document.getElementById('em'); if (el) el.value = em;
   }
-  else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); toast('준비됐어요'); }
+  else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); await syncSessions([]); toast('준비됐어요'); }
   else if (act === 'settings') openSettings();
   else if (act === 'nav') goView(v);
   else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }

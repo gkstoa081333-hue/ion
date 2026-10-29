@@ -576,12 +576,50 @@ function installHint() {
       <div class="row">${INSTALL_EVT ? '<button class="mini" style="background:var(--green);color:var(--cream)" data-act="install">앱 설치</button>' : ''}<button class="mini" style="background:var(--paper)" data-act="hideinstall">다음에 할게요</button></div></div></div>`;
 }
 
+
+/* ---------- 신청관리 타임 → 매칭 타임 자동 연동 ---------- */
+// 신청관리의 타임(apply/slots/{id})마다 매칭 타임(sessions/slot-{id})을 하나씩 자동으로 만들고,
+// 투표 시작 전이면 기수·날짜·시간 변경도 따라 바꿔요. 투표가 시작된 타임은 건드리지 않아요.
+function slotIsoDate(txt) {
+  const m = String(txt || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/);
+  const now = new Date();
+  if (!m) return now.toISOString().slice(0, 10);
+  const mo = +m[1], d = +m[2]; let y = now.getFullYear();
+  if (new Date(y, mo - 1, d) < new Date(y, now.getMonth() - 2, 1)) y++;   // 지난 달보다 한참 이전이면 내년
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function sessionSyncUpdates(slots, sessions, removedSlotIds) {
+  const up = {};
+  Object.entries(slots || {}).forEach(([id, s]) => {
+    const sid = 'slot-' + id; const cur = (sessions || {})[sid];
+    const pub = { cohort: s.cohort, date: slotIsoDate(s.date), slot: s.time };
+    if (!cur || !cur.pub) up[sid + '/pub'] = { ...pub, status: 'ready', M: 0, F: 0, createdAt: Date.now(), applySlot: id };
+    else if (cur.pub.status === 'ready') {
+      ['cohort', 'date', 'slot'].forEach(k => { if (cur.pub[k] !== pub[k]) up[`${sid}/pub/${k}`] = pub[k]; });
+      if (cur.pub.applySlot !== id) up[`${sid}/pub/applySlot`] = id;
+    }
+  });
+  (removedSlotIds || []).forEach(id => {   // 삭제된 타임: 아직 명단·투표가 없을 때만 함께 삭제
+    const cur = (sessions || {})['slot-' + id];
+    if (cur && !cur.roster && !cur.votes) up['slot-' + id] = null;
+  });
+  return up;
+}
+async function syncSessionsFromApply() {
+  if (!USE_FB || A.synced) return; A.synced = true;
+  try {
+    const slots = await DB.get('apply/slots');
+    const up = sessionSyncUpdates(slots, A.sessions);
+    if (Object.keys(up).length) await DB.update('sessions', up);
+  } catch (e) { console.error('타임 연동 실패', e); A.synced = false; }
+}
+
 function startAdmin() {
   if (!document.querySelector('link[rel="manifest"]')) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'admin.webmanifest'; document.head.appendChild(l); }
   AUTH.onChange(st => {
     A.checked = true; A.authed = !!st.admin;
     A.notAdmin = !!(st.user && !st.user.isAnonymous && !st.admin && USE_FB);
-    if (A.authed && !A.unsubList) A.unsubList = DB.watch('sessions', v => { A.sessions = v || {}; renderA(); }, () => toast('목록을 불러오지 못했어요'));
+    if (A.authed && !A.unsubList) A.unsubList = DB.watch('sessions', v => { A.sessions = v || {}; renderA(); syncSessionsFromApply(); }, () => toast('목록을 불러오지 못했어요'));
     if (!A.authed && A.unsubList) { A.unsubList(); A.unsubList = null; }
     renderA();
   });
@@ -686,7 +724,23 @@ async function loadApply() {
   A.applyLoading = true;
   try { const [slots, apps] = await Promise.all([DB.get('apply/slots'), DB.get('apply/apps')]); A.applyCache = { slots: slots || {}, apps: apps || {} }; }
   catch (e) { console.error(e); A.applyCache = { slots: {}, apps: {}, err: true }; }
-  A.applyLoading = false; renderA();
+  A.applyLoading = false; renderA(); autoImport();
+}
+async function autoImport() {
+  const s = A.cur; if (!s || !s.pub || !s.pub.applySlot || !A.applyCache || A.applyCache.err) return;
+  if (s.pub.status !== 'ready' || Object.keys(s.votes || {}).length) return;
+  A.autoDone = A.autoDone || {}; if (A.autoDone[A.sid]) return; A.autoDone[A.sid] = true;
+  const have = new Set(rosterList(s).map(p => digits(p.phone)));
+  const add = applyConfirmed(s.pub.applySlot).filter(r => !have.has(digits(r.phone))).map(r => ({ gender: r.gender, name: r.name, phone: r.phone }));
+  if (!add.length) return;
+  try { await writeRoster([...rosterList(s), ...add]); toast(`신청 확정자 ${add.length}명을 명단에 자동으로 넣었어요`); }
+  catch (e) { console.error(e); toast(e.message && e.message.length < 60 ? e.message : '자동 등록에 실패했어요'); }
+}
+function cancelledInRoster(s) {
+  if (!A.applyCache || !s.pub || !s.pub.applySlot) return [];
+  const gone = new Set(Object.values(A.applyCache.apps || {}).filter(r => r.slotId === s.pub.applySlot && ['cancelled', 'refunded'].includes(r.status)).map(r => digits(r.phone)));
+  const live = new Set(applyConfirmed(s.pub.applySlot).map(r => digits(r.phone)));
+  return rosterList(s).filter(p => gone.has(digits(p.phone)) && !live.has(digits(p.phone)));
 }
 function applyConfirmed(slotId) {
   const G = { M: 0, F: 1 };
@@ -702,11 +756,13 @@ function importBox(s) {
   if (!A.applyCache) { if (!A.applyLoading) setTimeout(loadApply, 0); return '<p class="small">신청 명단을 불러오는 중…</p>'; }
   const slots = Object.entries(A.applyCache.slots).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
   if (!slots.length) return `<p class="small">${A.applyCache.err ? '신청 명단을 읽지 못했어요.' : '신청관리에 등록된 타임이 없어요.'}</p>`;
-  const pick = A.importSlot && A.applyCache.slots[A.importSlot] ? A.importSlot : guessSlot(slots, s.pub || {});
+  const pick = A.importSlot && A.applyCache.slots[A.importSlot] ? A.importSlot : (s.pub && s.pub.applySlot && A.applyCache.slots[s.pub.applySlot] ? s.pub.applySlot : guessSlot(slots, s.pub || {}));
+  const gone = cancelledInRoster(s);
   const sel = applyConfirmed(pick); const m = sel.filter(r => r.gender === 'M').length;
   return `<div class="field"><label for="imp-slot">신청관리 타임</label>
       <select id="imp-slot" class="input" data-act-change="imp-slot">${slots.map(([id, x]) => `<option value="${id}" ${id === pick ? 'selected' : ''}>${esc(x.cohort)} ${esc(x.date)} ${esc(x.time)} · 확정 ${applyConfirmed(id).length}명</option>`).join('')}</select></div>
-    <p class="small">확정자 ${sel.length}명 (형제 ${m} · 자매 ${sel.length - m}) · 이미 명단에 있는 번호는 건너뛰어요.</p>
+    <p class="small">확정자 ${sel.length}명 (형제 ${m} · 자매 ${sel.length - m}) · 이미 명단에 있는 번호는 건너뛰어요.${s.pub && s.pub.applySlot ? ' 이 타임은 신청관리와 연동돼 있어 열 때마다 새 확정자가 자동으로 들어와요.' : ''}</p>
+    ${gone.length ? `<div class="notice">${ICON.info}<span>신청이 취소·환불된 분이 명단에 있어요: <b>${gone.map(p => esc(p.name) + '(' + label(p.id) + ')').join(', ')}</b> — 위 명단에서 삭제해 주세요.</span></div>` : ''}
     <div class="grid2"><button class="btn sm" style="width:100%" data-act="import" data-slot="${pick}" ${sel.length ? '' : 'disabled'}>확정자 불러오기</button>
       <button class="btn soft sm" style="width:100%" data-act="import-refresh">새로고침</button></div>`;
 }
@@ -811,6 +867,7 @@ function drawQR() {
 function openSession(sid) {
   if (A.unsubCur) A.unsubCur();
   A.sid = sid; A.view = 'session'; A.tab = 'people'; A.cur = (A.sessions || {})[sid] || null;
+  A.applyCache = null; // 열 때마다 최신 신청 명단으로
   A.unsubCur = DB.watch(`sessions/${sid}`, v => { A.cur = v; renderA(); });
   renderA(); window.scrollTo(0, 0);
 }
