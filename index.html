@@ -688,9 +688,29 @@ function viewHome() {
           <span class="chip ${st.pub.status === 'open' ? 'wait' : st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span>
         </button>`; }).join('')}</div>`;
   };
-  const items = upcoming.map(render1).join('') + (past.length ? `
-    <button class="btn soft sm" style="width:100%;margin-top:4px" data-act="toggle-past">${A.showPast ? '지난 기수 접기' : `지난 기수 ${past.length}개 보기`}</button>
-    ${A.showPast ? past.map(render1).join('') : ''}` : '');
+  // 지난 기수: 기수별 한 줄로 접어서 보여주고, 검색으로 찾기
+  const pastBy = {}; past.forEach(([k, arr]) => { const [c, d] = k.split('||'); const g = (pastBy[c] = pastBy[c] || { c, d, arr: [] }); if (d > g.d) g.d = d; g.arr.push(...arr); });
+  const pq = (A.pastQ || '').trim().toLowerCase();
+  const md = d => d ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : '';
+  let pastList = Object.values(pastBy).sort((a, b) => b.d.localeCompare(a.d))
+    .filter(g => !pq || (g.c + ' ' + g.d + ' ' + md(g.d) + ' ' + g.arr.map(([, s]) => s.pub.slot).join(' ')).toLowerCase().includes(pq));
+  const more = !pq && pastList.length > (A.pastN || 5); if (!pq) pastList = pastList.slice(0, A.pastN || 5);
+  const pastRow = g => {
+    const tot = g.arr.reduce((t, [, s]) => t + sessionStats(s).total, 0), vot = g.arr.reduce((t, [, s]) => t + sessionStats(s).voted, 0);
+    const open = A.pastOpen === g.c;
+    return `<button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:${open ? 'var(--sand)' : 'transparent'};text-align:left" data-act="past-open" data-v="${esc(g.c)}" aria-expanded="${open}">
+        <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:16px">${esc(g.c)} <span class="meta">${md(g.d)}</span></span>
+        <span class="meta">타임 ${g.arr.length}개 · 참가 ${tot}명 · 투표 ${vot}명</span></span><span class="chip mute">${open ? '접기' : '열기'}</span></button>
+      ${open ? g.arr.map(([sid, s]) => { const st = sessionStats(s); return `<button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left;padding-left:30px" data-act="open" data-sid="${sid}">
+        <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:15px">${esc(st.pub.slot)}</span><span class="meta">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span></span>
+        <span class="chip ${st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span></button>`; }).join('') : ''}`;
+  };
+  const pastBlock = Object.keys(pastBy).length ? `
+    <span class="section-t" style="margin-top:14px">종료된 기수 ${Object.keys(pastBy).length}개</span>
+    <input id="past-q" data-keep class="input" placeholder="기수·날짜로 찾기 (예: 2기, 10/31)" aria-label="종료된 기수 검색" inputmode="search" value="${esc(A.pastQ || '')}">
+    <div class="list">${pastList.map(pastRow).join('') || '<div class="li"><span class="meta">찾는 기수가 없어요</span></div>'}</div>
+    ${more ? `<button class="btn soft sm" style="width:100%" data-act="past-more">더 보기</button>` : ''}` : '';
+  const items = (upcoming.length ? '<span class="section-t">진행 중 · 예정</span>' : '') + upcoming.map(render1).join('') + pastBlock;
   return `<div class="wrap wide">
     <div class="between" style="min-height:44px"><div class="row"><span class="brand">ION</span><span class="pill" style="border-color:var(--gold-d);color:var(--gold-t)">운영</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
@@ -1003,6 +1023,7 @@ document.addEventListener('submit', async e => {
   } catch (err) { console.error(err); toast(err.message && err.message.length < 60 ? err.message : '저장하지 못했어요. 권한과 연결을 확인해 주세요'); }
 });
 
+document.addEventListener('input', e => { if (e.target.id === 'past-q') { A.pastQ = e.target.value; renderA(); } });
 document.addEventListener('change', e => { if (e.target.id === 'imp-slot') { A.importSlot = e.target.value; renderA(); } });
 // 메뉴 링크는 확실하게 이동 (일부 인앱 브라우저 대비)
 document.addEventListener('click', e => { const a = e.target.closest('.nav a[href]'); if (a) { e.preventDefault(); location.href = a.getAttribute('href'); } });
@@ -1019,6 +1040,8 @@ document.addEventListener('click', async e => {
       case 'att-all': { const att = {}; rosterList(A.cur).forEach(p => { att[p.id] = true; }); await DB.set(`sessions/${A.sid}/pub/att`, att); return toast('전원 출석으로 표시했어요'); }
       case 'att-reset': { if (!(await confirmBox('출석 체크를 초기화할까요?', '모든 분이 미체크 상태가 되고, 투표 화면에는 다시 전원이 보여요.', '초기화'))) return; await DB.remove(`sessions/${A.sid}/pub/att`); return toast('초기화했어요'); }
       case 'toggle-past': A.showPast = !A.showPast; renderA(); return;
+      case 'past-open': A.pastOpen = A.pastOpen === b.dataset.v ? '' : b.dataset.v; renderA(); return;
+      case 'past-more': A.pastN = (A.pastN || 5) + 10; renderA(); return;
       case 'import-refresh': A.applyCache = null; return loadApply();
       case 'import': {
         const list = applyConfirmed(b.dataset.slot); const have = new Set(rosterList(A.cur).map(p => digits(p.phone)));
