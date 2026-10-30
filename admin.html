@@ -238,7 +238,7 @@ const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' 
 
 /* ---------- 상태 ---------- */
 let START_HASH = (location.hash || '').replace('#', '');
-const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, rCohort: '' };
+const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, unsubS: null, sess: {}, rCohort: '' };
 const apps = () => Object.values((A.data && A.data.apps) || {});
 const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const conf = () => (A.data && A.data.config) || {};
@@ -247,10 +247,12 @@ function start() {
   IonStore.onAuth(st => {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews') render(); });
+      if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sess = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
       if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
       if (A.unsubR) { A.unsubR(); A.unsubR = null; }
+      if (A.unsubS) { A.unsubS(); A.unsubS = null; }
       A.phase = 'login';
       if (st.user && !st.user.isAnonymous) A.authErr = '운영진으로 등록되지 않은 계정이에요.';
       render();
@@ -260,6 +262,7 @@ function start() {
 function cohortList() {
   const out = []; slots().forEach(s => { if (!out.includes(s.cohort)) out.push(s.cohort); });
   apps().forEach(r => { if (r.cohort && !out.includes(r.cohort)) out.push(r.cohort); });
+  Object.keys(A.sess || {}).forEach(c => { if (!out.includes(c)) out.push(c); });   // 매칭에서만 만든 기수(예: 2기)도 포함
   return out;
 }
 /* ---------- 기수 정리: 행사일이 지난 기수는 '지난 기수'로 자동 분류 ---------- */
@@ -267,6 +270,7 @@ const TODAY = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 function cohortDate(c) {
   const ds = slots().filter(s => s.cohort === c).map(s => slotIsoDate(s.date));
   if (!ds.length) apps().filter(r => r.cohort === c && r.date).forEach(r => ds.push(slotIsoDate(r.date)));
+  if (!ds.length && A.sess && A.sess[c]) ds.push(A.sess[c]);
   return ds.sort()[0] || '';
 }
 function cohortGroups(extra = []) {
