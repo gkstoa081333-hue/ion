@@ -407,8 +407,8 @@ function renderP() {
   else if (P.phase === 'nosession' || P.phase === 'error') {
     html = `<div class="wrap dark"><div class="top"><span class="brand">ION</span></div>
       <div class="spacer"></div>
-      <div class="stack center"><p class="h1">${P.phase === 'error' ? '잠시 문제가 생겼어요' : '테이블의 QR로<br>들어와 주세요'}</p>
-      <p class="p">${P.phase === 'error' ? esc(P.err) : '현장에 있는 QR 코드를 찍으면 오늘 타임으로 바로 연결돼요.'}</p></div>
+      <div class="stack center"><p class="h1">${P.phase === 'error' ? '잠시 문제가 생겼어요' : P.sid ? '이 QR의 타임을<br>찾을 수 없어요' : '테이블의 QR로<br>들어와 주세요'}</p>
+      <p class="p">${P.phase === 'error' ? esc(P.err) : P.sid ? '타임이 삭제됐거나 바뀌었어요. 운영진에게 이 화면을 보여주세요.' : '현장에 있는 QR 코드를 찍으면 오늘 타임으로 바로 연결돼요.'}</p></div>
       <div class="spacer"></div></div>`;
   }
   else if (P.phase === 'done') html = viewDone(tag);
@@ -454,9 +454,11 @@ function viewWaiting(tag) {
 
 function viewPick(tag) {
   const pub = P.pub; const g = opposite(P.me.id[0]); const n = +pub[g] || 0;
+  const att = pub.att || {}; const attOn = Object.keys(att).length > 0;
   const cards = [];
   for (let i = 1; i <= n; i++) {
     const id = g + i; const r = P.first === id ? 1 : P.second === id ? 2 : 0;
+    if (attOn && !att[id]) continue;   // 출석 체크를 했으면 출석한 분만
     cards.push(`<button type="button" class="pick ${r === 1 ? 'on1' : r === 2 ? 'on2' : ''}" data-act="pick" data-id="${id}" aria-pressed="${r > 0}">
       <span class="who">${GENDER[g]}</span><span class="num">${i}번</span>
       ${r ? `<span class="chip r${r}">${r}순위</span>` : ''}</button>`);
@@ -511,7 +513,7 @@ async function onEntry(form) {
   try {
     const key = await makeKey(P.sid, name, last4);
     const hit = await DB.get(`sessions/${P.sid}/keys/${key}`);
-    if (!hit || !hit.id) { P.err = '명단에서 찾지 못했어요. 신청서의 이름과 번호를 확인해 주세요.'; }
+    if (!hit || !hit.id) { P.err = (+(P.pub && P.pub.M) || 0) + (+(P.pub && P.pub.F) || 0) === 0 ? '아직 이 타임에 참가자 명단이 등록되지 않았어요. 운영진에게 알려주세요.' : '명단에서 찾지 못했어요. 신청서의 이름과 번호 뒷자리를 확인해 주세요.'; }
     else {
       P.me = { id: hit.id, name, key };
       sessionStorage.setItem('eon-signal-me-' + P.sid, JSON.stringify(P.me));
@@ -778,9 +780,17 @@ function importBox(s) {
 function tabPeople(s) {
   const people = rosterList(s); const hasVotes = Object.keys(s.votes || {}).length > 0;
   const locked = hasVotes;
+  const att = (s.pub && s.pub.att) || {};
+  const nAtt = people.filter(p => att[p.id]).length;
+  const nAttG = g => people.filter(p => p.id[0] === g && att[p.id]).length;
   const rows = people.map(p => `<div class="li"><span class="no">${label(p.id)}</span><span class="meta">${esc(p.name)} · ${esc(fmtPhone(p.phone))}</span>
+    <button class="mini ${att[p.id] ? 'done' : ''}" data-act="att" data-id="${p.id}" aria-pressed="${!!att[p.id]}">${att[p.id] ? '✓ 출석' : '출석 체크'}</button>
     ${locked ? '' : `<button class="mini del" data-act="del-person" data-id="${p.id}" aria-label="${esc(p.name)} 삭제">삭제</button>`}</div>`).join('');
-  return `<div class="list">${rows || '<div class="empty">참가자를 추가해 주세요</div>'}</div>
+  const attBar = people.length ? `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;margin-bottom:10px">
+      <div class="stack" style="gap:2px"><span class="round" style="font-size:18px">출석 ${nAtt} / ${people.length}</span>
+        <span class="small">형제 ${nAttG('M')}/${people.filter(p => p.id[0] === 'M').length} · 자매 ${nAttG('F')}/${people.filter(p => p.id[0] === 'F').length}${nAtt ? ' · 투표 화면에는 출석한 분 번호만 보여요' : ' · 체크를 시작하면 출석한 분만 투표 목록에 보여요'}</span></div>
+      ${nAtt ? '<button class="mini" data-act="att-reset">체크 초기화</button>' : '<button class="mini" data-act="att-all">전원 출석</button>'}</div>` : '';
+  return `${attBar}<div class="list">${rows || '<div class="empty">참가자를 추가해 주세요</div>'}</div>
     <p class="small">형제 ${+s.pub.M || 0}명 · 자매 ${+s.pub.F || 0}명 · 번호는 성별마다 추가한 순서대로 매겨져요. 번호표도 같은 번호로 나눠주세요.</p>
     ${locked ? `<div class="notice">${ICON.info}<span>투표가 시작돼 명단을 고칠 수 없어요. 고쳐야 하면 투표 탭에서 제출 기록을 초기화해 주세요.</span></div>` : `
     <span class="section-t">신청 명단에서 불러오기</span>
@@ -884,16 +894,20 @@ function goHome() { if (A.unsubCur) A.unsubCur(); A.unsubCur = null; A.view = 'h
 /* 명단 전체를 다시 써서 번호·본인확인 키·인원수를 항상 맞춤 */
 async function writeRoster(list) {
   const roster = {}, keys = {}, cnt = { M: 0, F: 0 };
+  const oldAtt = (A.cur && A.cur.pub && A.cur.pub.att) || {}; const attByPhone = {};
+  rosterList(A.cur || {}).forEach(p => { if (oldAtt[p.id]) attByPhone[digits(p.phone)] = true; });
+  const att = {};
   for (const g of ['M', 'F']) {
     for (const p of list.filter(x => x.gender === g)) {
       cnt[g]++; const id = g + cnt[g];
       roster[id] = { gender: g, no: cnt[g], name: p.name, phone: digits(p.phone) };
+      if (attByPhone[digits(p.phone)]) att[id] = true;
       const k = await makeKey(A.sid, p.name, digits(p.phone).slice(-4));
       if (keys[k]) throw new Error(`이름과 번호 뒷자리가 같은 분이 있어요: ${p.name}`);
       keys[k] = { id };
     }
   }
-  await DB.update(`sessions/${A.sid}`, { roster, keys, 'pub/M': cnt.M, 'pub/F': cnt.F });
+  await DB.update(`sessions/${A.sid}`, { roster, keys, 'pub/M': cnt.M, 'pub/F': cnt.F, 'pub/att': Object.keys(att).length ? att : null });
 }
 function parseGender(t) {
   const s = String(t).trim().toLowerCase();
@@ -1001,6 +1015,9 @@ document.addEventListener('click', async e => {
       case 'submit': return onSubmit();
       case 'p-logout': sessionStorage.removeItem('eon-signal-me-' + P.sid); P.me = null; P.first = P.second = null; P.phase = 'entry'; P.err = ''; return renderP();
       case 'logout': return AUTH.signOut();
+      case 'att': { const id = b.dataset.id; const on = !!(A.cur.pub.att || {})[id]; await DB.set(`sessions/${A.sid}/pub/att/${id}`, on ? null : true); return; }
+      case 'att-all': { const att = {}; rosterList(A.cur).forEach(p => { att[p.id] = true; }); await DB.set(`sessions/${A.sid}/pub/att`, att); return toast('전원 출석으로 표시했어요'); }
+      case 'att-reset': { if (!(await confirmBox('출석 체크를 초기화할까요?', '모든 분이 미체크 상태가 되고, 투표 화면에는 다시 전원이 보여요.', '초기화'))) return; await DB.remove(`sessions/${A.sid}/pub/att`); return toast('초기화했어요'); }
       case 'toggle-past': A.showPast = !A.showPast; renderA(); return;
       case 'import-refresh': A.applyCache = null; return loadApply();
       case 'import': {
@@ -1028,7 +1045,7 @@ document.addEventListener('click', async e => {
         await DB.remove(`sessions/${A.sid}/votes/${id}`); return toast('초기화했어요');
       }
       case 'del-session': {
-        if (!(await confirmBox('이 타임을 삭제할까요?', '명단·투표·결과가 모두 지워지고 되돌릴 수 없어요.', '삭제', true))) return;
+        if (!(await confirmBox('이 타임을 삭제할까요?', '명단·투표·결과가 모두 지워지고 되돌릴 수 없어요. 이미 인쇄한 QR 안내문도 더 이상 접속되지 않아요. 명단만 바꾸려면 삭제 대신 참가자를 고쳐 주세요.', '삭제', true))) return;
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
       case 'copy': {
