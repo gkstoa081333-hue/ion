@@ -81,6 +81,13 @@ select.input{appearance:none;-webkit-appearance:none}
 .card.r1{border:2px solid var(--green);box-shadow:0 10px 30px rgba(38,69,59,.10)}
 .card.r2{border:2px solid var(--gold-d)}
 .card.void{border:2px dashed #D8CFBC}
+.vtbl-wrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:16px}
+.vtbl{width:100%;border-collapse:collapse;font-size:13px}
+.vtbl th{font-family:var(--round);font-weight:400;font-size:12px;color:#5C6B63;text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);background:var(--cream);white-space:nowrap}
+.vtbl td{padding:9px 6px;border-bottom:1px solid var(--line-3,#EFE9DC);vertical-align:top}
+.vtbl tr:last-child td{border-bottom:0}
+.vtbl .who{font-family:var(--round);white-space:nowrap}.vtbl .nm{display:block;font-size:11px;color:#5C6B63;white-space:nowrap}
+.vtbl .mut{color:var(--green);font-weight:700}.vtbl .dim{color:#7C8A83}
 .chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-family:var(--round);font-size:12px;white-space:nowrap}
 .chip.r1{background:var(--green);color:var(--cream)}
 .chip.r2{background:var(--gold-soft);color:var(--gold-ink)}
@@ -865,6 +872,27 @@ function tabVote(s) {
     <div class="stack" style="gap:8px">${ctl}<span class="small center">${pub.status === 'open' ? '마감하면 참가자는 더 이상 제출할 수 없어요' : pub.status === 'ready' ? '시작하면 참가자 화면에서 번호를 고를 수 있어요' : '다시 열면 미제출자가 마저 제출할 수 있어요'}</span></div>`;
 }
 
+/* 관리자 전용: 누가 누구를 골랐는지 표로 */
+function voteTable(s, R) {
+  const roster = s.roster || {}; const votes = s.votes || {};
+  const ids = Object.keys(roster).sort((a, b) => a[0] === b[0] ? +a.slice(1) - +b.slice(1) : a[0] === 'M' ? -1 : 1);
+  if (!ids.length) return '';
+  const got = {}; ids.forEach(id => { got[id] = { 1: [], 2: [] }; });
+  ids.forEach(id => { const v = votes[id]; if (!v) return; if (got[v.first]) got[v.first][1].push(id); if (got[v.second]) got[v.second][2].push(id); });
+  const who = id => id && roster[id] ? `<span class="who">${label(id)}<span class="nm">${esc(roster[id].name)}</span></span>` : '<span class="dim">-</span>';
+  const pick = (me, target, rank) => { if (!target) return '<span class="dim">-</span>'; const back = votes[target] && (votes[target].first === me || votes[target].second === me);
+    return `<span class="${back ? 'mut' : ''}">${who(target)}</span>${back ? '<span class="nm" style="color:var(--green)">↔ 서로</span>' : ''}`; };
+  const res = id => { const m = R.matched[id]; if (m) return `<span class="chip r${m.rank}">${m.rank}순위</span><span class="nm">↔ ${label(m.partner)}</span>`; return votes[id] ? '<span class="chip mute">불성사</span>' : '<span class="chip wait">미제출</span>'; };
+  const table = g => { const xs = ids.filter(id => id[0] === g); if (!xs.length) return '';
+    return `<div class="vtbl-wrap"><table class="vtbl"><caption class="sr-only" style="position:absolute;left:-9999px">${GENDER[g]} 투표 내역</caption>
+      <thead><tr><th scope="col">${GENDER[g]}</th><th scope="col">1순위</th><th scope="col">2순위</th><th scope="col">받은 표</th><th scope="col">결과</th></tr></thead>
+      <tbody>${xs.map(id => `<tr><td>${who(id)}</td><td>${votes[id] ? pick(id, votes[id].first, 1) : '<span class="dim">미제출</span>'}</td><td>${votes[id] ? pick(id, votes[id].second, 2) : ''}</td>
+        <td style="white-space:nowrap" title="${[...got[id][1], ...got[id][2]].map(label).join(', ')}">1st <b>${got[id][1].length}</b><br>2nd <b>${got[id][2].length}</b></td>
+        <td>${res(id)}</td></tr>`).join('')}</tbody></table></div>`; };
+  return `<span class="section-t">투표 내역 (운영진만 보여요)</span>
+    <p class="small" style="margin:-4px 0 0">초록 굵은 글씨는 상대도 나를 1·2순위 중 하나로 고른 경우예요. '받은 표'는 나를 1순위(1st)·2순위(2nd)로 고른 사람 수예요.</p>
+    ${table('M')}${table('F')}`;
+}
 function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
   const R = computeMatches(roster, s.votes);
@@ -890,6 +918,7 @@ function tabResult(s) {
     ${R.voided.length ? `<span class="section-t">자동 무효</span>` + R.voided.map(v => `<div class="card void stack" style="gap:6px">
       <div class="between"><span class="round strike" style="font-size:18px">${label(v.pair[0])} ↔ ${label(v.pair[1])}</span><span class="small">2순위</span></div>
       <span class="small">${v.who.map(label).join(', ')}이(가) 1순위로 성사되어 2순위 매칭은 무효 처리됐어요.</span></div>`).join('') : ''}
+    ${voteTable(s, R)}
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
     <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
