@@ -32,6 +32,10 @@ const ION_DEFAULTS = {
 };
 const ION_STATUS = { pending: '입금대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
 const ION_HOLDING = ['pending', 'confirmed'];
+/* 타임별 대상 연령 (운영진이 설정에서 년생으로 지정 · 비우면 제한 없음) */
+function ionAgeRange(s) { let a = Number(s && s.ageFrom) || 0, b = Number(s && s.ageTo) || 0; if (a && b && a > b) [a, b] = [b, a]; return { a, b }; }
+function ionAgeText(s) { const { a, b } = ionAgeRange(s); const yy = y => String(y).slice(2); return a && b ? `${yy(a)}~${yy(b)}년생` : a ? `${yy(a)}년생부터` : b ? `${yy(b)}년생까지` : ''; }
+function ionAgeOk(s, year) { const { a, b } = ionAgeRange(s); const y = Number(year); if (!y) return true; return (!a || y >= a) && (!b || y <= b); }
 
 /* ---------- 후기 문항 (운영진이 후기 탭 › 문항 편집에서 바꿀 수 있음, apply/config/reviewForm 에 저장) ----------
    core: 통계에 쓰이는 기본 문항(아이디 고정) · fixed: 숨길 수 없는 문항 · 직접 추가한 문항은 후기의 extra 에 저장 */

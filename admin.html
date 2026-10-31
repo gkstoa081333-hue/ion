@@ -141,7 +141,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261031a"></script>
+<script src="ion-store.js?v=20261031b"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -551,7 +551,7 @@ function viewStatus() {
           <div class="bar" aria-hidden="true"><i style="width:${okW}%"></i><b style="width:${cap ? Math.min(100 - okW, pend / cap * 100) : 0}%"></b></div>
           <span class="small" style="color:var(--cream)"><b class="round">${ok}</b>/${cap}${pend ? ` · 입금대기 ${pend}` : ''}${wait ? ` · 대기 ${wait}` : ''}</span></div>`;
       };
-      return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}${s.public ? '' : ' <span class="small">(비공개)</span>'}</span>
+      return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}${ionAgeText(s) ? ` <span class="small">${ionAgeText(s)}</span>` : ''}${s.public ? '' : ' <span class="small">(비공개)</span>'}</span>
         <button class="mini on-dark" data-act="roster" data-v="${esc(s.id)}">${ICON.copy}매칭앱 명단</button></div>${g('M')}${g('F')}</div>`;
     }).join('')}
   </div>`;
@@ -573,7 +573,7 @@ function card(r, showCohort) {
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
-    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}</div><span class="small">${esc(r.id)}</span></div>
+    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
       ${st === 'pending' ? `<span class="${late ? 'late' : ''}">${esc(dt(r.deadline))} · ${esc(leftText(r.deadline))}</span>` : st === 'confirmed' ? `<span>확정 ${esc(dt(r.confirmedAt))}</span>` : `<span>신청 ${esc(dt(r.at))}</span>`}</div>
@@ -771,7 +771,9 @@ function viewSettings() {
         ${sf(i, 'cohort', '기수', s.cohort, '3기')}${sf(i, 'date', '날짜', s.date, '11/14(토)')}
         ${sf(i, 'time', '시간', s.time, '15:00~17:00')}${sf(i, 'place', '장소', s.place, '대전 괴정동 카페')}
         ${sf(i, 'capM', '형제 정원', s.cap.M, '6', 'number')}${sf(i, 'capF', '자매 정원', s.cap.F, '6', 'number')}
+        ${sf(i, 'ageFrom', '대상 연령 (몇 년생부터)', s.ageFrom, '1990', 'number')}${sf(i, 'ageTo', '대상 연령 (몇 년생까지)', s.ageTo, '1997', 'number')}
       </div>
+      <span class="small">${ionAgeText(s) ? `신청 페이지에 <b>${ionAgeText(s)}</b>로 표시되고, 범위 밖 출생연도는 이 타임을 고를 수 없어요.` : '대상 연령을 비워두면 나이 제한 없이 받아요. 기수마다 바뀌면 여기서 고치면 돼요.'}</span>
       <div class="row" style="justify-content:flex-end">${hasApps(s.id) ? '<span class="small">신청자가 있어 삭제할 수 없어요 (공개를 끄세요)</span>' : `<button class="mini del" data-act="delslot" data-v="${i}">이 타임 삭제</button>`}</div>
     </div>`;
   // 기수별로 묶기 (첫 등장 순서)
@@ -779,7 +781,7 @@ function viewSettings() {
   A.openG = A.openG || {};
   const group = g => { const st = draftState(g.name); const date = d.slots[g.idx[0]].date;
     const isOpen = A.openG[g.name] || g.idx.some(i => d.slots[i]._new);
-    const sum = g.idx.map(i => d.slots[i]).map(x => `${esc(x.time || '시간 미정')}${x.public ? '' : ' (비공개)'} · ${x.cap.M}:${x.cap.F}`).join('<br>');
+    const sum = g.idx.map(i => d.slots[i]).map(x => `${esc(x.time || '시간 미정')}${ionAgeText(x) ? ' · ' + ionAgeText(x) : ''}${x.public ? '' : ' (비공개)'} · ${x.cap.M}:${x.cap.F}`).join('<br>');
     return `<div class="stack" style="gap:10px">
       <div class="card stack" style="gap:10px;padding:14px;background:var(--sand);border-color:var(--gold)">
         <div class="between"><span class="round" style="font-size:18px">${esc(g.name || '새 기수')} <span class="small">${esc(date || '')}</span></span><button class="mini" data-act="addslot" data-v="${esc(g.name)}">+ 타임 추가</button></div>
@@ -823,7 +825,8 @@ async function saveSettings() {
   if (!String(c.account).trim()) return toast('입금 계좌를 입력해 주세요');
   for (const s of d.slots) if (!s.cohort || !s.date || !s.time) return toast('타임마다 기수·날짜·시간을 입력해 주세요');
   const outSlots = {};
-  d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1 }; });
+  for (const s of d.slots) for (const k of ['ageFrom', 'ageTo']) { const y = Number(s[k]); if (s[k] !== '' && s[k] != null && !(y >= 1950 && y <= new Date().getFullYear())) return toast(`${s.cohort} ${s.time}: 대상 연령은 1990처럼 4자리 출생연도로 적어주세요`); }
+  d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
   const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}) } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });

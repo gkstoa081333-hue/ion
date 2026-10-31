@@ -137,7 +137,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261031a"></script>
+<script src="ion-store.js?v=20261031b"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -284,7 +284,7 @@ function viewIntro() {
   const cards = Object.entries(groups).map(([cohort, g]) => `
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
-      ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}</span>
+      ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}${ionAgeText(s) ? ` <b style="color:var(--gold)">· ${ionAgeText(s)}</b>` : ''}</span>
         <span>형제 ${s.left.M ? `<b style="color:var(--gold)">${s.left.M}자리</b>` : '마감·대기'} · 자매 ${s.left.F ? `<b style="color:var(--gold)">${s.left.F}자리</b>` : '마감·대기'}</span></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
@@ -339,10 +339,10 @@ function viewStep1() {
   const slotHtml = Object.entries(groupSlots()).map(([cohort, grp]) => `
     <div class="small" style="margin-top:4px">${esc(cohort)} · ${esc(grp.date)} · ${esc(grp.place)}</div>
     ${grp.slots.map(s => {
-      const left = g ? s.left[g] : null;
-      const chip = !g ? '<span class="chip mute">성별 먼저</span>' : left > 0 ? `<span class="chip ok">${left}자리 남음</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
+      const left = g ? s.left[g] : null; const ageOk = ionAgeOk(s, S.d.birthYear);
+      const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ok">${left}자리 남음</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
       return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
-        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}</span></span>${chip}</button>`;
+        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}</span></span>${chip}</button>`;
     }).join('')}`).join('');
   return `<div class="wrap">${head('기본 정보를 알려주세요', '운영진만 확인하고, 다른 참가자에게는 공개되지 않아요.')}
     <form class="stack" style="gap:20px" data-form="step" autocomplete="on" novalidate>
@@ -383,7 +383,7 @@ function viewStep3() {
   return `<div class="wrap">${head('마지막으로 확인해 주세요')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       <div class="card" style="padding:6px 18px">
-        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(s.time)}</span></div>
+        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ` (${ionAgeText(s)})` : ''}</span></div>
         <div class="kv"><span>이름</span><span>${esc(S.d.name)} (${GENDER[S.d.gender]}, ${esc(S.d.birthYear)}년생)</span></div>
         <div class="kv"><span>연락처</span><span>${esc(fmtPhone(S.d.phone))}</span></div>
         <div class="kv"><span>참가비</span><span>${won(S.cfg.fee)}원</span></div>
@@ -458,6 +458,7 @@ function check(step) {
     if (!d.slotId) return '신청할 기수·타임을 선택해 주세요.';
     if (!/^[가-힣a-zA-Z\s]{2,20}$/.test(d.name.trim())) return '이름을 확인해 주세요. (한글·영문 2자 이상)';
     if (!d.birthYear) return '출생 연도를 선택해 주세요.';
+    { const s = S.cfg.slots.find(x => x.id === d.slotId); if (s && !ionAgeOk(s, d.birthYear)) return `선택한 ${s.time} 타임은 ${ionAgeText(s)} 대상이에요. 다른 타임을 골라주세요.`; }
     if (!/^01\d{8,9}$/.test(digits(d.phone))) return '연락처를 확인해 주세요. (010으로 시작하는 번호)';
     if (!val('region')) return '거주 지역을 입력해 주세요.';
     if (!d.job.trim()) return '직업을 입력해 주세요.';
