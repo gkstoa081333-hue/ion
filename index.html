@@ -869,7 +869,8 @@ function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
   const R = computeMatches(roster, s.votes);
   const person = id => ({ id, ...(roster[id] || {}) });
-  const copyBtn = (id, kind) => `<button class="mini ${sent[id] ? 'done' : ''}" data-act="copy" data-id="${id}" data-kind="${kind}">${ICON.copy}${label(id)} 문구${sent[id] ? ' · 보냄' : ''}</button>`;
+  const copyBtn = (id, kind, txt) => { const btn = `<button class="mini ${sent[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy" data-id="${id}" data-kind="${kind}">${ICON.copy}${txt || label(id) + ' 문구'}${sent[id] ? ' · 보냄' : ''}</button>`;
+    return sent[id] ? `<span style="display:flex;gap:6px;min-width:0">${btn}<button class="mini" style="flex:0 0 auto;padding:0 12px" data-act="unsent" data-id="${id}" aria-label="${label(id)} 미발송으로 되돌리기" title="미발송으로 되돌리기">↺</button></span>` : btn; };
   const pairCard = (pair, rank) => {
     const [a, b] = pair; const both = sent[a] && sent[b];
     return `<div class="card r${rank} stack" style="gap:14px">
@@ -890,9 +891,10 @@ function tabResult(s) {
       <div class="between"><span class="round strike" style="font-size:18px">${label(v.pair[0])} ↔ ${label(v.pair[1])}</span><span class="small">2순위</span></div>
       <span class="small">${v.who.map(label).join(', ')}이(가) 1순위로 성사되어 2순위 매칭은 무효 처리됐어요.</span></div>`).join('') : ''}
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
-    <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss').replace(`${label(id)} 문구`, '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
+    <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
-    <p class="small center">문구를 복사하면 자동으로 '보냄'으로 표시돼요. 카카오톡에 붙여넣어 보내주세요.</p>`;
+    <p class="small center">문구를 복사하면 자동으로 '보냄'으로 표시돼요. 잘못 눌렀으면 옆의 '↺'를 눌러 미발송으로 되돌릴 수 있어요.</p>
+    ${Object.keys(sent).length ? `<button class="btn soft sm" style="width:100%" data-act="unsent-all">'보냄' 표시 모두 지우기 (${Object.keys(sent).length}명)</button>` : ''}`;
 }
 
 function participantURL(sid) { return `${location.origin}${location.pathname}?s=${encodeURIComponent(sid)}`; }
@@ -1093,6 +1095,8 @@ document.addEventListener('click', async e => {
         if (!(await confirmBox('이 타임을 삭제할까요?', '명단·투표·결과가 모두 지워지고 되돌릴 수 없어요. 이미 인쇄한 QR 안내문도 더 이상 접속되지 않아요. 명단만 바꾸려면 삭제 대신 참가자를 고쳐 주세요.', '삭제', true))) return;
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
+      case 'unsent': await DB.remove(`sessions/${A.sid}/sent/${b.dataset.id}`); toast(`${label(b.dataset.id)} 미발송으로 되돌렸어요`); return;
+      case 'unsent-all': if (!(await confirmBox("'보냄' 표시를 모두 지울까요?", '문구는 그대로이고, 발송 표시만 미발송으로 돌아가요.', '모두 지우기'))) return; await DB.remove(`sessions/${A.sid}/sent`); toast('모두 미발송으로 되돌렸어요'); return;
       case 'copy': {
         const s = A.cur; const id = b.dataset.id; const me = { id, ...s.roster[id] };
         let text;
