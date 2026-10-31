@@ -139,7 +139,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261029e"></script>
+<script src="ion-store.js?v=20261031a"></script>
 <script>
 /* =====================================================================
    이온 참여 후기 — 익명으로 Firebase에 저장 (운영진만 열람)
@@ -147,14 +147,11 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
    ▶ 주소 끝에 &demo 를 붙이면 데모 모드
    ===================================================================== */
 const OPT = {
-  worry: ['처음 보는 사람과 어색할까 봐', '대화 주제가 없을까 봐', '나와 맞는 분이 없을까 봐', '같은 교회 지인을 만날까 봐', '여러 분과 돌아가며 대화하는 방식이 낯설어서', '특별히 걱정 없었어요', '기타'],
-  pace: ['짧았어요', '적당했어요', '길었어요'],
-  size: ['딱 좋았어요', '조금 적었어요', '조금 많았어요'],
-  again: ['다음 기수에도 참여하고 싶어요', '고민 중이에요', '아니요'],
   share: ['네, 소개해도 좋아요', '아니요, 운영진만 봐 주세요'],
   age: ['20대 초반', '20대 중반', '20대 후반', '30대 초반', '30대 중반', '30대 후반', '40대'],
   gender: ['형제', '자매']
 };
+let FORM = ionReviewForm(null);   // 운영진이 바꾼 문항은 load()에서 불러옴
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const DEMO = IonStore.demo;
@@ -170,13 +167,14 @@ const SAT = ['', '아쉬웠어요', '조금 아쉬웠어요', '보통이었어�
 
 const FIXED = !!(qs.get('c') && qs.get('t'));
 const S = { phase: 'loading', step: 0, slots: [], err: '', busy: false, edit: false,
-  d: { cohort: qs.get('c') || '', time: qs.get('t') || '', sat: 0, worry: '', worryEtc: '', felt: '', moment: '', size: '', pace: '', improve: '', again: '', nps: -1, share: '', age: '', gender: '', agree: false } };
+  d: { cohort: qs.get('c') || '', time: qs.get('t') || '', sat: 0, worry: '', felt: '', moment: '', size: '', pace: '', improve: '', again: '', nps: -1, share: '', age: '', gender: '', agree: false, x: {}, etc: {} } };
 
 async function load() {
   try {
     const slots = await IonStore.get('apply/slots');
     S.slots = Object.values(slots || {}).sort((a, b) => (a.order || 0) - (b.order || 0));
   } catch (e) { S.slots = []; }
+  try { FORM = ionReviewForm(await IonStore.get('apply/config/reviewForm')); } catch (e) {}
   S.phase = 'form'; render();
 }
 const cohorts = () => { const o = []; S.slots.forEach(s => { if (!o.includes(s.cohort)) o.push(s.cohort); }); if (S.d.cohort && !o.includes(S.d.cohort)) o.unshift(S.d.cohort); return o; };
@@ -187,67 +185,58 @@ function render() {
   let h = '';
   if (S.phase === 'loading') h = '<div class="spin" aria-label="불러오는 중"></div>';
   else if (S.phase === 'done') h = viewDone();
-  else h = [viewStep1, viewStep2, viewStep3][S.step]();
+  else h = viewPage();
   $app.innerHTML = demoBanner() + h;
 }
+// 화면 구성: 1쪽(기수·타임 + 1쪽 문항), 2쪽(문항이 있을 때만), 3쪽(3쪽 문항 + 개인정보 동의)
+const shown = () => FORM.q.filter(q => !q.hidden);
+const pages = () => [1, 2, 3].filter(n => n !== 2 || shown().some(q => q.step === 2));
+const TITLES = { 1: ['오늘 소개팅 어떠셨어요?', '솔직한 후기가 다음 기수를 더 좋게 만들어요. 이름 없이 익명으로 받아요.'], 2: ['조금 더 들려주세요', ''], 3: ['마지막 질문이에요', ''] };
 function head(title, sub) {
-  return `<div class="top">${S.step ? `<button class="icon-btn" data-act="back" aria-label="이전으로">${ICON.back}</button>` : '<span style="width:34px"></span>'}<span class="brand" style="font-size:18px">ION</span><span class="small" style="width:34px;text-align:right">${S.step + 1}/3</span></div>
-    <div class="steps" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i <= S.step ? 'on' : ''}"></i>`).join('')}</div>
+  const total = pages().length;
+  return `<div class="top">${S.step ? `<button class="icon-btn" data-act="back" aria-label="이전으로">${ICON.back}</button>` : '<span style="width:34px"></span>'}<span class="brand" style="font-size:18px">ION</span><span class="small" style="width:34px;text-align:right">${S.step + 1}/${total}</span></div>
+    <div class="steps" aria-hidden="true">${pages().map((_, i) => `<i class="${i <= S.step ? 'on' : ''}"></i>`).join('')}</div>
     <div class="stack" style="gap:6px;margin:14px 0 20px"><span class="eyebrow">ION REVIEW</span><h1 class="h2" style="font-size:25px">${title}</h1>${sub ? `<p class="p" style="font-size:14px">${sub}</p>` : ''}</div>`;
 }
-function opts(key, list) {
-  return `<div class="opts" role="radiogroup">${list.map(v => `<button type="button" class="opt ${S.d[key] === v ? 'on' : ''}" role="radio" aria-checked="${S.d[key] === v}" data-act="opt" data-k="${key}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+const val = q => (q.core ? S.d[q.id] : S.d.x[q.id]) ?? '';
+function opts(key, list, cur, xq) {
+  return `<div class="opts" role="radiogroup">${list.map(v => `<button type="button" class="opt ${cur === v ? 'on' : ''}" role="radio" aria-checked="${cur === v}" data-act="opt" data-k="${esc(key)}" ${xq ? `data-q="${esc(xq)}"` : ''} data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
 }
-function ta(key, label, ph, req = true) {
-  return `<div class="field"><label for="f-${key}">${label}${req ? '<span class="req">*</span>' : ''}</label><textarea id="f-${key}" class="input" data-k="${key}" maxlength="1000" placeholder="${ph}">${esc(S.d[key])}</textarea></div>`;
+const req = q => q.req ? '<span class="req">*</span>' : '';
+function question(q) {
+  const v = val(q);
+  if (q.type === 'stars') return `<div class="field"><span class="lab">${esc(q.label)}${req(q)}</span>
+        <div class="card center" style="padding:16px 10px">
+          <div class="row" style="justify-content:center;gap:4px" role="radiogroup" aria-label="만족도">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="icon-btn" style="width:52px;height:52px;margin:0" data-act="sat" data-v="${n}" role="radio" aria-checked="${S.d.sat === n}" aria-label="${n}점">${ICON.star(S.d.sat >= n)}</button>`).join('')}</div>
+          <div class="round" style="margin-top:6px;min-height:22px;color:var(--gold-t)">${S.d.sat ? SAT[S.d.sat] : '별을 눌러주세요'}</div></div></div>`;
+  if (q.type === 'nps') return `<div class="field"><span class="lab">${esc(q.label)}${req(q)}</span>
+        <div class="nps" role="radiogroup" aria-label="추천 의향 0~10점">${[...Array(11).keys()].map(n => `<button type="button" class="opt ${S.d.nps === n ? 'on' : ''}" data-act="nps" data-v="${n}" role="radio" aria-checked="${S.d.nps === n}">${n}</button>`).join('')}</div>
+        <div class="between small"><span>전혀 아니에요</span><span>꼭 추천할래요</span></div></div>`;
+  if (q.type === 'share') return `<div class="field"><span class="lab">${esc(q.label)}${req(q)}</span>${opts('share', OPT.share, S.d.share)}</div>
+      ${S.d.share === OPT.share[0] ? `<div class="field"><span class="lab">표기할 연령대·성별을 골라주세요<span class="req">*</span></span>${opts('age', OPT.age, S.d.age)}<div style="height:4px"></div>${opts('gender', OPT.gender, S.d.gender)}
+        <p class="small">예) "30대 초반 · 자매" 처럼 표기되고, 이름이나 교회는 절대 공개하지 않아요.</p></div>` : ''}`;
+  if (q.type === 'choice') return `<div class="field"><span class="lab">${esc(q.label)}${req(q)}</span>${opts(q.id, q.options || [], v, q.core ? '' : q.id)}
+        ${v === '기타' ? `<input class="input" data-etc="${esc(q.id)}" value="${esc(S.d.etc[q.id] || '')}" placeholder="직접 입력" maxlength="60" aria-label="${esc(q.label)} 직접 입력">` : ''}</div>`;
+  return `<div class="field"><label for="f-${esc(q.id)}">${esc(q.label)}${req(q)}</label><textarea id="f-${esc(q.id)}" class="input" ${q.core ? `data-k="${esc(q.id)}"` : `data-x="${esc(q.id)}"`} maxlength="1000" placeholder="${esc(q.ph || '')}">${esc(v)}</textarea></div>`;
 }
 function foot(label) {
   return `<div class="spacer" style="min-height:24px"></div><div class="err" id="err">${esc(S.err)}</div>
     <button class="btn" data-act="next" ${S.busy ? 'disabled' : ''}>${S.busy ? '보내는 중…' : label}</button>`;
 }
-
-function viewStep1() {
-  return `<div class="wrap">${head('오늘 소개팅 어떠셨어요?', '솔직한 후기가 다음 기수를 더 좋게 만들어요. 이름 없이 익명으로 받아요.')}
-    <div class="stack" style="gap:20px">
-      ${FIXED && !S.edit ? `<div class="card between" style="padding:14px 16px"><span><span class="small">참여한 소개팅</span><br><span class="round" style="font-size:18px">${esc(S.d.cohort)} · ${esc(S.d.time)}</span></span>
+function viewPage() {
+  const ps = pages(); const n = ps[S.step]; const last = S.step === ps.length - 1;
+  const top = n === 1 ? (FIXED && !S.edit ? `<div class="card between" style="padding:14px 16px"><span><span class="small">참여한 소개팅</span><br><span class="round" style="font-size:18px">${esc(S.d.cohort)} · ${esc(S.d.time)}</span></span>
           <button type="button" class="mini" data-act="edit">다른 타임이에요</button></div>` : `
-      <div class="field"><span class="lab">참여 기수<span class="req">*</span></span>${opts('cohort', cohorts())}</div>
-      ${S.d.cohort ? `<div class="field"><span class="lab">참여 타임<span class="req">*</span></span>${opts('time', times())}</div>` : ''}`}
-      <div class="field"><span class="lab">전반적으로 얼마나 만족하셨나요?<span class="req">*</span></span>
-        <div class="card center" style="padding:16px 10px">
-          <div class="row" style="justify-content:center;gap:4px" role="radiogroup" aria-label="만족도">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="icon-btn" style="width:52px;height:52px;margin:0" data-act="sat" data-v="${n}" role="radio" aria-checked="${S.d.sat === n}" aria-label="${n}점">${ICON.star(S.d.sat >= n)}</button>`).join('')}</div>
-          <div class="round" style="margin-top:6px;min-height:22px;color:var(--gold-t)">${S.d.sat ? SAT[S.d.sat] : '별을 눌러주세요'}</div></div></div>
-      <div class="field"><span class="lab">참가 전에 가장 걱정됐던 점은?<span class="req">*</span></span>${opts('worry', OPT.worry)}
-        ${S.d.worry === '기타' ? `<input class="input" data-k="worryEtc" value="${esc(S.d.worryEtc)}" placeholder="직접 입력" maxlength="60" aria-label="걱정됐던 점 직접 입력">` : ''}</div>
-    </div>${foot('다음')}</div>`;
-}
-function viewStep2() {
-  return `<div class="wrap">${head('조금 더 들려주세요')}
-    <div class="stack" style="gap:20px">
-      ${ta('felt', '실제로 참여해 보니 어떠셨나요? 걱정과 비교해 편하게 적어주세요.', '예) 처음엔 어색했는데 진행자분 덕분에 금방 편해졌어요')}
-      ${ta('moment', '오늘 가장 기억에 남는 순간 한 가지는?', '예) 같은 교회 수련회 얘기로 웃었던 순간')}
-      <div class="field"><span class="lab">소규모 진행은 어떠셨나요?<span class="req">*</span></span>${opts('size', OPT.size)}</div>
-      <div class="field"><span class="lab">한 분과 대화하는 시간은 어땠나요?<span class="req">*</span></span>${opts('pace', OPT.pace)}</div>
-      ${ta('improve', '다음에 더 좋아졌으면 하는 점이 있다면?', '없으면 "없음"이라고 적어주세요')}
-    </div>${foot('다음')}</div>`;
-}
-function viewStep3() {
-  return `<div class="wrap">${head('마지막 질문이에요')}
-    <div class="stack" style="gap:20px">
-      <div class="field"><span class="lab">다음 기수에 다시 참여할 의향이 있으신가요?<span class="req">*</span></span>${opts('again', OPT.again)}</div>
-      <div class="field"><span class="lab">이온을 지인에게 추천할 의향은 몇 점인가요?<span class="req">*</span></span>
-        <div class="nps" role="radiogroup" aria-label="추천 의향 0~10점">${[...Array(11).keys()].map(n => `<button type="button" class="opt ${S.d.nps === n ? 'on' : ''}" data-act="nps" data-v="${n}" role="radio" aria-checked="${S.d.nps === n}">${n}</button>`).join('')}</div>
-        <div class="between small"><span>전혀 아니에요</span><span>꼭 추천할래요</span></div></div>
-      <div class="field"><span class="lab">남겨주신 후기를 홍보에 소개해도 될까요?<span class="req">*</span></span>${opts('share', OPT.share)}</div>
-      ${S.d.share === OPT.share[0] ? `<div class="field"><span class="lab">표기할 연령대·성별을 골라주세요<span class="req">*</span></span>${opts('age', OPT.age)}<div style="height:4px"></div>${opts('gender', OPT.gender)}
-        <p class="small">예) "30대 초반 · 자매" 처럼 표기되고, 이름이나 교회는 절대 공개하지 않아요.</p></div>` : ''}
-      <div class="agree"><div class="agree-row"><input type="checkbox" id="a-ok" data-k="agree" ${S.d.agree ? 'checked' : ''}>
+      <div class="field"><span class="lab">참여 기수<span class="req">*</span></span>${opts('cohort', cohorts(), S.d.cohort)}</div>
+      ${S.d.cohort ? `<div class="field"><span class="lab">참여 타임<span class="req">*</span></span>${opts('time', times(), S.d.time)}</div>` : ''}`) : '';
+  const agree = n === 3 ? `<div class="agree"><div class="agree-row"><input type="checkbox" id="a-ok" data-k="agree" ${S.d.agree ? 'checked' : ''}>
         <label for="a-ok"><span style="color:var(--gold-d)">[필수]</span> 개인정보 수집 및 이용 안내를 확인했어요</label></div>
         <div class="terms">· 후기는 이름·연락처 없이 익명으로 저장돼요.
 · 수집 항목: 참여 기수·타임, 후기 응답, (동의 시) 연령대·성별
 · 이용 목적: 프로그램 개선, 동의한 경우 홍보 소개
-· 보유 기간: 수집일로부터 2년</div></div>
-    </div>${foot('후기 보내기')}</div>`;
+· 보유 기간: 수집일로부터 2년</div></div>` : '';
+  return `<div class="wrap">${head(...TITLES[n])}
+    <div class="stack" style="gap:20px">${top}${shown().filter(q => q.step === n).map(question).join('')}${agree}</div>${foot(last ? '후기 보내기' : '다음')}</div>`;
 }
 function viewDone() {
   return `<div class="wrap dark center">
@@ -260,39 +249,38 @@ function viewDone() {
     <span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
 }
 
+const short = t => { const x = String(t).replace(/[?？].*$/, ''); return x.length > 18 ? x.slice(0, 18) + '…' : x; };
 function check(step) {
-  const d = S.d;
-  if (step === 0) {
+  const d = S.d; const n = pages()[step];
+  if (n === 1) {
     if (!d.cohort) return '참여 기수를 선택해 주세요.';
     if (!d.time) return '참여 타임을 선택해 주세요.';
-    if (!d.sat) return '만족도를 별로 표시해 주세요.';
-    if (!d.worry || (d.worry === '기타' && !d.worryEtc.trim())) return '걱정됐던 점을 선택해 주세요.';
   }
-  if (step === 1) {
-    if (d.felt.trim().length < 2) return '참여해 보신 느낌을 적어주세요.';
-    if (d.moment.trim().length < 2) return '기억에 남는 순간을 적어주세요.';
-    if (!d.size) return '소규모 진행에 대한 생각을 선택해 주세요.';
-    if (!d.pace) return '대화 시간이 어땠는지 선택해 주세요.';
-    if (!d.improve.trim()) return '더 좋아졌으면 하는 점을 적어주세요. 없으면 "없음"도 괜찮아요.';
+  for (const q of shown().filter(q => q.step === n)) {
+    if (!q.req) continue;
+    const v = val(q);
+    if (q.type === 'stars' && !d.sat) return '만족도를 별로 표시해 주세요.';
+    if (q.type === 'nps' && d.nps < 0) return '추천 의향 점수를 선택해 주세요.';
+    if (q.type === 'share') { if (!d.share) return '홍보 소개 여부를 선택해 주세요.'; if (d.share === OPT.share[0] && (!d.age || !d.gender)) return '표기할 연령대와 성별을 골라주세요.'; }
+    if (q.type === 'choice' && (!v || (v === '기타' && !String(d.etc[q.id] || '').trim()))) return `'${short(q.label)}' 항목을 선택해 주세요.`;
+    if (q.type === 'text' && !String(v).trim()) return `'${short(q.label)}' 항목을 적어주세요.${q.id === 'improve' ? ' 없으면 "없음"도 괜찮아요.' : ''}`;
   }
-  if (step === 2) {
-    if (!d.again) return '재참여 의향을 선택해 주세요.';
-    if (d.nps < 0) return '추천 의향 점수를 선택해 주세요.';
-    if (!d.share) return '홍보 소개 여부를 선택해 주세요.';
-    if (d.share === OPT.share[0] && (!d.age || !d.gender)) return '표기할 연령대와 성별을 골라주세요.';
-    if (!d.agree) return '개인정보 수집 및 이용 안내를 확인해 주세요.';
-  }
+  if (n === 3 && !d.agree) return '개인정보 수집 및 이용 안내를 확인해 주세요.';
   return '';
 }
 async function submit() {
   S.busy = true; S.err = ''; render();
   const d = S.d; const ok = d.share === OPT.share[0];
+  const hid = id => { const q = FORM.q.find(x => x.id === id); return !q || q.hidden; };
+  const pick = id => hid(id) ? '' : (d[id] === '기타' ? String(d.etc[id] || '').trim() : String(d[id] || '').trim());
+  const extra = {};
+  shown().filter(q => !q.core).forEach(q => { let v = d.x[q.id] ?? ''; if (v === '기타') v = String(d.etc[q.id] || '').trim(); if (String(v).trim()) extra[q.id] = String(v).trim().slice(0, 1000); });
   try {
     const uid = await IonStore.ensureAnon();
     const id = IonStore.newId('reviews');
     await IonStore.set('reviews/' + id, { id, uid, at: Date.now(), cohort: d.cohort, time: d.time, sat: d.sat,
-      worry: d.worry === '기타' ? d.worryEtc.trim() : d.worry, felt: d.felt.trim(), moment: d.moment.trim(), size: d.size, pace: d.pace, improve: d.improve.trim(),
-      again: d.again, nps: d.nps, share: ok, label: ok ? `${d.age} · ${d.gender}` : '' });
+      worry: pick('worry'), felt: pick('felt'), moment: pick('moment'), size: pick('size'), pace: pick('pace'), improve: pick('improve'),
+      again: pick('again'), nps: d.nps, share: ok, label: ok ? `${d.age} · ${d.gender}` : '', ...(Object.keys(extra).length ? { extra } : {}) });
     try { localStorage.setItem('ion_review_done_' + d.cohort + d.time, '1'); } catch (e) {}
     S.phase = 'done'; window.scrollTo(0, 0);
   } catch (e) { console.error(e); S.err = '후기를 저장하지 못했어요. 잠시 후 다시 눌러주세요.'; }
@@ -300,7 +288,10 @@ async function submit() {
 }
 
 document.addEventListener('input', e => {
-  const k = e.target.dataset && e.target.dataset.k; if (!k) return;
+  const ds = e.target.dataset || {};
+  if (ds.x) { S.d.x[ds.x] = e.target.value; return; }
+  if (ds.etc) { S.d.etc[ds.etc] = e.target.value; return; }
+  const k = ds.k; if (!k) return;
   if (e.target.type === 'checkbox') { S.d[k] = e.target.checked; return; }
   S.d[k] = e.target.value;
   if (S.err) { S.err = ''; const el = document.getElementById('err'); if (el) el.textContent = ''; }
@@ -308,7 +299,7 @@ document.addEventListener('input', e => {
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
-  if (act === 'opt') { S.d[b.dataset.k] = v; if (b.dataset.k === 'cohort' && !times().includes(S.d.time)) S.d.time = ''; render(); }
+  if (act === 'opt') { if (b.dataset.q) S.d.x[b.dataset.q] = v; else S.d[b.dataset.k] = v; if (b.dataset.k === 'cohort' && !times().includes(S.d.time)) S.d.time = ''; render(); }
   else if (act === 'edit') { S.edit = true; if (!times().includes(S.d.time)) S.d.time = ''; render(); }
   else if (act === 'sat') { S.d.sat = Number(v); render(); }
   else if (act === 'nps') { S.d.nps = Number(v); render(); }
@@ -317,7 +308,7 @@ document.addEventListener('click', e => {
     const msg = check(S.step);
     if (msg) { S.err = msg; const el = document.getElementById('err'); if (el) el.textContent = msg; return; }
     S.err = '';
-    if (S.step < 2) { S.step++; render(); window.scrollTo(0, 0); } else submit();
+    if (S.step < pages().length - 1) { S.step++; render(); window.scrollTo(0, 0); } else submit();
   }
 });
 load();

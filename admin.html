@@ -141,7 +141,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261029e"></script>
+<script src="ion-store.js?v=20261031a"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -441,7 +441,7 @@ function render() {
   const v = A.phase === 'loading' ? '<div class="spin" aria-label="불러오는 중"></div>'
     : A.phase === 'login' ? viewLogin()
     : A.phase === 'setup' ? viewSetup()
-    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : viewMain();
+    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : viewMain();
   const q = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
   const pos = q ? document.activeElement.selectionStart : 0;
   $app.innerHTML = banner + v;
@@ -645,7 +645,7 @@ function viewReviews() {
   if (A.rCohort && !cohortIndex().all.some(c => c.name === A.rCohort)) A.rCohort = '';
   const rs = reviewFiltered(); const n = rs.length;
   const avg = n ? (rs.reduce((t, r) => t + r.sat, 0) / n).toFixed(1) : '-';
-  const again = n ? Math.round(rs.filter(r => String(r.again).startsWith('다음')).length / n * 100) : 0;
+  const yesAgain = ((RFORM().q.find(x => x.id === 'again') || {}).options || [])[0] || ''; const again = n ? Math.round(rs.filter(r => String(r.again).startsWith('다음') || (yesAgain && r.again === yesAgain)).length / n * 100) : 0;
   const nps = n ? Math.round((rs.filter(r => r.nps >= 9).length - rs.filter(r => r.nps <= 6).length) / n * 100) : 0;
   const tally = k => { const m = {}; rs.forEach(r => { if (r[k]) m[r[k]] = (m[r[k]] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
   const ss = A.rCohort ? slots().filter(s => s.cohort === A.rCohort) : [];
@@ -659,7 +659,7 @@ function viewReviews() {
   const filtered = A.rTime || A.rStar || A.rShare || A.rq.trim();
   return `<div class="wrap">
     ${appHead('reviews')}
-    ${cohortPicker(A.rCohort, 'rcohort', { all: true })}
+    <div class="row" style="flex-wrap:nowrap;align-items:center;gap:8px"><div style="flex-grow:1;min-width:0">${cohortPicker(A.rCohort, 'rcohort', { all: true })}</div><button class="mini" data-act="rform" style="flex-shrink:0">✎ 문항 편집</button></div>
     <div class="card hero stack" style="gap:12px">
       <div class="between"><span class="eyebrow">${A.rCohort ? esc(A.rCohort) : '전체 기수'} 후기 요약${filtered ? ' · 필터 적용' : ''}</span><span class="small">응답 ${n}명</span></div>
       <div class="sgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -681,24 +681,72 @@ function viewReviews() {
     ${n ? `<div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="rcsv">${ICON.down}${A.rCohort ? esc(A.rCohort) : '전체'} 후기 ${n}건 CSV</button></div>` : ''}
     <div class="spacer" style="min-height:20px"></div></div>`;
 }
+const RFORM = () => ionReviewForm(conf().reviewForm);
+function extraLabel(id) { const q = RFORM().q.find(x => x.id === id); return q ? q.label : id; }
 function reviewCard(r, showCohort) {
+  const kv = (k, v) => v ? `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>` : '';
   return `<div class="card stack" style="gap:8px">
     <div class="between"><span class="round" style="color:var(--gold-d);font-size:18px;letter-spacing:.05em">${stars(r.sat)}</span><span class="small">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.time)} · ${esc(dt(r.at))}</span></div>
-    <div class="row">${r.share ? `<span class="chip ok">홍보 동의 · ${esc(r.label)}</span>` : '<span class="chip mute">운영진만</span>'}<span class="chip mute">${esc(r.again)}</span><span class="chip mute">추천 ${r.nps}점</span></div>
-    <div class="kv"><span>걱정</span><span>${esc(r.worry)}</span></div>
-    <div class="kv"><span>참여해 보니</span><span>${esc(r.felt)}</span></div>
-    <div class="kv"><span>기억에 남는 순간</span><span>${esc(r.moment)}</span></div>
-    <div class="kv"><span>소규모 진행</span><span>${esc(r.size)}</span></div>
-    ${r.pace ? `<div class="kv"><span>대화 시간</span><span>${esc(r.pace)}</span></div>` : ''}
-    <div class="kv"><span>바라는 점</span><span>${esc(r.improve)}</span></div>
+    <div class="row">${r.share ? `<span class="chip ok">홍보 동의 · ${esc(r.label)}</span>` : '<span class="chip mute">운영진만</span>'}${r.again ? `<span class="chip mute">${esc(r.again)}</span>` : ''}<span class="chip mute">추천 ${r.nps}점</span></div>
+    ${kv('걱정', r.worry)}${kv('참여해 보니', r.felt)}${kv('기억에 남는 순간', r.moment)}${kv('소규모 진행', r.size)}${kv('대화 시간', r.pace)}${kv('바라는 점', r.improve)}
+    ${Object.entries(r.extra || {}).map(([k, v]) => kv(extraLabel(k), v)).join('')}
     <div class="row">${r.share ? `<button class="mini go" data-act="rcopy" data-v="${esc(r.id)}">${ICON.copy}홍보 문구 복사</button>` : ''}<button class="mini del" data-act="rdel" data-v="${esc(r.id)}">삭제</button></div>
   </div>`;
+}
+
+/* ---------- 후기 문항 편집 ---------- */
+const RTYPE = { stars: '별점', choice: '객관식', text: '주관식', nps: '추천 점수', share: '홍보 동의' };
+function openRForm() { A.rf = JSON.parse(JSON.stringify(RFORM())); A.view = 'rform'; render(); window.scrollTo(0, 0); }
+function viewRForm() {
+  const q = A.rf.q;
+  const card = (x, i) => {
+    const same = q.map((y, j) => j).filter(j => q[j].step === x.step); const pos = same.indexOf(i);
+    return `<div class="card stack" style="gap:10px;padding:14px;${x.hidden ? 'opacity:.55' : ''}">
+      <div class="between"><div class="row" style="gap:6px"><span class="chip ${x.core ? 'mute' : 'ok'}">${RTYPE[x.type] || x.type}</span>${x.core ? '<span class="small">기본 문항</span>' : '<span class="small">추가 문항</span>'}${x.hidden ? '<span class="chip bad">숨김</span>' : ''}</div>
+        <div class="row" style="gap:4px;flex-wrap:nowrap"><button class="mini" data-act="rfmove" data-v="${i}" data-d="-1" ${pos === 0 ? 'disabled' : ''} aria-label="위로">▲</button><button class="mini" data-act="rfmove" data-v="${i}" data-d="1" ${pos === same.length - 1 ? 'disabled' : ''} aria-label="아래로">▼</button></div></div>
+      <div class="field"><label for="rf${i}l">질문</label><input id="rf${i}l" class="input" data-rq="${i}" data-rf="label" value="${esc(x.label)}" maxlength="80"></div>
+      ${x.type === 'choice' ? `<div class="field"><label for="rf${i}o">보기 (한 줄에 하나 · '기타'를 넣으면 직접 입력칸이 생겨요)</label><textarea id="rf${i}o" class="input" style="min-height:${Math.max(3, (x.options || []).length) * 30 + 28}px" data-rq="${i}" data-rf="options">${esc((x.options || []).join('\n'))}</textarea></div>` : ''}
+      ${x.type === 'text' ? `<div class="field"><label for="rf${i}p">입력칸 안내 문구</label><input id="rf${i}p" class="input" data-rq="${i}" data-rf="ph" value="${esc(x.ph || '')}" maxlength="80"></div>` : ''}
+      <div class="between" style="flex-wrap:wrap;gap:8px">
+        <div class="row" style="gap:12px">${x.fixed ? '<span class="small">꼭 필요한 문항이라 숨기거나 선택으로 바꿀 수 없어요</span>' : `
+          <label class="row small" style="gap:6px"><input type="checkbox" data-rq="${i}" data-rf="req" ${x.req ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--green)">필수</label>
+          ${x.core ? `<label class="row small" style="gap:6px"><input type="checkbox" data-rq="${i}" data-rf="hidden" ${x.hidden ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--green)">숨기기</label>` : ''}`}</div>
+        <div class="row" style="gap:6px"><select class="pastsel" data-rq="${i}" data-rf="step" aria-label="표시할 쪽">${[1, 2, 3].map(n => `<option value="${n}" ${x.step === n ? 'selected' : ''}>${n}쪽</option>`).join('')}</select>
+          ${x.core ? '' : `<button class="mini del" data-act="rfdel" data-v="${i}">삭제</button>`}</div></div>
+    </div>`;
+  };
+  const sec = n => { const idx = q.map((x, i) => i).filter(i => q[i].step === n);
+    return `<span class="eyebrow" style="margin-top:6px">${n}쪽${n === 1 ? ' · 맨 위에 기수·타임 선택이 먼저 나와요' : n === 3 ? ' · 맨 아래에 개인정보 동의가 붙어요' : ' · 문항이 없으면 이 쪽은 건너뛰어요'}</span>
+      ${idx.map(i => card(q[i], i)).join('') || '<div class="card empty">이 쪽에 문항이 없어요</div>'}`; };
+  return `<div class="wrap">
+    ${appHead('reviews')}
+    <div class="between" style="margin:6px 0 4px"><span class="h2" style="font-size:20px">후기 문항 편집</span><button class="mini" data-act="rfback">← 후기로</button></div>
+    <p class="small" style="margin:0 0 10px">저장하면 바로 후기 페이지에 반영돼요. 이미 받은 후기는 그대로 남아요. 기본 문항은 질문 문구·보기를 바꿔도 요약 통계에 계속 쓰여요.</p>
+    <div class="stack" style="gap:10px">${sec(1)}${sec(2)}${sec(3)}</div>
+    <div class="row" style="margin-top:14px"><button class="mini go" data-act="rfadd" data-v="choice">+ 객관식 문항 추가</button><button class="mini go" data-act="rfadd" data-v="text">+ 주관식 문항 추가</button></div>
+    <div class="stack" style="gap:10px;margin-top:16px">
+      <button class="btn" data-act="rfsave" ${A.busy ? 'disabled' : ''}>${A.busy ? '저장 중…' : '저장하기'}</button>
+      <div class="row" style="justify-content:center"><a class="mini" href="review.html${DEMO ? '?demo' : ''}" target="_blank" rel="noopener">후기 페이지 미리보기</a><button class="mini del" data-act="rfreset">기본 문항으로 되돌리기</button></div>
+    </div>
+    <div class="spacer" style="min-height:20px"></div></div>`;
+}
+async function saveRForm() {
+  const q = A.rf.q.map(x => ({ ...x, label: String(x.label || '').trim(), options: x.type === 'choice' ? (x.options || []).map(o => String(o).trim()).filter(Boolean) : undefined }));
+  const bad = q.find(x => !x.label) ; if (bad) return toast('질문 문구가 빈 문항이 있어요');
+  const fewOpt = q.find(x => x.type === 'choice' && !x.hidden && x.options.length < 2); if (fewOpt) return toast(`'${fewOpt.label.slice(0, 14)}' 보기를 2개 이상 넣어주세요`);
+  const clean = q.map(x => { const o = { id: x.id, type: x.type, step: +x.step, label: x.label, req: !!x.req }; if (x.core) o.core = true; if (x.fixed) o.fixed = true; if (x.hidden) o.hidden = true; if (x.options) o.options = x.options; if (x.ph) o.ph = String(x.ph).trim(); return o; });
+  A.busy = true; render();
+  try { await IonStore.update('apply/config', { reviewForm: { q: clean, at: Date.now() } }); toast('후기 문항을 저장했어요 · 후기 페이지에 바로 반영돼요'); A.view = 'reviews'; }
+  catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  A.busy = false; render(); window.scrollTo(0, 0);
 }
 function reviewCSV() {
   const cols = [['작성일시', r => dt(r.at, true)], ['기수', 'cohort'], ['타임', 'time'], ['만족도', 'sat'], ['걱정됐던 점', 'worry'], ['참여해 보니', 'felt'], ['기억에 남는 순간', 'moment'],
     ['소규모 진행', 'size'], ['대화 시간', 'pace'], ['바라는 점', 'improve'], ['재참여 의향', 'again'], ['추천 점수', 'nps'], ['홍보 동의', r => (r.share ? '동의' : '비동의')], ['표기', 'label']];
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rs = reviewFiltered();
+  const xs = []; RFORM().q.filter(x => !x.core).forEach(x => xs.push(x.id)); rs.forEach(r => Object.keys(r.extra || {}).forEach(k => { if (!xs.includes(k)) xs.push(k); }));
+  xs.forEach(k => cols.push([extraLabel(k), r => (r.extra || {})[k]]));
   const csv = '﻿' + [cols.map(c => cell(c[0])).join(',')].concat(rs.map(r => cols.map(([, f]) => cell(typeof f === 'function' ? f(r) : r[f])).join(','))).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -777,7 +825,7 @@ async function saveSettings() {
   const outSlots = {};
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1 }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), refund: String(c.refund || '') } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}) } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   removed.forEach(id => { up['slots/' + id] = null; up['counts/' + id] = null; });
   // 기수 상태 저장 (바꾼 기수만)
@@ -920,6 +968,14 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.k === 'q') { A.q = t.value; render(); return; }
   if (t.dataset.k === 'rq') { A.rq = t.value; render(); return; }
+  if (t.dataset.rq !== undefined && A.rf) {
+    const x = A.rf.q[+t.dataset.rq]; const f = t.dataset.rf;
+    if (f === 'req' || f === 'hidden') { x[f] = t.checked; render(); }
+    else if (f === 'step') { x.step = +t.value; render(); }
+    else if (f === 'options') x.options = t.value.split('\n');
+    else x[f] = t.value;
+    return;
+  }
   if (A.view === 'settings' && A.draft) {
     if (t.dataset.c) A.draft.config[t.dataset.c] = t.value;
     if (t.dataset.s !== undefined && t.dataset.f) {
@@ -951,6 +1007,13 @@ document.addEventListener('click', async e => {
   else if (act === 'rcohort') { A.rCohort = v; render(); }
   else if (act === 'revcopy') copyText(REV_URL(b.dataset.c, b.dataset.t), `${b.dataset.c} ${b.dataset.t} 후기 링크를 복사했어요`);
   else if (act === 'revqr') openRevQR(b.dataset.c, b.dataset.t);
+  else if (act === 'rform') openRForm();
+  else if (act === 'rfback') { if (await confirmBox('편집을 그만둘까요?', '저장하지 않은 변경은 사라져요.', '그만두기')) { A.view = 'reviews'; render(); window.scrollTo(0, 0); } }
+  else if (act === 'rfsave') saveRForm();
+  else if (act === 'rfreset') { if (await confirmBox('기본 문항으로 되돌릴까요?', '추가한 문항이 빠지고 처음 문항으로 돌아가요. 저장하기를 눌러야 반영돼요.', '되돌리기', true)) { A.rf = JSON.parse(JSON.stringify(ionReviewForm(null))); render(); } }
+  else if (act === 'rfadd') { const n = A.rf.q.filter(x => !x.core).length + 1; A.rf.q.push({ id: 'q' + Date.now().toString(36), type: v, step: 2, req: false, label: v === 'choice' ? `새 객관식 질문 ${n}` : `새 주관식 질문 ${n}`, options: v === 'choice' ? ['보기 1', '보기 2'] : undefined, ph: '' }); render(); setTimeout(() => { const el = document.getElementById(`rf${A.rf.q.length - 1}l`); if (el) { el.scrollIntoView({ block: 'center' }); el.select(); } }, 50); }
+  else if (act === 'rfdel') { const x = A.rf.q[+v]; if (await confirmBox(`'${x.label.slice(0, 20)}' 문항을 삭제할까요?`, '이미 받은 답변은 후기 목록과 CSV에 그대로 남아요.', '삭제', true)) { A.rf.q.splice(+v, 1); render(); } }
+  else if (act === 'rfmove') { const q = A.rf.q; const i = +v; const same = q.map((y, j) => j).filter(j => q[j].step === q[i].step); const k = same[same.indexOf(i) + Number(b.dataset.d)]; if (k !== undefined) { [q[i], q[k]] = [q[k], q[i]]; render(); } }
   else if (act === 'cpick') openCohortSheet(v, b.dataset.all === '1');
   else if (act === 'rgo') { A.rCohort = v; A.rTime = ''; render(); window.scrollTo(0, 0); }
   else if (act === 'rtime') { A.rTime = v; render(); }

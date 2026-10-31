@@ -33,6 +33,29 @@ const ION_DEFAULTS = {
 const ION_STATUS = { pending: '입금대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
 const ION_HOLDING = ['pending', 'confirmed'];
 
+/* ---------- 후기 문항 (운영진이 후기 탭 › 문항 편집에서 바꿀 수 있음, apply/config/reviewForm 에 저장) ----------
+   core: 통계에 쓰이는 기본 문항(아이디 고정) · fixed: 숨길 수 없는 문항 · 직접 추가한 문항은 후기의 extra 에 저장 */
+const ION_REVIEW_FORM = { q: [
+  { id: 'sat', type: 'stars', step: 1, core: true, fixed: true, req: true, label: '전반적으로 얼마나 만족하셨나요?' },
+  { id: 'worry', type: 'choice', step: 1, core: true, req: true, label: '참가 전에 가장 걱정됐던 점은?', options: ['처음 보는 사람과 어색할까 봐', '대화 주제가 없을까 봐', '나와 맞는 분이 없을까 봐', '같은 교회 지인을 만날까 봐', '여러 분과 돌아가며 대화하는 방식이 낯설어서', '특별히 걱정 없었어요', '기타'] },
+  { id: 'felt', type: 'text', step: 2, core: true, req: true, label: '실제로 참여해 보니 어떠셨나요? 걱정과 비교해 편하게 적어주세요.', ph: '예) 처음엔 어색했는데 진행자분 덕분에 금방 편해졌어요' },
+  { id: 'moment', type: 'text', step: 2, core: true, req: true, label: '오늘 가장 기억에 남는 순간 한 가지는?', ph: '예) 같은 교회 수련회 얘기로 웃었던 순간' },
+  { id: 'size', type: 'choice', step: 2, core: true, req: true, label: '소규모 진행은 어떠셨나요?', options: ['딱 좋았어요', '조금 적었어요', '조금 많았어요'] },
+  { id: 'pace', type: 'choice', step: 2, core: true, req: true, label: '한 분과 대화하는 시간은 어땠나요?', options: ['짧았어요', '적당했어요', '길었어요'] },
+  { id: 'improve', type: 'text', step: 2, core: true, req: true, label: '다음에 더 좋아졌으면 하는 점이 있다면?', ph: '없으면 "없음"이라고 적어주세요' },
+  { id: 'again', type: 'choice', step: 3, core: true, req: true, label: '다음 기수에 다시 참여할 의향이 있으신가요?', options: ['다음 기수에도 참여하고 싶어요', '고민 중이에요', '아니요'] },
+  { id: 'nps', type: 'nps', step: 3, core: true, fixed: true, req: true, label: '이온을 지인에게 추천할 의향은 몇 점인가요?' },
+  { id: 'share', type: 'share', step: 3, core: true, fixed: true, req: true, label: '남겨주신 후기를 홍보에 소개해도 될까요?' }
+] };
+// 저장된 문항을 불러올 때: 빠진 고정 문항은 기본값으로 채우고, 형식이 이상한 항목은 버림
+function ionReviewForm(saved) {
+  const def = ION_REVIEW_FORM.q;
+  const list = Array.isArray(saved && saved.q) ? saved.q.filter(x => x && x.id && x.type && x.label).map(x => ({ ...x, options: Array.isArray(x.options) ? x.options.filter(Boolean) : x.options })) : def.map(x => ({ ...x }));
+  def.filter(d => d.fixed && !list.some(x => x.id === d.id)).forEach(d => list.push({ ...d }));
+  list.forEach(x => { const d = def.find(y => y.id === x.id); if (d) { x.core = true; x.type = d.type; if (d.fixed) { x.fixed = true; x.hidden = false; x.req = true; } } x.step = [1, 2, 3].includes(+x.step) ? +x.step : 2; });
+  return { q: list };
+}
+
 async function ionSha(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
