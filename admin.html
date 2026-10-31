@@ -86,6 +86,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .chip.wait{background:var(--gold-soft);color:var(--gold-ink)}
 .chip.mute{background:var(--sand);color:var(--ink-2)}
 .chip.bad{background:#F3DED8;color:var(--danger)}
+.chip.warn{background:#FCEFC7;color:#7A5300}
+.conflict{border-left:0;background:#FFF8E6;border:1px solid #EBCB7A;border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.55;color:#5A4300}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .chipbtn{min-height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-2);background:var(--paper);font-family:var(--round);font-size:14px;color:var(--ink-2);white-space:nowrap}
 .chipbtn.on{background:var(--green);border-color:var(--green);color:var(--cream)}
@@ -187,6 +189,9 @@ const TPL = {
   wait: { label: '대기 안내', for: ['waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
 
 자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
+  move: { label: '타임 변경 안내', for: ['pending', 'confirmed', 'waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${r.cohort} 신청 감사합니다 🙂
+더 편안한 만남을 위해 참가 타임을 ${x.from ? x.from + ' → ' : ''}${r.date} ${r.time} 으로 조정해 드렸어요.
+${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리가 나면 바로 연락드릴게요.\n' : ''}일정이 어려우시면 편하게 말씀해 주세요. 감사합니다.` },
   cancel: { label: '취소 안내', for: ['cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청이 취소되었어요.
 
 다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
@@ -256,7 +261,7 @@ function start() {
   IonStore.onAuth(st => {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews') render(); });
-      if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
+      if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sessRaw = v || {}; A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
       if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
@@ -420,6 +425,41 @@ async function changeStatus(id, to, memo) {
   } catch (e) { console.error(e); toast('저장하지 못했어요: ' + e.message); return false; }
 }
 
+/* ---------- 타임 변경 ---------- */
+function openMove(id) {
+  const r = (A.data.apps || {})[id]; if (!r) return;
+  const held = (sid, g) => apps().filter(x => x.slotId === sid && x.gender === g && ION_HOLDING.includes(x.status) && x.id !== id).length;
+  const cands = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId);
+  const m = document.getElementById('modal');
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="타임 변경">
+    <div class="stack" style="gap:4px"><span class="round" style="font-size:19px">${esc(r.name)}님 타임 변경</span><span class="small">지금: ${esc(r.cohort)} ${esc(r.date)} ${esc(r.time)} · ${ION_STATUS[r.status]}</span></div>
+    ${cands.map(x => { const left = (x.cap?.[r.gender] || 0) - held(x.id, r.gender); const cf = conflictsOf(r, x.id); const ageBad = !ionAgeOk(x, r.birthYear);
+      return `<button class="card stack" style="gap:6px;text-align:left;cursor:pointer;border:1.5px solid var(--line-2)" data-move="${x.id}">
+        <div class="between"><span class="round" style="font-size:17px">${esc(x.date)} ${esc(x.time)}</span><span class="chip ${left > 0 ? 'ok' : 'wait'}">${left > 0 ? `${G[r.gender]} ${left}자리` : '정원 마감 → 대기'}</span></div>
+        ${ionAgeText(x) ? `<span class="small">${ionAgeText(x)}${ageBad ? ' · <b style="color:var(--danger)">대상 연령 밖</b>' : ''}</span>` : ''}
+        ${cf.length ? `<span class="small" style="color:#7A5300">⚠ 여기서도 겹침: ${cf.map(c => esc(c.text)).join(', ')}</span>` : '<span class="small" style="color:var(--green)">겹치는 사람 없음</span>'}
+      </button>`; }).join('') || '<div class="card empty">같은 기수에 옮길 다른 타임이 없어요</div>'}
+    <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
+  m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
+  m.querySelectorAll('[data-move]').forEach(b => b.onclick = async () => { m.innerHTML = ''; await moveApp(id, b.dataset.move); });
+}
+async function moveApp(id, to) {
+  const list = apps().map(x => ({ ...x })); const r = list.find(x => x.id === id); const t = slots().find(x => x.id === to); if (!r || !t) return;
+  const from = `${r.time}`;
+  const held = list.filter(x => x.slotId === to && x.gender === r.gender && ION_HOLDING.includes(x.status) && x.id !== id).length;
+  const full = held >= (t.cap?.[r.gender] || 0);
+  if (full && ION_HOLDING.includes(r.status) && !(await confirmBox(`${t.time} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 그 타임 대기 순번으로 들어가요. ${r.status === 'confirmed' ? '이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '대기로 옮기기', true))) return;
+  r.slotId = to; r.date = t.date; r.time = t.time; r.place = t.place || '';
+  if (full && ION_HOLDING.includes(r.status)) { r.status = 'waiting'; r.at = Date.now(); }
+  r.log = addLog(r, `타임 변경(${from}→${t.time})`);
+  const { up, promoted } = plan(list, { [`apps/${id}/slotId`]: to, [`apps/${id}/date`]: t.date, [`apps/${id}/time`]: t.time, [`apps/${id}/place`]: t.place || '', [`apps/${id}/status`]: r.status, [`apps/${id}/log`]: r.log, ...(r.status === 'waiting' ? { [`apps/${id}/at`]: r.at } : {}) });
+  try {
+    await IonStore.update('apply', up);
+    toast(`${r.name}님을 ${t.time} 타임으로 옮겼어요${promoted.length ? ` · 빈자리에 대기 ${promoted.length}명 배정` : ''}`);
+    A._moveFrom = from; setTimeout(() => openMsg(id, 'move'), 250);
+  } catch (e) { toast('옮기지 못했어요: ' + e.message); }
+}
+
 /* ---------- 영구삭제 (취소·환불 건만) ---------- */
 async function purge(ids) {
   const up = {};
@@ -551,7 +591,8 @@ function viewStatus() {
           <div class="bar" aria-hidden="true"><i style="width:${okW}%"></i><b style="width:${cap ? Math.min(100 - okW, pend / cap * 100) : 0}%"></b></div>
           <span class="small" style="color:var(--cream)"><b class="round">${ok}</b>/${cap}${pend ? ` · 입금대기 ${pend}` : ''}${wait ? ` · 대기 ${wait}` : ''}</span></div>`;
       };
-      return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}${ionAgeText(s) ? ` <span class="small">${ionAgeText(s)}</span>` : ''}${s.public ? '' : ' <span class="small">(비공개)</span>'}</span>
+      const nc = rows.filter(r => r.slotId === s.id && conflictsOf(r).length).length;
+      return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}${nc ? ` <span class="chip warn">겹침 ${nc}명</span>` : ''}${ionAgeText(s) ? ` <span class="small">${ionAgeText(s)}</span>` : ''}${s.public ? '' : ' <span class="small">(비공개)</span>'}</span>
         <button class="mini on-dark" data-act="roster" data-v="${esc(s.id)}">${ICON.copy}매칭앱 명단</button></div>${g('M')}${g('F')}</div>`;
     }).join('')}
   </div>`;
@@ -562,6 +603,37 @@ function repeatOf(r) {
   const prev = apps().filter(x => x.id !== r.id && x.cohort !== r.cohort && x.status === 'confirmed' && digits(x.phone) === d && x.at < r.at).map(x => x.cohort);
   return [...new Set(prev)].join('·');
 }
+/* ---------- 겹침 경고: 같은 교회(이성) · 이전 만남(이성) ---------- */
+const ACTIVE = ['pending', 'confirmed', 'waiting'];
+const normChurch = n => String(n || '').replace(/\(.*?\)/g, '').replace(/[\s·.,\-_]/g, '').replace(/교회$/, '').replace(/^(대한예수교|기독교|예수교)/, '').toLowerCase();
+const normPlace = n => String(n || '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' ');
+// 지난 매칭 명단에서 함께 있었던 기록: 전화번호 → [{sid, label}]
+function metIndex() {
+  if (A._met && A._metSrc === A.sessRaw) return A._met;
+  const idx = {};
+  Object.entries(A.sessRaw || {}).forEach(([sid, x]) => { if (!x || !x.roster) return; const lab = `${(x.pub && x.pub.cohort) || ''} ${(x.pub && x.pub.slot) || ''}`.trim();
+    Object.entries(x.roster).forEach(([pid, p]) => { const d = digits(p && p.phone); if (d) (idx[d] = idx[d] || []).push({ sid, lab, g: pid[0] }); }); });
+  A._met = idx; A._metSrc = A.sessRaw; return idx;
+}
+function metBefore(a, b, slotId) {   // 두 전화번호가 (이번 타임이 아닌) 같은 매칭 타임에 있었는지
+  const idx = metIndex(); const da = digits(a.phone), db = digits(b.phone); if (!da || !db) return '';
+  const sa = idx[da] || []; const hit = sa.find(x => x.sid !== 'slot-' + slotId && (idx[db] || []).some(y => y.sid === x.sid));
+  if (hit) return hit.lab;
+  const old = apps().find(x => x.id !== a.id && digits(x.phone) === da && x.status === 'confirmed' && x.slotId !== slotId && apps().some(y => y.slotId === x.slotId && y.status === 'confirmed' && digits(y.phone) === db));
+  return old ? `${old.cohort} ${old.time}` : '';
+}
+function conflictsOf(r, slotId = r.slotId) {
+  if (!ACTIVE.includes(r.status)) return [];
+  const out = []; const mc = normChurch(r.church);
+  apps().filter(x => x.id !== r.id && x.slotId === slotId && x.gender !== r.gender && ACTIVE.includes(x.status)).forEach(x => {
+    if (mc && mc.length >= 2 && normChurch(x.church) === mc) {
+      const pa = normPlace(r.churchAddr), pb = normPlace(x.churchAddr);
+      out.push({ kind: 'church', who: x, sure: !(pa && pb && pa !== pb), text: `같은 교회${pa && pb && pa !== pb ? '(위치 다름·확인)' : ''} · ${G[x.gender]} ${x.name}` });
+    }
+    const met = metBefore(r, x, slotId); if (met) out.push({ kind: 'met', who: x, text: `이전 만남 · ${G[x.gender]} ${x.name} (${met})` });
+  });
+  return out;
+}
 function card(r, showCohort) {
   const st = r.status; const open = A.open[r.id]; const rep = repeatOf(r);
   const chip = { pending: 'wait', confirmed: 'ok', waiting: 'mute', cancelled: 'bad', refunded: 'bad' }[st] || 'mute';
@@ -569,11 +641,14 @@ function card(r, showCohort) {
   const actions = [];
   if (st === 'pending') actions.push(`<button class="mini gold" data-act="confirm" data-v="${r.id}">${ICON.ok}입금확인</button>`);
   if (st === 'waiting') actions.push(`<button class="mini go" data-act="promote" data-v="${r.id}">자리 배정</button>`);
+  const cf = conflictsOf(r);
+  if (ACTIVE.includes(st) && slots().some(x => x.cohort === r.cohort && x.id !== r.slotId)) actions.push(`<button class="mini ${cf.length ? 'gold' : ''}" data-act="move" data-v="${r.id}">타임 변경</button>`);
   actions.push(`<button class="mini" data-act="msg" data-v="${r.id}">${ICON.msg}문자·카톡</button>`);
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
     <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
+    ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
       ${st === 'pending' ? `<span class="${late ? 'late' : ''}">${esc(dt(r.deadline))} · ${esc(leftText(r.deadline))}</span>` : st === 'confirmed' ? `<span>확정 ${esc(dt(r.confirmedAt))}</span>` : `<span>신청 ${esc(dt(r.at))}</span>`}</div>
@@ -885,7 +960,7 @@ async function syncSessions(removed) {
 
 /* ---------- 문자·카톡 모달 ---------- */
 function ctx(r) {
-  return { when: `${r.cohort} ${r.date} ${r.time}`, place: r.place || '추후 안내', account: conf().account, fee: won(conf().fee), deadline: dt(r.deadline, true) + '까지', waitNo: waitNo(r) };
+  return { from: A._moveFrom || '', when: `${r.cohort} ${r.date} ${r.time}`, place: r.place || '추후 안내', account: conf().account, fee: won(conf().fee), deadline: dt(r.deadline, true) + '까지', waitNo: waitNo(r) };
 }
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
@@ -1057,7 +1132,8 @@ document.addEventListener('click', async e => {
   else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }
   else if (act === 'tab') { A.tab = v; render(); }
   else if (act === 'toggle') { A.open[v] = !A.open[v]; render(); }
-  else if (act === 'msg') openMsg(v);
+  else if (act === 'msg') { A._moveFrom = ''; openMsg(v); }
+  else if (act === 'move') openMove(v);
   else if (act === 'confirm') {
     const r = row(v);
     if (!(await confirmBox(`${r.payName} 입금확인`, `${r.name}님을 확정으로 바꿀까요? 확정 문자 창이 이어서 열려요.`, '입금확인'))) return;
