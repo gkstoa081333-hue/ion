@@ -152,7 +152,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261031b"></script>
+<script src="ion-store.js?v=20261031c"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -208,6 +208,8 @@ ${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리�
 
 /* ---------- 유틸 ---------- */
 const $app = document.getElementById('app');
+// 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
+['pay', 'promote', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = TPL[k].make; TPL[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const digits = s => String(s || '').replace(/\D/g, '');
 const won = n => Number(n || 0).toLocaleString('ko-KR');
@@ -951,6 +953,7 @@ function viewSettings() {
         ${applyState(d)}
         ${cf('account', '입금 계좌', d.config.account)}
         <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '문의처', d.config.contact)}
+          ${cf('openchat', '오픈채팅 링크 (문의·안내용)', d.config.openchat)}
           ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
         <div class="field"><label for="c-refund">환불 규정 (신청 페이지에 표시)</label><textarea id="c-refund" class="input" data-c="refund" style="min-height:120px">${esc(d.config.refund)}</textarea></div>
       </div>
@@ -978,7 +981,7 @@ async function saveSettings() {
   for (const s of d.slots) for (const k of ['ageFrom', 'ageTo']) { const y = Number(s[k]); if (s[k] !== '' && s[k] != null && !(y >= 1950 && y <= new Date().getFullYear())) return toast(`${s.cohort} ${s.time}: 대상 연령은 1990처럼 4자리 출생연도로 적어주세요`); }
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}) } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}) } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   // 타임의 날짜·시간·장소를 바꾸면 이미 들어온 신청서에도 함께 반영 (문자·명단·CSV가 최신 정보로)
   apps().forEach(r => { const ns = outSlots[r.slotId]; if (!ns) return; ['date', 'time', 'place'].forEach(k => { if ((r[k] || '') !== (ns[k] || '')) up[`apps/${r.id}/${k}`] = ns[k] || ''; }); });
@@ -1039,7 +1042,8 @@ async function syncSessions(removed) {
 function ctx(r) {
   const sl = slots().find(x => x.id === r.slotId) || {};   // 설정에서 바꾼 최신 날짜·시간·장소를 우선
   const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
-  return { from: A._moveFrom || '', when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: conf().account, fee: won(conf().fee), deadline: dt(r.deadline, true) + '까지', waitNo: waitNo(r) };
+  const chat = conf().openchat || ION_DEFAULTS.config.openchat;
+  return { chat, from: A._moveFrom || '', when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: conf().account, fee: won(conf().fee), deadline: dt(r.deadline, true) + '까지', waitNo: waitNo(r) };
 }
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;

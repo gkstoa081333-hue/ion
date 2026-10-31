@@ -137,7 +137,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261031b"></script>
+<script src="ion-store.js?v=20261031c"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -299,7 +299,7 @@ function viewIntro() {
     ${lastCard()}
     <div class="spacer" style="min-height:26px"></div>
     <button class="btn gold" data-act="start">신청 시작하기</button>
-    <p class="small center" style="margin-top:12px">약 3분 걸려요 · 문의 ${esc(S.cfg.contact)}</p>
+    <p class="small center" style="margin-top:12px">약 3분 걸려요 · 문의 <a href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener" style="color:var(--gold)">카카오톡 오픈채팅</a></p>
   </div>`;
 }
 
@@ -416,6 +416,7 @@ function viewDone() {
         <div class="tr" style="padding-bottom:18px"><span class="small">상태</span><span class="round" style="font-size:20px">대기 · 순서대로 연락</span></div>
       </div>
       <div class="notice" style="text-align:left">${ICON.info}<span>지금은 입금하지 마세요. 자리가 확보되면 입금자명과 기한을 함께 안내드려요.</span></div>
+      ${`<a class="btn line" style="min-height:50px" href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener">카카오톡 오픈채팅으로 문의하기</a>`}
       <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
   }
   const acct = splitAccount(r.account);
@@ -440,6 +441,7 @@ function viewDone() {
     </div>
     <button class="btn soft" data-act="copy" data-v="${esc(all)}">${ICON.copy}계좌·금액·입금자명 한 번에 복사</button>
     <div class="notice" style="text-align:left">${ICON.info}<span>기한까지 입금이 확인되지 않으면 자동으로 취소돼요. 이 화면을 캡처해 두시면 편해요.</span></div>
+    ${`<a class="btn line" style="min-height:50px" href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener">카카오톡 오픈채팅으로 문의하기</a>`}
     <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
 }
 
