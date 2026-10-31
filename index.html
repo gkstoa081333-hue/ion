@@ -301,6 +301,29 @@ ${label(partner.id)} ${partner.name}님과 서로 마음이 닿았어요.
 두 분의 걸음에 좋은 인연과 하나님의 인도하심이 함께하길 기도합니다 🙏
 — 이온 크리스천 소개팅 드림`;
 }
+/* ---------- 후속 안부 (매칭 2주 뒤) ---------- */
+const FOLLOW_DAYS = 14;
+const reviewURL = pub => `${location.origin}${location.pathname.replace(/[^/]*$/, '')}review.html?c=${encodeURIComponent(pub.cohort || '')}&t=${encodeURIComponent(pub.slot || '')}`;
+function followDue(pub) { const base = pub.closedAt || (pub.date ? new Date(pub.date + 'T20:00:00').getTime() : 0); return base ? base + FOLLOW_DAYS * 864e5 : 0; }
+function msgFollow(me, partner, pub) {
+  return `안녕하세요 ${me.name}님, 이온 크리스천 소개팅입니다 🙂
+${pub.cohort} ${pub.slot} 타임 이후 벌써 2주가 지났네요.
+${partner.name}님과는 연락 잘 이어가고 계신가요?
+
+좋은 소식이 있다면 저희도 함께 기뻐하고 싶어요.
+혹시 아쉬운 점이 있었다면 편하게 말씀해 주세요. 다음 만남을 더 잘 준비하는 데 큰 힘이 돼요.
+
+아직 참여 후기를 남기지 않으셨다면 2분만 부탁드려요 🙏
+${reviewURL(pub)}
+
+두 분의 만남 위에 하나님의 은혜가 늘 함께하길 기도합니다.
+(답장은 편하실 때 주셔도 괜찮아요)`;
+}
+function followPending(s) {   // 보낼 때가 됐는데 아직 안 보낸 사람 수
+  if (!s || !s.pub || s.pub.status !== 'closed') return 0; const due = followDue(s.pub); if (!due || Date.now() < due) return 0;
+  const R = computeMatches(s.roster || {}, s.votes); const f = s.follow || {};
+  return Object.keys(R.matched).filter(id => !f[id]).length;
+}
 function msgMiss(me, pub) {
   return `안녕하세요 ${me.name}님, 이온 크리스천 소개팅입니다.
 ${pub.cohort} ${pub.slot} 타임에 귀한 시간 내주셔서 감사합니다.
@@ -736,7 +759,11 @@ function viewHome() {
     <input id="past-q" data-keep class="input" placeholder="기수·날짜로 찾기 (예: 2기, 10/31)" aria-label="종료된 기수 검색" inputmode="search" value="${esc(A.pastQ || '')}">
     <div class="list">${pastList.map(pastRow).join('') || '<div class="li"><span class="meta">찾는 기수가 없어요</span></div>'}</div>
     ${more ? `<button class="btn soft sm" style="width:100%" data-act="past-more">더 보기</button>` : ''}` : '';
-  const items = (upcoming.length ? '<span class="section-t">진행 중 · 예정</span>' : '') + upcoming.map(render1).join('') + pastBlock;
+  const fol = Object.entries(A.sessions || {}).map(([sid, x]) => [sid, x, followPending(x)]).filter(([, , n]) => n);
+  const folBanner = fol.length ? `<div class="card stack" style="gap:8px;border:2px solid var(--gold-d);background:#FFF8E6">
+      <span class="round" style="font-size:16px">💌 후속 안부 보낼 때예요</span>
+      ${fol.map(([sid, x, n]) => `<button class="li" style="width:100%;border:0;background:transparent;text-align:left;padding:6px 0" data-act="open-follow" data-sid="${sid}"><span class="round">${esc(x.pub.cohort)} · ${esc(x.pub.slot)}</span><span class="chip wait">${n}명 남음</span></button>`).join('')}</div>` : '';
+  const items = folBanner + (upcoming.length ? '<span class="section-t">진행 중 · 예정</span>' : '') + upcoming.map(render1).join('') + pastBlock;
   return `<div class="wrap wide">
     <div class="between" style="min-height:44px"><div class="row"><span class="brand">ION</span><span class="pill" style="border-color:var(--gold-d);color:var(--gold-t)">운영</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
@@ -928,6 +955,18 @@ function openVoteTable() {
     ${voteTable(s, R) || '<div class="empty">참가자가 없어요</div>'}</div></div>`;
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
 }
+function followSection(s, R) {
+  const f = s.follow || {}; const due = followDue(s.pub); const ready = due && Date.now() >= due;
+  const ids = Object.keys(R.matched).sort(sortIds); const done = ids.filter(id => f[id]).length;
+  const md = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const btn = id => { const b = `<button class="mini ${f[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy-follow" data-id="${id}">${ICON.copy}${label(id)} ${esc((s.roster[id] || {}).name || '')} 안부${f[id] ? ' · 보냄' : ''}</button>`;
+    return f[id] ? `<span style="display:flex;gap:6px;min-width:0">${b}<button class="mini" style="flex:0 0 auto;padding:0 12px" data-act="unfollow" data-id="${id}" aria-label="${label(id)} 안부 미발송으로 되돌리기">↺</button></span>` : b; };
+  return `<span class="section-t">후속 안부 · 매칭 ${FOLLOW_DAYS}일 뒤</span>
+    <div class="card stack" style="gap:10px;${ready && done < ids.length ? 'border:2px solid var(--gold-d)' : ''}">
+      <div class="between"><span class="round" style="font-size:16px">${!due ? '투표를 마감하면 날짜가 정해져요' : ready ? (done < ids.length ? '지금 보내면 좋아요' : '모두 보냈어요') : `${md(due)}부터 보내면 좋아요`}</span><span class="small">${done}/${ids.length}명</span></div>
+      <span class="small">"연락 잘 이어가고 계신가요?" 안부와 후기 링크가 담긴 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
+      <div class="stack" style="gap:8px">${ids.map(btn).join('')}</div></div>`;
+}
 function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
   const R = computeMatches(roster, s.votes);
@@ -954,6 +993,7 @@ function tabResult(s) {
     ${R.voided.length ? `<span class="section-t">자동 무효</span>` + R.voided.map(v => `<div class="card void stack" style="gap:6px">
       <div class="between"><span class="round strike" style="font-size:18px">${label(v.pair[0])} ↔ ${label(v.pair[1])}</span><span class="small">2순위</span></div>
       <span class="small">${v.who.map(label).join(', ')}이(가) 1순위로 성사되어 2순위 매칭은 무효 처리됐어요.</span></div>`).join('') : ''}
+    ${n ? followSection(s, R) : ''}
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
     <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
@@ -1031,7 +1071,7 @@ async function setStatus(to) {
   const msgs = { open: ['투표를 시작할까요?', '참가자 화면에서 번호를 고를 수 있게 돼요.'], closed: ['투표를 마감할까요?', '마감 후에는 참가자가 제출할 수 없어요.'] };
   const [t, b] = msgs[to] || ['상태를 바꿀까요?', ''];
   if (!(await confirmBox(t, b, to === 'closed' ? '마감하기' : '시작하기'))) return;
-  await DB.update(`sessions/${A.sid}/pub`, { status: to });
+  await DB.update(`sessions/${A.sid}/pub`, { status: to, ...(to === 'closed' && !(A.cur.pub || {}).closedAt ? { closedAt: Date.now() } : {}) });
   if (to === 'closed') { A.tab = 'result'; renderA(); }
   toast(to === 'closed' ? '마감했어요. 결과를 확인해 주세요.' : '투표를 열었어요.');
 }
@@ -1128,6 +1168,7 @@ document.addEventListener('click', async e => {
         await closeApplySlots(c); toast(`${c}을 종료로 내렸어요`); return;
       }
       case 'cohort-reopen': { const c = b.dataset.v; await DB.set(`apply/cohorts/${ckeyOf(c)}`, { name: c, status: 'ready', keep: true }); A.pastOpen = ''; toast(`${c}을 진행 중으로 올렸어요`); return; }
+      case 'open-follow': openSession(b.dataset.sid); A.tab = 'result'; renderA(); return;
       case 'past-open': A.pastOpen = A.pastOpen === b.dataset.v ? '' : b.dataset.v; renderA(); return;
       case 'past-more': A.pastN = (A.pastN || 5) + 10; renderA(); return;
       case 'import-refresh': A.applyCache = null; return loadApply();
@@ -1160,6 +1201,10 @@ document.addEventListener('click', async e => {
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
       case 'vote-table': openVoteTable(); return;
+      case 'copy-follow': { const s = A.cur; const id = b.dataset.id; const m = computeMatches(s.roster, s.votes).matched[id]; if (!m) return;
+        const text = msgFollow({ id, ...s.roster[id] }, { id: m.partner, ...s.roster[m.partner] }, s.pub);
+        if (await copyText(text)) { await DB.set(`sessions/${A.sid}/follow/${id}`, true); toast(`${label(id)} 안부 문구를 복사했어요`); } else toast('복사하지 못했어요'); return; }
+      case 'unfollow': await DB.remove(`sessions/${A.sid}/follow/${b.dataset.id}`); toast('미발송으로 되돌렸어요'); return;
       case 'unsent': await DB.remove(`sessions/${A.sid}/sent/${b.dataset.id}`); toast(`${label(b.dataset.id)} 미발송으로 되돌렸어요`); return;
       case 'unsent-all': if (!(await confirmBox("'보냄' 표시를 모두 지울까요?", '문구는 그대로이고, 발송 표시만 미발송으로 돌아가요.', '모두 지우기'))) return; await DB.remove(`sessions/${A.sid}/sent`); toast('모두 미발송으로 되돌렸어요'); return;
       case 'copy': {
