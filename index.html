@@ -149,6 +149,7 @@ select.input{appearance:none;-webkit-appearance:none}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--green-ink);color:var(--cream);padding:12px 18px;border-radius:14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
 .modal-bg{position:fixed;inset:0;background:rgba(26,48,41,.45);display:flex;align-items:flex-end;justify-content:center;z-index:40;padding:16px}
+.modal.wide{max-width:720px;max-height:92vh;overflow:auto;padding:18px 14px}
 .modal{width:100%;max-width:440px;background:var(--cream);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:14px;margin-bottom:env(safe-area-inset-bottom)}
 @media (min-width:600px){.modal-bg{align-items:center}}
 @media print{.noprint{display:none!important} body{background:#fff}}
@@ -889,9 +890,18 @@ function voteTable(s, R) {
       <tbody>${xs.map(id => `<tr><td>${who(id)}</td><td>${votes[id] ? pick(id, votes[id].first, 1) : '<span class="dim">미제출</span>'}</td><td>${votes[id] ? pick(id, votes[id].second, 2) : ''}</td>
         <td style="white-space:nowrap" title="${[...got[id][1], ...got[id][2]].map(label).join(', ')}">1st <b>${got[id][1].length}</b><br>2nd <b>${got[id][2].length}</b></td>
         <td>${res(id)}</td></tr>`).join('')}</tbody></table></div>`; };
-  return `<span class="section-t">투표 내역 (운영진만 보여요)</span>
-    <p class="small" style="margin:-4px 0 0">초록 굵은 글씨는 상대도 나를 1·2순위 중 하나로 고른 경우예요. '받은 표'는 나를 1순위(1st)·2순위(2nd)로 고른 사람 수예요.</p>
-    ${table('M')}${table('F')}`;
+  return `${table('M')}${table('F')}
+    <p class="small" style="margin:0">초록 굵은 글씨 + '↔ 서로'는 상대도 나를 1·2순위 중 하나로 고른 경우예요. '받은 표'는 나를 1순위(1st)·2순위(2nd)로 고른 사람 수예요.</p>`;
+}
+function openVoteTable() {
+  const s = A.cur; if (!s) return; const R = computeMatches(s.roster || {}, s.votes);
+  const m = document.getElementById('modal');
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal wide" role="dialog" aria-modal="true" aria-label="매칭 결과 표">
+    <div class="between"><div class="stack" style="gap:2px"><span class="h2" style="font-size:20px">${esc(s.pub.cohort)} · ${esc(s.pub.slot)} 매칭 결과</span>
+      <span class="small">성사 ${R.first.length + R.second.length}건 (1순위 ${R.first.length} · 2순위 ${R.second.length}) · 운영진만 보여요</span></div>
+      <button class="btn line sm" data-close="1" style="flex-shrink:0">닫기</button></div>
+    ${voteTable(s, R) || '<div class="empty">참가자가 없어요</div>'}</div></div>`;
+  m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
 }
 function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
@@ -904,7 +914,7 @@ function tabResult(s) {
     return `<div class="card r${rank} stack" style="gap:14px">
       <div class="between"><span class="chip r${rank}">${rank}순위 매칭</span><span class="small" style="${both ? 'color:var(--green)' : ''}">${both ? '발송 완료' : '발송 전'}</span></div>
       <div class="pair"><span>${label(a)}<small>${esc(person(a).name)}</small></span>${ICON.heart}<span>${label(b)}<small>${esc(person(b).name)}</small></span></div>
-      <div class="grid2">${copyBtn(a, 'match')}${copyBtn(b, 'match')}</div></div>`;
+      <div class="stack" style="gap:8px">${copyBtn(a, 'match')}${copyBtn(b, 'match')}</div></div>`;
   };
   const n = R.first.length + R.second.length;
   const notVoted = Object.keys(roster).filter(id => !(s.votes || {})[id]).length;
@@ -913,12 +923,12 @@ function tabResult(s) {
       <div style="display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:999px;background:var(--gold);flex-shrink:0">${ICON.bell}</div>
       <div class="stack" style="gap:4px"><span class="round" style="font-size:22px">매칭 ${n}건 성사</span>
       <span class="small">1순위 ${R.first.length}건 · 2순위 ${R.second.length}건 · 무효 ${R.voided.length}건</span></div></div>
+    <button class="btn gold" data-act="vote-table">매칭 결과 표로 보기 (누가 누구를 골랐는지)</button>
     ${n ? `<span class="section-t">성사된 매칭</span>` : ''}
     ${R.first.map(p => pairCard(p, 1)).join('')}${R.second.map(p => pairCard(p, 2)).join('')}
     ${R.voided.length ? `<span class="section-t">자동 무효</span>` + R.voided.map(v => `<div class="card void stack" style="gap:6px">
       <div class="between"><span class="round strike" style="font-size:18px">${label(v.pair[0])} ↔ ${label(v.pair[1])}</span><span class="small">2순위</span></div>
       <span class="small">${v.who.map(label).join(', ')}이(가) 1순위로 성사되어 2순위 매칭은 무효 처리됐어요.</span></div>`).join('') : ''}
-    ${voteTable(s, R)}
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
     <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
@@ -1124,6 +1134,7 @@ document.addEventListener('click', async e => {
         if (!(await confirmBox('이 타임을 삭제할까요?', '명단·투표·결과가 모두 지워지고 되돌릴 수 없어요. 이미 인쇄한 QR 안내문도 더 이상 접속되지 않아요. 명단만 바꾸려면 삭제 대신 참가자를 고쳐 주세요.', '삭제', true))) return;
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
+      case 'vote-table': openVoteTable(); return;
       case 'unsent': await DB.remove(`sessions/${A.sid}/sent/${b.dataset.id}`); toast(`${label(b.dataset.id)} 미발송으로 되돌렸어요`); return;
       case 'unsent-all': if (!(await confirmBox("'보냄' 표시를 모두 지울까요?", '문구는 그대로이고, 발송 표시만 미발송으로 돌아가요.', '모두 지우기'))) return; await DB.remove(`sessions/${A.sid}/sent`); toast('모두 미발송으로 되돌렸어요'); return;
       case 'copy': {
