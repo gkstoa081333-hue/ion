@@ -831,6 +831,17 @@ function reviewCSV() {
 
 /* ---------- 설정 ---------- */
 const CSTATES = [['open', '모집 중'], ['ready', '진행 예정'], ['ended', '종료']];
+// 신청 페이지가 실제로 열려 보이는지 + 안 보이면 이유
+function applyState(d) {
+  const t = TODAY(); const vis = d.slots.filter(x => x.public && x.date && slotIsoDate(x.date) >= t);
+  const saved = conf().open !== false && slots().some(x => x.public && slotIsoDate(x.date) >= t);
+  const changed = JSON.stringify([d.config.open !== false, d.slots.map(x => [x.id, !!x.public, x.date])]) !== JSON.stringify([conf().open !== false, slots().map(x => [x.id, !!x.public, x.date])]);
+  const why = d.config.open === false ? "'전체 닫기' 상태예요." : !vis.length ? (d.slots.some(x => x.public) ? '공개된 타임의 날짜가 모두 지났어요.' : "공개된 타임이 없어요. 아래 기수 상태를 '모집 중'으로 바꾸거나, 타임 편집에서 '신청 페이지에 공개'를 켜주세요.") : '';
+  return `<div class="card" style="padding:12px 14px;background:${why ? '#FCEFC7' : 'var(--mint)'};border:0;font-size:14px;line-height:1.6">
+    <b>${why ? '● 신청 페이지가 닫혀 보여요' : '● 신청 페이지가 열려 있어요'}</b><br>
+    ${why ? esc(why) : `보이는 타임: ${vis.map(x => esc(`${x.cohort} ${x.time}`)).join(', ')}`}
+    ${changed ? `<br><span style="color:var(--gold-ink)">아직 저장 전이에요. 지금 신청 페이지는 ${saved ? '열림' : '닫힘'} 상태예요 — 아래 '저장하기'를 눌러주세요.</span>` : ''}</div>`;
+}
 function draftState(name) {   // 설정 화면에서 보이는 기수 상태 (아직 저장 전 값 포함)
   const d = A.draft; if (d.cstat[name]) return d.cstat[name];
   const date = (d.slots.filter(x => x.cohort === name).map(x => slotIsoDate(x.date)).sort()[0]) || '';
@@ -875,6 +886,7 @@ function viewSettings() {
       <div class="card stack" style="gap:14px">
         <div class="between"><span class="round" style="font-size:17px">신청 페이지</span>
           <div class="chips">${[[true, '열기'], [false, '전체 닫기']].map(([v, l]) => `<button class="chipbtn ${d.config.open === v ? 'on' : ''}" data-act="open" data-v="${v}">${l}</button>`).join('')}</div></div>
+        ${applyState(d)}
         ${cf('account', '입금 계좌', d.config.account)}
         <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '문의처', d.config.contact)}
           ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
@@ -883,7 +895,8 @@ function viewSettings() {
       <div class="between"><span class="eyebrow">기수 · 타임</span><button class="mini go" data-act="newcohort">+ 새 기수 개설</button></div>
       ${sl}
       <button class="btn" data-act="save" ${A.busy ? 'disabled' : ''}>${A.busy ? '저장 중…' : '저장하기'}</button>
-      <p class="small center">신청 페이지: <a href="apply.html">apply.html</a> · 매칭앱: <a href="index.html#admin">index.html#admin</a></p>
+      <div class="row" style="justify-content:center"><a class="mini" href="apply.html" target="_blank" rel="noopener">신청 페이지 새 창으로 보기</a><button class="mini" data-act="copyapply">${ICON.copy}신청 링크 복사</button></div>
+      <p class="small center">설정을 바꾼 뒤에는 <b>저장하기</b>를 눌러야 신청 페이지에 반영돼요.</p>
     </div>
     <div class="spacer" style="min-height:20px"></div></div>`;
 }
@@ -1109,6 +1122,7 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
+  else if (act === 'copyapply') copyText(location.href.replace(/admin\.html.*$/, 'apply.html'), '신청 페이지 링크를 복사했어요');
   else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
   else if (act === 'addslot') {
     const ss = A.draft.slots; const same = ss.filter(x => x.cohort === v || x._orig === v); const last = same[same.length - 1] || ss[ss.length - 1] || {};
