@@ -798,7 +798,7 @@ function viewRReport() {
   // 좋았던 말 (만족도 높은 순, 홍보 동의 먼저) · 바라는 점 (없음 제외)
   const none = v => !String(v || '').trim() || /^(없음|없어요|없습니다|x|-|\.)$/i.test(String(v).trim());
   const uniq = (xs, k) => { const seen = new Set(); return xs.filter(r => { const t = String(r[k]).trim(); if (seen.has(t)) return false; seen.add(t); return true; }); };
-  const good = uniq(rs.filter(r => !none(r.felt)).sort((a, b) => (b.share ? 1 : 0) - (a.share ? 1 : 0) || b.sat - a.sat)), 'felt').slice(0, 6);
+  const good = uniq(rs.filter(r => !none(r.felt)).sort((a, b) => (b.share ? 1 : 0) - (a.share ? 1 : 0) || b.sat - a.sat), 'felt').slice(0, 6);
   const wants = uniq(rs.filter(r => !none(r.improve)), 'improve');
   const moments = uniq(rs.filter(r => !none(r.moment)), 'moment').slice(0, 6);
   // 자주 나온 말 (2글자 이상 명사 비슷한 단어)
