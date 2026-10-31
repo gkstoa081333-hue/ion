@@ -130,6 +130,15 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .tbar{display:flex;align-items:center;gap:8px}.tbar .t{flex-grow:1;height:8px;border-radius:99px;background:var(--line-3);overflow:hidden}.tbar .t i{display:block;height:100%;background:var(--gold)}
 .pastsel{min-height:38px;border-radius:999px;border:1.5px dashed var(--line-2);background:var(--paper);padding:0 12px;font-family:var(--round);font-size:14px;color:var(--muted)}
 .pastsel.on{background:var(--green);color:var(--cream);border:1.5px solid var(--green)}
+.rp-kpi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.rp-kpi>div{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:14px}
+.rp-kpi .v{font-family:var(--round);font-size:30px;color:var(--green);line-height:1.1}
+.rp-kpi .l{font-size:12px;color:var(--ink-2)}
+.hb{display:grid;grid-template-columns:minmax(0,1fr) 110px 34px;gap:8px;align-items:center;font-size:13px;padding:3px 0}
+.hb .t{height:10px;border-radius:99px;background:var(--line-3);overflow:hidden}.hb .t i{display:block;height:100%;background:var(--green)}
+.hb .t i.g{background:var(--gold)}.hb .n{text-align:right;color:var(--ink-2)}
+.quote{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.6}
+.quote small{display:block;color:var(--ink-2);font-size:12px;margin-top:4px}
 .sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sgrid .input{height:46px;padding:0 12px}
 </style>
@@ -260,7 +269,7 @@ const conf = () => (A.data && A.data.config) || {};
 function start() {
   IonStore.onAuth(st => {
     if (st.admin) {
-      if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews') render(); });
+      if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews' || A.view === 'rreport') render(); });
       if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sessRaw = v || {}; A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
       if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
@@ -483,7 +492,7 @@ function render() {
   const v = A.phase === 'loading' ? '<div class="spin" aria-label="불러오는 중"></div>'
     : A.phase === 'login' ? viewLogin()
     : A.phase === 'setup' ? viewSetup()
-    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : viewMain();
+    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : A.view === 'rreport' ? viewRReport() : viewMain();
   const q = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
   const pos = q ? document.activeElement.selectionStart : 0;
   $app.innerHTML = banner + v;
@@ -737,6 +746,7 @@ function viewReviews() {
   return `<div class="wrap">
     ${appHead('reviews')}
     <div class="row" style="flex-wrap:nowrap;align-items:center;gap:8px"><div style="flex-grow:1;min-width:0">${cohortPicker(A.rCohort, 'rcohort', { all: true })}</div><button class="mini" data-act="rform" style="flex-shrink:0">✎ 문항 편집</button></div>
+    ${reviewList().length ? `<button class="btn gold" style="margin-bottom:12px" data-act="rreport">📊 후기 한눈에 보기${A.rCohort ? ` · ${esc(A.rCohort)}` : ' · 전체'}</button>` : ''}
     <div class="card hero stack" style="gap:12px">
       <div class="between"><span class="eyebrow">${A.rCohort ? esc(A.rCohort) : '전체 기수'} 후기 요약${filtered ? ' · 필터 적용' : ''}</span><span class="small">응답 ${n}명</span></div>
       <div class="sgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -769,6 +779,56 @@ function reviewCard(r, showCohort) {
     ${Object.entries(r.extra || {}).map(([k, v]) => kv(extraLabel(k), v)).join('')}
     <div class="row">${r.share ? `<button class="mini go" data-act="rcopy" data-v="${esc(r.id)}">${ICON.copy}홍보 문구 복사</button>` : ''}<button class="mini del" data-act="rdel" data-v="${esc(r.id)}">삭제</button></div>
   </div>`;
+}
+
+/* ---------- 후기 한눈에 보기 (리포트) ---------- */
+function viewRReport() {
+  const rs = reviewList().filter(r => !A.rCohort || r.cohort === A.rCohort); const n = rs.length;
+  const pc = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const avg = n ? rs.reduce((t, r) => t + (+r.sat || 0), 0) / n : 0;
+  const npsN = rs.filter(r => typeof r.nps === 'number' && r.nps >= 0); const pro = npsN.filter(r => r.nps >= 9).length, det = npsN.filter(r => r.nps <= 6).length;
+  const yesAgain = ((RFORM().q.find(x => x.id === 'again') || {}).options || [])[0] || '';
+  const again = rs.filter(r => String(r.again).startsWith('다음') || (yesAgain && r.again === yesAgain)).length;
+  const bars = (pairs, total, gold) => pairs.map(([k, v]) => `<div class="hb"><span>${esc(k)}</span><span class="t"><i class="${gold ? 'g' : ''}" style="width:${pc(v, total)}%"></i></span><span class="n">${v}</span></div>`).join('');
+  const tally = k => { const m = {}; rs.forEach(r => { const v = r[k]; if (v !== undefined && v !== '') m[v] = (m[v] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+  const sec = (title, body, note) => body ? `<div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">${title}</span>${note ? `<span class="small">${note}</span>` : ''}${body}</div>` : '';
+  // 타임별 비교
+  const groups = {}; rs.forEach(r => { const k = `${r.cohort} · ${r.time}`; (groups[k] = groups[k] || []).push(r); });
+  const byTime = Object.entries(groups).map(([k, xs]) => [k, xs.length, xs.reduce((t, r) => t + (+r.sat || 0), 0) / xs.length]);
+  // 좋았던 말 (만족도 높은 순, 홍보 동의 먼저) · 바라는 점 (없음 제외)
+  const none = v => !String(v || '').trim() || /^(없음|없어요|없습니다|x|-|\.)$/i.test(String(v).trim());
+  const uniq = (xs, k) => { const seen = new Set(); return xs.filter(r => { const t = String(r[k]).trim(); if (seen.has(t)) return false; seen.add(t); return true; }); };
+  const good = uniq(rs.filter(r => !none(r.felt)).sort((a, b) => (b.share ? 1 : 0) - (a.share ? 1 : 0) || b.sat - a.sat)), 'felt').slice(0, 6);
+  const wants = uniq(rs.filter(r => !none(r.improve)), 'improve');
+  const moments = uniq(rs.filter(r => !none(r.moment)), 'moment').slice(0, 6);
+  // 자주 나온 말 (2글자 이상 명사 비슷한 단어)
+  const STOP = new Set('없음 없어요 그리고 그래서 그런데 너무 정말 진짜 조금 좀 더 많이 있어요 없어요 같아요 했어요 좋았어요 있었어요 생각 오늘 이번 다음 저는 제가 분들 분이 시간이 시간'.split(' '));
+  const freq = {}; rs.forEach(r => [r.felt, r.moment, r.improve].join(' ').replace(/[^가-힣a-zA-Z\s]/g, ' ').split(/\s+/).map(w => w.replace(/(은|는|이|가|을|를|에|에서|도|와|과|으로|로|의|요)$/, '')).filter(w => w.length >= 2 && !STOP.has(w)).forEach(w => { freq[w] = (freq[w] || 0) + 1; }));
+  const words = Object.entries(freq).filter(([, v]) => v >= 2).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const extras = RFORM().q.filter(x => !x.core && x.type === 'choice').map(q => { const m = {}; rs.forEach(r => { const v = (r.extra || {})[q.id]; if (v) m[v] = (m[v] || 0) + 1; }); return [q.label, Object.entries(m).sort((a, b) => b[1] - a[1])]; }).filter(([, e]) => e.length);
+  return `<div class="wrap">
+    ${appHead('reviews')}
+    <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">후기 한눈에 보기 · ${A.rCohort ? esc(A.rCohort) : '전체'}</span><button class="mini" data-act="rreport-back">← 후기로</button></div>
+    ${!n ? '<div class="card empty">아직 후기가 없어요</div>' : `<div class="stack" style="gap:12px">
+      <div class="rp-kpi">
+        <div><div class="v">${n}<span class="small"> 명</span></div><div class="l">응답 수</div></div>
+        <div><div class="v">${avg.toFixed(1)}<span class="small"> / 5</span></div><div class="l">평균 만족도 ${'★'.repeat(Math.round(avg))}</div></div>
+        <div><div class="v">${pc(again, n)}<span class="small">%</span></div><div class="l">다음에도 참여하고 싶어요</div></div>
+        <div><div class="v">${npsN.length ? pc(pro, npsN.length) - pc(det, npsN.length) : '-'}</div><div class="l">추천 지수(NPS) · 추천 ${pro} · 비추천 ${det}</div></div>
+      </div>
+      ${sec('만족도 분포', bars([5, 4, 3, 2, 1].map(k => ['★'.repeat(k), rs.filter(r => +r.sat === k).length]), n, true))}
+      ${byTime.length > 1 ? sec('타임별 비교', byTime.map(([k, c, a]) => `<div class="hb"><span>${esc(k)} <span class="small">${c}명</span></span><span class="t"><i class="g" style="width:${a / 5 * 100}%"></i></span><span class="n">${a.toFixed(1)}</span></div>`).join(''), '평균 만족도') : ''}
+      ${sec('참가 전 걱정', bars(tally('worry'), n))}
+      ${sec('소규모 진행', bars(tally('size'), n))}
+      ${sec('대화 시간', bars(tally('pace'), n))}
+      ${sec('재참여 의향', bars(tally('again'), n))}
+      ${extras.map(([l, e]) => sec(esc(l), bars(e, n))).join('')}
+      ${words.length ? sec('자주 나온 말', `<div class="chips" style="flex-wrap:wrap">${words.map(([w, c]) => `<span class="chip mute" style="font-size:${12 + Math.min(6, c)}px">${esc(w)} ${c}</span>`).join('')}</div>`, '소감·기억에 남는 순간·바라는 점에서 2번 이상 나온 말') : ''}
+      ${sec('좋았다는 이야기', good.map(r => `<div class="quote">"${esc(r.felt)}"<small>${'★'.repeat(r.sat)} · ${esc(r.cohort)} ${esc(r.time)}${r.share ? ` · 홍보 동의(${esc(r.label)})` : ''}</small></div>`).join(''))}
+      ${sec('기억에 남는 순간', moments.map(r => `<div class="quote">${esc(r.moment)}<small>${esc(r.cohort)} ${esc(r.time)}</small></div>`).join(''))}
+      ${sec(`바라는 점 · ${wants.length}건`, wants.map(r => `<div class="quote">${esc(r.improve)}<small>${'★'.repeat(r.sat)} · ${esc(r.cohort)} ${esc(r.time)}</small></div>`).join(''), '다음 기수 준비할 때 체크리스트로 쓰세요')}
+    </div>`}
+    <div class="spacer" style="min-height:20px"></div></div>`;
 }
 
 /* ---------- 후기 문항 편집 ---------- */
@@ -1105,6 +1165,8 @@ document.addEventListener('click', async e => {
   else if (act === 'revcopy') copyText(REV_URL(b.dataset.c, b.dataset.t), `${b.dataset.c} ${b.dataset.t} 후기 링크를 복사했어요`);
   else if (act === 'revqr') openRevQR(b.dataset.c, b.dataset.t);
   else if (act === 'rform') openRForm();
+  else if (act === 'rreport') { A.view = 'rreport'; render(); window.scrollTo(0, 0); }
+  else if (act === 'rreport-back') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
   else if (act === 'rfback') { if (await confirmBox('편집을 그만둘까요?', '저장하지 않은 변경은 사라져요.', '그만두기')) { A.view = 'reviews'; render(); window.scrollTo(0, 0); } }
   else if (act === 'rfsave') saveRForm();
   else if (act === 'rfreset') { if (await confirmBox('기본 문항으로 되돌릴까요?', '추가한 문항이 빠지고 처음 문항으로 돌아가요. 저장하기를 눌러야 반영돼요.', '되돌리기', true)) { A.rf = JSON.parse(JSON.stringify(ionReviewForm(null))); render(); } }
