@@ -660,8 +660,10 @@ function startAdmin() {
     A.notAdmin = !!(st.user && !st.user.isAnonymous && !st.admin && USE_FB);
     if (A.authed && !A.unsubList) A.unsubList = DB.watch('sessions', v => { A.sessions = v || {}; renderA(); syncSessionsFromApply(); }, () => toast('목록을 불러오지 못했어요'));
     if (A.authed && !A.unsubC) A.unsubC = DB.watch('apply/cohorts', v => { A.cstat = v || {}; renderA(); }, () => {});
+    if (A.authed && !A.unsubR) A.unsubR = DB.watch('reviews', v => { A.reviews = v || {}; renderA(); }, () => {});
     if (!A.authed && A.unsubList) { A.unsubList(); A.unsubList = null; }
     if (!A.authed && A.unsubC) { A.unsubC(); A.unsubC = null; }
+    if (!A.authed && A.unsubR) { A.unsubR(); A.unsubR = null; }
     renderA();
   });
 }
@@ -707,6 +709,8 @@ const isoToday = () => { const t = new Date(); return `${t.getFullYear()}-${Stri
 async function closeApplySlots(c) {   // 종료한 기수의 신청 타임은 신청 페이지에서 숨김
   try { const sl = (await DB.get('apply/slots')) || {}; const up = {}; Object.entries(sl).forEach(([id, x]) => { if (x && x.cohort === c && x.public) up[`${id}/public`] = false; }); if (Object.keys(up).length) await DB.update('apply/slots', up); } catch (e) { console.error(e); }
 }
+// 후기는 익명이라 '누가'가 아니라 '몇 명'만 셉니다 (기수·타임이 같은 후기)
+function reviewCount(pub) { if (!pub) return 0; return Object.values(A.reviews || {}).filter(r => r && r.cohort === pub.cohort && r.time === pub.slot).length; }
 function sessionStats(s) {
   const pub = s.pub || {}; const roster = s.roster || {};
   const total = Object.keys(roster).length; const voted = Object.keys(s.votes || {}).length;
@@ -732,7 +736,7 @@ function viewHome() {
         <button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left" data-act="open" data-sid="${sid}">
           <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1">
             <span class="round" style="font-size:16px">${esc(st.pub.slot)}</span>
-            <span class="meta" style="white-space:normal">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span></span>
+            <span class="meta" style="white-space:normal">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}${st.pub.status === 'closed' ? ` · 후기 ${reviewCount(st.pub)}` : ''}</span></span>
           <span class="chip ${st.pub.status === 'open' ? 'wait' : st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span>
         </button>`; }).join('')}</div>`;
   };
@@ -751,7 +755,7 @@ function viewHome() {
         <span class="meta">타임 ${g.arr.length}개 · 참가 ${tot}명 · 투표 ${vot}명</span></span><span class="chip mute">${open ? '접기' : '열기'}</span></button>
       ${open ? `<div class="li" style="justify-content:flex-end;background:var(--sand)"><button class="chip mute" style="border:0" data-act="cohort-reopen" data-v="${esc(g.c)}">진행 중으로 다시 올리기</button></div>` : ''}
       ${open ? g.arr.map(([sid, s]) => { const st = sessionStats(s); return `<button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left;padding-left:30px" data-act="open" data-sid="${sid}">
-        <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:15px">${esc(st.pub.slot)}</span><span class="meta">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span></span>
+        <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:15px">${esc(st.pub.slot)}</span><span class="meta">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}${st.pub.status === 'closed' ? ` · 후기 ${reviewCount(st.pub)}` : ''}</span></span>
         <span class="chip ${st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span></button>`; }).join('') : ''}`;
   };
   const pastBlock = Object.keys(pastBy).length ? `
@@ -987,6 +991,11 @@ function tabResult(s) {
       <div style="display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:999px;background:var(--gold);flex-shrink:0">${ICON.bell}</div>
       <div class="stack" style="gap:4px"><span class="round" style="font-size:22px">매칭 ${n}건 성사</span>
       <span class="small">1순위 ${R.first.length}건 · 2순위 ${R.second.length}건 · 무효 ${R.voided.length}건</span></div></div>
+    ${(() => { const total = Object.keys(roster).length; const rc = reviewCount(pub); const pct = total ? Math.min(100, Math.round(rc / total * 100)) : 0;
+      return `<div class="card stack" style="gap:10px"><div class="between"><span class="round" style="font-size:16px">후기 ${rc} / ${total}명 작성</span><span class="small">${pct}%</span></div>
+        <div class="bar" style="background:var(--line)"><i style="width:${pct}%"></i></div>
+        <span class="small">후기는 익명이라 누가 썼는지는 알 수 없어요. 아직 안 쓴 분이 있으면 아래 문구를 단체로 보내주세요.</span>
+        <button class="mini" data-act="copy-review-ask">${ICON.copy}후기 부탁 문구 복사 (링크 포함)</button></div>`; })()}
     <button class="btn gold" data-act="vote-table">매칭 결과 표로 보기 (누가 누구를 골랐는지)</button>
     ${n ? `<span class="section-t">성사된 매칭</span>` : ''}
     ${R.first.map(p => pairCard(p, 1)).join('')}${R.second.map(p => pairCard(p, 2)).join('')}
@@ -1201,6 +1210,12 @@ document.addEventListener('click', async e => {
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
       case 'vote-table': openVoteTable(); return;
+      case 'copy-review-ask': { const pub = A.cur.pub; const t = `[이온 크리스천 소개팅] 오늘 함께해 주셔서 감사합니다 🙂
+${pub.cohort} ${pub.slot} 타임 후기를 아직 남기지 않으셨다면 2분만 부탁드려요.
+이름 없이 익명으로 받고, 다음 기수를 더 좋게 만드는 데 쓰여요 🙏
+${reviewURL(pub)}
+(이미 남겨주신 분은 이 메시지를 넘겨주세요. 감사합니다!)`;
+        return (await copyText(t)) ? toast('후기 부탁 문구를 복사했어요') : toast('복사하지 못했어요'); }
       case 'copy-follow': { const s = A.cur; const id = b.dataset.id; const m = computeMatches(s.roster, s.votes).matched[id]; if (!m) return;
         const text = msgFollow({ id, ...s.roster[id] }, { id: m.partner, ...s.roster[m.partner] }, s.pub);
         if (await copyText(text)) { await DB.set(`sessions/${A.sid}/follow/${id}`, true); toast(`${label(id)} 안부 문구를 복사했어요`); } else toast('복사하지 못했어요'); return; }
