@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#26453B">
 <title>이온 신청하기</title>
-<meta name="description" content="이온 크리스천 로테이션 소개팅 참가 신청">
+<meta name="description" content="이온 크리스천 소개팅 참가 신청">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -290,9 +290,9 @@ function viewIntro() {
   return `<div class="wrap dark">
     <div class="top"><span class="brand">ION</span><span class="pill">참가 신청</span></div>
     <div class="stack" style="margin-top:30px;gap:14px">
-      <span class="eyebrow">ION CHRISTIAN ROTATION</span>
+      <span class="eyebrow">ION CHRISTIAN</span>
       <h1 class="h1" style="font-size:32px">믿음 안에서<br>좋은 인연을 만나요</h1>
-      <p class="p">대전 지역 크리스천 청년을 위한 소규모 로테이션 소개팅이에요. 신청 후 안내되는 계좌로 입금하시면 참가가 확정돼요.</p>
+      <p class="p">대전 지역 크리스천 청년을 위한 소규모 소개팅이에요. 신청 후 안내되는 계좌로 입금하시면 참가가 확정돼요.</p>
     </div>
     <div class="stack" style="margin-top:26px;gap:10px">${cards}</div>
     <div class="notice" style="margin-top:14px">${ICON.info}<span>참가비 ${won(S.cfg.fee)}원 · 원활한 진행을 위해 참가자 연령(±7세 내외)을 고려해 운영진이 타임을 조정할 수 있어요.</span></div>
@@ -416,7 +416,7 @@ function viewDone() {
         <div class="tr" style="padding-bottom:18px"><span class="small">상태</span><span class="round" style="font-size:20px">대기 · 순서대로 연락</span></div>
       </div>
       <div class="notice" style="text-align:left">${ICON.info}<span>지금은 입금하지 마세요. 자리가 확보되면 입금자명과 기한을 함께 안내드려요.</span></div>
-      <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span></div>`;
+      <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
   }
   const acct = splitAccount(r.account);
   const all = `${r.account}\n${won(r.fee)}원\n입금자명: ${r.payName}`;
@@ -440,7 +440,7 @@ function viewDone() {
     </div>
     <button class="btn soft" data-act="copy" data-v="${esc(all)}">${ICON.copy}계좌·금액·입금자명 한 번에 복사</button>
     <div class="notice" style="text-align:left">${ICON.info}<span>기한까지 입금이 확인되지 않으면 자동으로 취소돼요. 이 화면을 캡처해 두시면 편해요.</span></div>
-    <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span></div>`;
+    <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
 }
 
 function splitAccount(a) {

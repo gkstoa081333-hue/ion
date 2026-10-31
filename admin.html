@@ -152,7 +152,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 
 /* ---------- 문자 문구 (자유롭게 고쳐 쓰세요) ---------- */
 const TPL = {
-  pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온] ${r.name}님, ${x.when} 신청 감사합니다 🙂
+  pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청 감사합니다 🙂
 
 입금 계좌: ${x.account}
 금액: ${x.fee}원
@@ -160,7 +160,7 @@ const TPL = {
 입금 기한: ${x.deadline}
 
 기한까지 입금이 확인되지 않으면 자동 취소돼요.` },
-  promote: { label: '자리 확보(승격)', for: ['pending'], make: (r, x) => `[이온] ${r.name}님, 기다려 주셔서 감사해요! ${x.when} 자리가 생겼어요 🙌
+  promote: { label: '자리 확보(승격)', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 기다려 주셔서 감사해요! ${x.when} 자리가 생겼어요 🙌
 
 입금 계좌: ${x.account}
 금액: ${x.fee}원
@@ -168,14 +168,14 @@ const TPL = {
 입금 기한: ${x.deadline}
 
 기한이 지나면 다음 대기자분께 순서가 넘어가요.` },
-  confirm: { label: '참가 확정', for: ['confirmed'], make: (r, x) => `[이온] ${r.name}님, 입금 확인되어 참가가 확정되었어요 🎉
+  confirm: { label: '참가 확정', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 입금 확인되어 참가가 확정되었어요 🎉
 
 일정: ${x.when}
 장소: ${x.place}
 신청번호: ${r.id}
 
 자세한 장소와 안내는 행사 전날 다시 보내드릴게요.` },
-  d1: { label: 'D-1 안내', for: ['confirmed'], make: (r, x) => `[이온] ${r.name}님, 내일 뵙겠습니다 🙂
+  d1: { label: 'D-1 안내', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 내일 뵙겠습니다 🙂
 
 일정: ${x.when}
 장소: ${x.place}
@@ -183,10 +183,10 @@ const TPL = {
 · 10분 전까지 도착해 주세요. 입구에서 번호표를 드려요.
 · 마지막에 테이블 QR로 마음에 남은 분을 골라주시면 돼요.
 · 늦거나 못 오시게 되면 이 번호로 꼭 연락 주세요.` },
-  wait: { label: '대기 안내', for: ['waiting'], make: (r, x) => `[이온] ${r.name}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
+  wait: { label: '대기 안내', for: ['waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
 
 자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
-  cancel: { label: '취소 안내', for: ['cancelled', 'refunded'], make: (r, x) => `[이온] ${r.name}님, ${x.when} 신청이 취소되었어요.
+  cancel: { label: '취소 안내', for: ['cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청이 취소되었어요.
 
 다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
 };
@@ -925,7 +925,7 @@ document.addEventListener('click', async e => {
   else if (act === 'rshare') { A.rShare = !A.rShare; render(); }
   else if (act === 'qall') { A.qAll = !A.qAll; render(); }
   else if (act === 'revlink') { const s = slots().find(x => x.id === v); copyText(REV_URL(s.cohort, s.time), '후기 링크를 복사했어요'); }
-  else if (act === 'rcopy') { const r = A.reviews[v]; copyText(`"${r.felt}"\n\n기억에 남는 순간: ${r.moment}\n\n— ${r.label}, 이온 ${r.cohort} 참가자`, '홍보 문구를 복사했어요'); }
+  else if (act === 'rcopy') { const r = A.reviews[v]; copyText(`"${r.felt}"\n\n기억에 남는 순간: ${r.moment}\n\n— ${r.label}, 이온 크리스천 소개팅 ${r.cohort} 참가자`, '홍보 문구를 복사했어요'); }
   else if (act === 'rcsv') reviewCSV();
   else if (act === 'rdel') {
     const r = A.reviews[v];

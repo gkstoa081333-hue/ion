@@ -1,7 +1,7 @@
 {
   "name": "이온 시그널 관리",
   "short_name": "이온시그널",
-  "description": "이온 로테이션 소개팅 매칭(시그널) 운영진 화면",
+  "description": "이온 크리스천 소개팅 매칭(시그널) 운영진 화면",
   "start_url": "./index.html?app=signal#admin",
   "scope": "./",
   "display": "standalone",

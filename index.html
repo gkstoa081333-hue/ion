@@ -164,7 +164,7 @@ select.input{appearance:none;-webkit-appearance:none}
 
 <script>
 /* =====================================================================
-   이온 시그널 — 로테이션 소개팅 매칭 앱 (단일 HTML)
+   이온 크리스천 소개팅 매칭 앱 (단일 HTML)
    ---------------------------------------------------------------------
    ▶ 설정: 아래 FIREBASE_CONFIG 에 Firebase 웹앱 설정값을 붙여넣으세요.
      비워두면 '데모 모드'(이 브라우저에만 저장)로 동작합니다.
@@ -276,7 +276,7 @@ function computeMatches(roster, votes) {
 
 /* ---------- 카톡 안내 문구 ---------- */
 function msgMatch(me, partner, rank, pub) {
-  return `안녕하세요 ${me.name}님, 이온 로테이션 소개팅입니다 😊
+  return `안녕하세요 ${me.name}님, 이온 크리스천 소개팅입니다 😊
 ${pub.cohort} ${pub.slot} 타임에 함께해 주셔서 감사해요.
 
 기쁜 소식 전해드려요!
@@ -288,7 +288,7 @@ ${label(partner.id)} ${partner.name}님과 서로 ${rank}순위로 마음이 닿
 좋은 인연 되시길 응원합니다 🙏`;
 }
 function msgMiss(me, pub) {
-  return `안녕하세요 ${me.name}님, 이온 로테이션 소개팅입니다.
+  return `안녕하세요 ${me.name}님, 이온 크리스천 소개팅입니다.
 ${pub.cohort} ${pub.slot} 타임에 귀한 시간 내주셔서 감사합니다.
 
 아쉽게도 이번 타임에는 같은 순위로 서로 이어진 분이 없었어요.
@@ -500,7 +500,7 @@ function viewDone(tag) {
     <div class="spacer"></div>
     <p class="round" style="margin:0;font-size:16px;line-height:1.7;color:var(--ink-2)">오늘 귀한 시간 함께해 주셔서 감사합니다.<br>남은 시간도 편하게 즐겨주세요.</p>
     <a class="btn gold" href="review.html?c=${encodeURIComponent((P.pub && P.pub.cohort) || '')}&t=${encodeURIComponent((P.pub && P.pub.slot) || '')}">오늘 소개팅 후기 남기기 (2분)</a>
-    <span class="small" style="letter-spacing:.1em">이온 크리스천 로테이션 소개팅</span>
+    <span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span>
   </div>`;
 }
 
