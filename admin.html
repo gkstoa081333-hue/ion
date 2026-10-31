@@ -281,10 +281,20 @@ function cohortDate(c) {
   if (!ds.length && A.sess && A.sess[c]) ds.push(A.sess[c]);
   return ds.sort()[0] || '';
 }
+/* 기수 상태: apply/cohorts/{키} = { name, status: open(모집 중)|ready(진행 예정)|ended(종료), keep }
+   상태를 안 정하면 자동: 행사일 다음날부터 종료. 종료일이 지난 뒤 직접 '진행 중'으로 바꾸면 keep으로 유지 */
+const ckey = n => String(n || '').replace(/[.$#\[\]\/]/g, '_') || '_';
+const cstat = n => (((A.data && A.data.cohorts) || {})[ckey(n)]) || {};
+function cohortEnded(n, date) { const st = cstat(n); if (st.status === 'ended') return true; if (st.status && st.keep) return false; const d = date === undefined ? cohortDate(n) : date; return !!d && d < TODAY(); }
+function cohortState(n) {
+  const date = cohortDate(n); if (cohortEnded(n, date)) return { code: 'ended', label: '종료' };
+  const st = cstat(n).status; if (st === 'open') return { code: 'open', label: '모집 중' }; if (st === 'ready') return { code: 'ready', label: '진행 예정' };
+  return slots().some(x => x.cohort === n && x.public) ? { code: 'open', label: '모집 중' } : { code: 'ready', label: '진행 예정' };
+}
 function cohortGroups(extra = []) {
   const all = [...new Set([...cohortList(), ...extra])]; const t = TODAY();
-  const cur = all.filter(c => !cohortDate(c) || cohortDate(c) >= t).sort((a, b) => cohortDate(a).localeCompare(cohortDate(b)));
-  const past = all.filter(c => cohortDate(c) && cohortDate(c) < t).sort((a, b) => cohortDate(b).localeCompare(cohortDate(a)));
+  const cur = all.filter(c => !cohortEnded(c)).sort((a, b) => cohortDate(a).localeCompare(cohortDate(b)));
+  const past = all.filter(c => cohortEnded(c)).sort((a, b) => cohortDate(b).localeCompare(cohortDate(a)));
   return { cur, past };
 }
 /* 기수 목록은 여기 한 곳에서만 만든다: 설정 타임 · 신청서 · 매칭 타임 · 후기 */
@@ -292,9 +302,9 @@ function cohortIndex() {
   const t = TODAY(); const revs = Object.values(A.reviews || {});
   const names = cohortList(); revs.forEach(r => { if (r.cohort && !names.includes(r.cohort)) names.push(r.cohort); });
   const list = names.map(name => { const date = cohortDate(name);
-    return { name, date, ended: !!date && date < t, nApps: apps().filter(r => r.cohort === name).length, nRev: revs.filter(r => r.cohort === name).length }; });
+    return { name, date, ended: cohortEnded(name, date), state: cohortState(name), nApps: apps().filter(r => r.cohort === name).length, nRev: revs.filter(r => r.cohort === name).length }; });
   const live = list.filter(c => !c.ended).sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
-  const ended = list.filter(c => c.ended).sort((a, b) => b.date.localeCompare(a.date));
+  const ended = list.filter(c => c.ended).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return { live, ended, all: [...live, ...ended] };
 }
 const mdOf = d => d ? `${+d.slice(5, 7)}/${+d.slice(8, 10)}` : '';
@@ -304,18 +314,18 @@ function cohortPicker(active, act, opt = {}) {
   if (!idx.all.length) return '<div class="small" style="margin:8px 0 12px">설정에서 타임을 먼저 추가해 주세요</div>';
   const c = idx.all.find(x => x.name === active);
   const label = !active && opt.all ? '<span class="nm">전체 기수</span><span class="small">' + idx.all.length + '개 기수</span>'
-    : c ? `<span class="nm">${esc(c.name)}</span><span class="small">${mdOf(c.date)}</span><span class="chip ${c.ended ? 'end' : 'live'}">${c.ended ? '종료' : '진행 중'}</span>` : '<span class="nm">기수 선택</span>';
+    : c ? `<span class="nm">${esc(c.name)}</span><span class="small">${mdOf(c.date)}</span><span class="chip ${c.ended ? 'end' : 'live'}">${c.state.label}</span>` : '<span class="nm">기수 선택</span>';
   return `<button class="cpick" style="margin:8px 0 12px" data-act="cpick" data-v="${act}" data-all="${opt.all ? 1 : ''}" aria-label="기수 바꾸기">${label}<span class="ar">바꾸기 ▾</span></button>`;
 }
 function cohortSheetList(act, all, q) {
   const idx = cohortIndex(); const cur = act === 'rcohort' ? A.rCohort : A.cohort;
   const hit = c => !q || (c.name + ' ' + c.date + ' ' + mdOf(c.date)).toLowerCase().includes(q.toLowerCase());
-  const item = c => `<button class="citem ${c.name === cur ? 'on' : ''}" data-pickc="${esc(c.name)}"><span class="nm">${esc(c.name)}</span><span class="small">${mdOf(c.date)}</span><span class="mt">신청 ${c.nApps} · 후기 ${c.nRev}</span></button>`;
+  const item = c => `<button class="citem ${c.name === cur ? 'on' : ''}" data-pickc="${esc(c.name)}"><span class="nm">${esc(c.name)}</span><span class="small">${mdOf(c.date)}</span>${c.ended ? '' : `<span class="chip ${c.state.code === 'open' ? 'live' : 'mute'}">${c.state.label}</span>`}<span class="mt">신청 ${c.nApps} · 후기 ${c.nRev}</span></button>`;
   const live = idx.live.filter(hit); const ended = idx.ended.filter(hit);
-  const byMonth = {}; ended.forEach(c => { const k = `${c.date.slice(0, 4)}년 ${+c.date.slice(5, 7)}월`; (byMonth[k] = byMonth[k] || []).push(c); });
+  const byMonth = {}; ended.forEach(c => { const k = c.date ? `${c.date.slice(0, 4)}년 ${+c.date.slice(5, 7)}월` : '날짜 없음'; (byMonth[k] = byMonth[k] || []).push(c); });
   let h = '';
   if (all && !q) h += `<button class="citem ${!cur ? 'on' : ''}" data-pickc=""><span class="nm">전체 기수</span><span class="mt">모든 후기 한 번에</span></button>`;
-  if (live.length) h += '<div class="cgroup">진행 중 · 예정</div>' + live.map(item).join('');
+  if (live.length) h += '<div class="cgroup">모집 중 · 진행 예정</div>' + live.map(item).join('');
   Object.entries(byMonth).forEach(([k, arr]) => { h += `<div class="cgroup">종료 · ${k}</div>` + arr.map(item).join(''); });
   return h || '<div class="small" style="padding:16px">찾는 기수가 없어요</div>';
 }
@@ -666,36 +676,55 @@ function reviewCSV() {
 }
 
 /* ---------- 설정 ---------- */
+const CSTATES = [['open', '모집 중'], ['ready', '진행 예정'], ['ended', '종료']];
+function draftState(name) {   // 설정 화면에서 보이는 기수 상태 (아직 저장 전 값 포함)
+  const d = A.draft; if (d.cstat[name]) return d.cstat[name];
+  const date = (d.slots.filter(x => x.cohort === name).map(x => slotIsoDate(x.date)).sort()[0]) || '';
+  const st = cstat(name); if (st.status === 'ended' || (!(st.status && st.keep) && date && date < TODAY() && !d.slots.some(x => x.cohort === name && x._new))) return 'ended';
+  return st.status && st.status !== 'ended' ? st.status : (d.slots.some(x => x.cohort === name && x.public) ? 'open' : 'ready');
+}
 function viewSettings() {
   const d = A.draft;
-  const t = TODAY(); const isPastSlot = s => s.id && s.date && slotIsoDate(s.date) < t && !s._new;
   const card = (s, i) => `<div class="card stack" style="gap:10px;padding:14px">
-      <div class="between"><span class="round">${esc(s.cohort || '새 타임')} · ${esc(s.time || '')}</span>
+      <div class="between"><span class="round">${esc(s.time || '새 타임')}</span>
         <label class="row small" style="gap:6px"><input type="checkbox" data-s="${i}" data-f="public" ${s.public ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--green)">신청 페이지에 공개</label></div>
       <div class="sgrid">
         ${sf(i, 'cohort', '기수', s.cohort, '3기')}${sf(i, 'date', '날짜', s.date, '11/14(토)')}
         ${sf(i, 'time', '시간', s.time, '15:00~17:00')}${sf(i, 'place', '장소', s.place, '대전 괴정동 카페')}
         ${sf(i, 'capM', '형제 정원', s.cap.M, '6', 'number')}${sf(i, 'capF', '자매 정원', s.cap.F, '6', 'number')}
       </div>
-      <div class="row" style="justify-content:flex-end">${hasApps(s.id) ? '<span class="small">신청자가 있어 삭제할 수 없어요 (비공개로 바꾸세요)</span>' : `<button class="mini del" data-act="delslot" data-v="${i}">이 타임 삭제</button>`}</div>
+      <div class="row" style="justify-content:flex-end">${hasApps(s.id) ? '<span class="small">신청자가 있어 삭제할 수 없어요 (공개를 끄세요)</span>' : `<button class="mini del" data-act="delslot" data-v="${i}">이 타임 삭제</button>`}</div>
     </div>`;
-  const curIdx = d.slots.map((s, i) => i).filter(i => !isPastSlot(d.slots[i]));
-  const pastIdx = d.slots.map((s, i) => i).filter(i => isPastSlot(d.slots[i]));
-  const sl = curIdx.map(i => card(d.slots[i], i)).join('') + (pastIdx.length ? `
-      <button class="btn soft sm" style="width:100%" data-act="togglepastslots">${A.showPastSlots ? '지난 기수 타임 접기' : `지난 기수 타임 ${pastIdx.length}개 보기`}</button>
-      ${A.showPastSlots ? pastIdx.map(i => card(d.slots[i], i)).join('') : ''}` : '');
+  // 기수별로 묶기 (첫 등장 순서)
+  const groups = []; d.slots.forEach((s, i) => { let g = groups.find(x => x.name === s.cohort); if (!g) groups.push(g = { name: s.cohort, idx: [] }); g.idx.push(i); });
+  A.openG = A.openG || {};
+  const group = g => { const st = draftState(g.name); const date = d.slots[g.idx[0]].date;
+    const isOpen = A.openG[g.name] || g.idx.some(i => d.slots[i]._new);
+    const sum = g.idx.map(i => d.slots[i]).map(x => `${esc(x.time || '시간 미정')}${x.public ? '' : ' (비공개)'} · ${x.cap.M}:${x.cap.F}`).join('<br>');
+    return `<div class="stack" style="gap:10px">
+      <div class="card stack" style="gap:10px;padding:14px;background:var(--sand);border-color:var(--gold)">
+        <div class="between"><span class="round" style="font-size:18px">${esc(g.name || '새 기수')} <span class="small">${esc(date || '')}</span></span><button class="mini" data-act="addslot" data-v="${esc(g.name)}">+ 타임 추가</button></div>
+        <div class="chips" role="group" aria-label="기수 상태">${CSTATES.map(([v, l]) => `<button class="chipbtn ${st === v ? 'on' : ''}" data-act="cstat" data-c="${esc(g.name)}" data-v="${v}">${l}</button>`).join('')}</div>
+        <div class="between" style="align-items:flex-end"><span class="small" style="line-height:1.6">${sum}</span><button class="mini" data-act="opengroup" data-v="${esc(g.name)}" aria-expanded="${!!isOpen}">${isOpen ? '접기' : '타임 편집'}</button></div>
+        <span class="small">${st === 'open' ? '신청 페이지에 이 기수 타임이 보여요.' : st === 'ready' ? '신청은 닫고, 매칭·후기에서는 진행 중으로 보여요.' : '신청 페이지에서 숨기고, 모든 탭에서 종료된 기수로 내려가요.'} 상태를 안 바꾸면 행사일 다음날 자동으로 종료돼요.</span>
+      </div>
+      ${isOpen ? g.idx.map(i => card(d.slots[i], i)).join('') : ''}</div>`; };
+  const live = groups.filter(g => draftState(g.name) !== 'ended'), ended = groups.filter(g => draftState(g.name) === 'ended');
+  const sl = live.map(group).join('') + (ended.length ? `
+      <button class="btn soft sm" style="width:100%" data-act="togglepastslots">${A.showPastSlots ? '종료된 기수 접기' : `종료된 기수 ${ended.length}개 보기`}</button>
+      ${A.showPastSlots ? ended.map(group).join('') : ''}` : '');
   return `<div class="wrap">
     ${appHead('settings')}
     <div class="stack" style="gap:16px;margin-top:8px">
       <div class="card stack" style="gap:14px">
-        <div class="between"><span class="round" style="font-size:17px">모집 상태</span>
-          <div class="chips">${[[true, '모집 중'], [false, '닫힘']].map(([v, l]) => `<button class="chipbtn ${d.config.open === v ? 'on' : ''}" data-act="open" data-v="${v}">${l}</button>`).join('')}</div></div>
+        <div class="between"><span class="round" style="font-size:17px">신청 페이지</span>
+          <div class="chips">${[[true, '열기'], [false, '전체 닫기']].map(([v, l]) => `<button class="chipbtn ${d.config.open === v ? 'on' : ''}" data-act="open" data-v="${v}">${l}</button>`).join('')}</div></div>
         ${cf('account', '입금 계좌', d.config.account)}
         <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '문의처', d.config.contact)}
           ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
         <div class="field"><label for="c-refund">환불 규정 (신청 페이지에 표시)</label><textarea id="c-refund" class="input" data-c="refund" style="min-height:120px">${esc(d.config.refund)}</textarea></div>
       </div>
-      <div class="between"><span class="eyebrow">기수 · 타임</span><button class="mini" data-act="addslot">+ 타임 추가</button></div>
+      <div class="between"><span class="eyebrow">기수 · 타임</span><button class="mini go" data-act="newcohort">+ 새 기수 개설</button></div>
       ${sl}
       <button class="btn" data-act="save" ${A.busy ? 'disabled' : ''}>${A.busy ? '저장 중…' : '저장하기'}</button>
       <p class="small center">신청 페이지: <a href="apply.html">apply.html</a> · 매칭앱: <a href="index.html#admin">index.html#admin</a></p>
@@ -706,7 +735,7 @@ const sf = (i, f, label, v, ph, type = 'text') => `<div class="field"><label for
 const cf = (f, label, v, type = 'text') => `<div class="field"><label for="c-${f}">${label}</label><input id="c-${f}" class="input" type="${type}" data-c="${f}" value="${esc(v ?? '')}" ${type === 'number' ? 'inputmode="numeric" min="0"' : ''}></div>`;
 const hasApps = sid => apps().some(r => r.slotId === sid);
 function openSettings() {
-  A.draft = { config: { ...ION_DEFAULTS.config, ...conf() }, slots: slots().map(s => ({ ...s, cap: { M: s.cap?.M || 0, F: s.cap?.F || 0 } })) };
+  A.draft = { config: { ...ION_DEFAULTS.config, ...conf() }, cstat: {}, slots: slots().map(s => ({ ...s, _orig: s.cohort, cap: { M: s.cap?.M || 0, F: s.cap?.F || 0 } })) };
   A.view = 'settings'; render(); window.scrollTo(0, 0);
   try { history.replaceState(null, '', '#settings'); } catch (e) {}
 }
@@ -720,6 +749,15 @@ async function saveSettings() {
   const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), refund: String(c.refund || '') } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   removed.forEach(id => { up['slots/' + id] = null; up['counts/' + id] = null; });
+  // 기수 상태 저장 (바꾼 기수만)
+  const t = TODAY();
+  [...new Set(d.slots.map(x => x.cohort.trim()))].forEach(name => {
+    const src = d.slots.find(x => x.cohort.trim() === name);
+    const st = d.cstat[name] || d.cstat[src._orig ?? ''] || d.cstat[src.cohort];
+    if (!st) return;
+    const date = d.slots.filter(x => x.cohort.trim() === name).map(x => slotIsoDate(x.date)).sort()[0] || '';
+    up['cohorts/' + ckey(name)] = { name, status: st, keep: st !== 'ended' && !!date && date < t };
+  });
   A.busy = true; render();
   try { await IonStore.update('apply', up); await syncSessions(removed); toast('저장했어요 · 매칭 타임도 함께 맞췄어요'); A.lastMaint = 0; maintain(true); goView('apply'); }
   catch (e) { toast('저장하지 못했어요: ' + e.message); }
@@ -898,7 +936,23 @@ document.addEventListener('click', async e => {
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
-  else if (act === 'addslot') { const last = A.draft.slots[A.draft.slots.length - 1] || {}; A.draft.slots.push({ _new: true, id: 's' + Date.now().toString(36), cohort: last.cohort || '', date: last.date || '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render(); }
+  else if (act === 'addslot') {
+    const ss = A.draft.slots; const same = ss.filter(x => x.cohort === v || x._orig === v); const last = same[same.length - 1] || ss[ss.length - 1] || {};
+    const at = same.length ? ss.indexOf(last) + 1 : ss.length;
+    ss.splice(at, 0, { _new: true, _orig: v, id: 's' + Date.now().toString(36), cohort: same.length ? last.cohort : v, date: last.date || '', time: '', place: last.place || '', cap: { M: last.cap?.M || 6, F: last.cap?.F || 6 }, public: draftState(same.length ? last.cohort : v) === 'open' }); render();
+  }
+  else if (act === 'newcohort') {
+    if (A.draft.slots.some(x => x.cohort === '')) return toast('먼저 새 기수 이름을 입력해 주세요');
+    const last = A.draft.slots[A.draft.slots.length - 1] || {};
+    A.draft.cstat[''] = 'open';
+    A.draft.slots.push({ _new: true, _orig: '', id: 's' + Date.now().toString(36), cohort: '', date: '', time: '', place: last.place || '', cap: { M: 6, F: 6 }, public: true }); render();
+    setTimeout(() => { const ix = A.draft.slots.length - 1; const el = document.getElementById(`s${ix}cohort`); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 50);
+  }
+  else if (act === 'opengroup') { A.openG = A.openG || {}; A.openG[v] = !A.openG[v]; render(); }
+  else if (act === 'cstat') {
+    const name = b.dataset.c; A.draft.cstat[name] = v;
+    A.draft.slots.forEach(x => { if (x.cohort === name) x.public = v === 'open'; }); render();
+  }
   else if (act === 'delslot') { A.draft.slots.splice(Number(v), 1); render(); }
   else if (act === 'save') saveSettings();
   else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }

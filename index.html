@@ -622,7 +622,9 @@ function startAdmin() {
     A.checked = true; A.authed = !!st.admin;
     A.notAdmin = !!(st.user && !st.user.isAnonymous && !st.admin && USE_FB);
     if (A.authed && !A.unsubList) A.unsubList = DB.watch('sessions', v => { A.sessions = v || {}; renderA(); syncSessionsFromApply(); }, () => toast('목록을 불러오지 못했어요'));
+    if (A.authed && !A.unsubC) A.unsubC = DB.watch('apply/cohorts', v => { A.cstat = v || {}; renderA(); }, () => {});
     if (!A.authed && A.unsubList) { A.unsubList(); A.unsubList = null; }
+    if (!A.authed && A.unsubC) { A.unsubC(); A.unsubC = null; }
     renderA();
   });
 }
@@ -662,6 +664,12 @@ function viewLogin() {
     </form></div>`;
 }
 
+const ckeyOf = n => String(n || '').replace(/[.$#\[\]\/]/g, '_') || '_';
+const cstatOf = n => ((A.cstat || {})[ckeyOf(n)]) || {};
+const isoToday = () => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+async function closeApplySlots(c) {   // 종료한 기수의 신청 타임은 신청 페이지에서 숨김
+  try { const sl = (await DB.get('apply/slots')) || {}; const up = {}; Object.entries(sl).forEach(([id, x]) => { if (x && x.cohort === c && x.public) up[`${id}/public`] = false; }); if (Object.keys(up).length) await DB.update('apply/slots', up); } catch (e) { console.error(e); }
+}
 function sessionStats(s) {
   const pub = s.pub || {}; const roster = s.roster || {};
   const total = Object.keys(roster).length; const voted = Object.keys(s.votes || {}).length;
@@ -675,11 +683,14 @@ function viewHome() {
   list.forEach(([sid, s]) => { const k = `${s.pub.cohort}||${s.pub.date}`; (groups[k] = groups[k] || []).push([sid, s]); });
   const t = new Date(); const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
   const ents = Object.entries(groups);
-  const upcoming = ents.filter(([k]) => (k.split('||')[1] || '') >= today).sort((a, b) => a[0].split('||')[1].localeCompare(b[0].split('||')[1]));
-  const past = ents.filter(([k]) => (k.split('||')[1] || '') < today);
+  // 기수 상태는 신청관리 설정과 같은 값(apply/cohorts)을 써요: 종료로 정했거나, 정하지 않았으면 행사일 다음날 자동 종료
+  const ended = k => { const [c, d] = k.split('||'); const st = cstatOf(c); if (st.status === 'ended') return true; if (st.status && st.keep) return false; return !!d && d < today; };
+  const upcoming = ents.filter(([k]) => !ended(k)).sort((a, b) => a[0].split('||')[1].localeCompare(b[0].split('||')[1]));
+  const past = ents.filter(([k]) => ended(k));
   const render1 = ([k, arr]) => {
-    const [cohort, date] = k.split('||');
-    return `<span class="section-t">${esc(cohort)} · ${esc(date)}</span>
+    const [cohort, date] = k.split('||'); const st = cstatOf(cohort).status;
+    return `<div class="between" style="margin:8px 0 -2px"><span class="section-t" style="margin:0">${esc(cohort)} · ${esc(date)} ${st === 'open' ? '· 모집 중' : '· 진행 예정'}</span>
+      <button class="chip mute" style="border:0" data-act="cohort-end" data-v="${esc(cohort)}">종료로 내리기</button></div>
       <div class="list">${arr.map(([sid, s]) => { const st = sessionStats(s); return `
         <button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left" data-act="open" data-sid="${sid}">
           <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1">
@@ -701,6 +712,7 @@ function viewHome() {
     return `<button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:${open ? 'var(--sand)' : 'transparent'};text-align:left" data-act="past-open" data-v="${esc(g.c)}" aria-expanded="${open}">
         <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:16px">${esc(g.c)} <span class="meta">${md(g.d)}</span></span>
         <span class="meta">타임 ${g.arr.length}개 · 참가 ${tot}명 · 투표 ${vot}명</span></span><span class="chip mute">${open ? '접기' : '열기'}</span></button>
+      ${open ? `<div class="li" style="justify-content:flex-end;background:var(--sand)"><button class="chip mute" style="border:0" data-act="cohort-reopen" data-v="${esc(g.c)}">진행 중으로 다시 올리기</button></div>` : ''}
       ${open ? g.arr.map(([sid, s]) => { const st = sessionStats(s); return `<button class="li" style="width:100%;border-left:0;border-right:0;border-top:0;background:transparent;text-align:left;padding-left:30px" data-act="open" data-sid="${sid}">
         <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex-grow:1"><span class="round" style="font-size:15px">${esc(st.pub.slot)}</span><span class="meta">형제 ${+st.pub.M || 0} · 자매 ${+st.pub.F || 0} · 제출 ${st.voted}/${st.total}</span></span>
         <span class="chip ${st.pub.status === 'closed' ? 'ok' : 'mute'}">${STATUS[st.pub.status] || ''}</span></button>`; }).join('') : ''}`;
@@ -724,6 +736,7 @@ function viewHome() {
         <div class="field"><label for="ns-date">날짜</label><input id="ns-date" data-keep class="input" type="date" required></div>
         <div class="field"><label for="ns-slot">타임</label><input id="ns-slot" data-keep class="input" placeholder="예: 15시" required maxlength="12"></div>
       </div>
+      <div class="field"><label for="ns-st">기수 상태</label><select id="ns-st" data-keep class="input"><option value="">자동 (행사일 다음날 종료)</option><option value="ready">진행 예정</option><option value="ended">종료 (지난 기록 정리용)</option></select></div>
       <button class="btn" type="submit">타임 만들기</button>
       <p class="small">신청관리 › 설정에서 만든 타임은 위 목록에 <b>자동으로 생겨요</b>. 신청 없이 따로 진행하는 타임만 여기서 직접 만드세요.</p>
     </form>
@@ -1003,6 +1016,8 @@ document.addEventListener('submit', async e => {
       if (!cohort || !date || !slot) return toast('기수·날짜·타임을 모두 입력해 주세요');
       const sid = DB.newId();
       await DB.set(`sessions/${sid}/pub`, { cohort, date, slot, status: 'ready', M: 0, F: 0, createdAt: Date.now() });
+      const cst = f.querySelector('#ns-st').value;
+      if (cst) await DB.set(`apply/cohorts/${ckeyOf(cohort)}`, { name: cohort, status: cst, keep: cst !== 'ended' && date < isoToday() });
       f.querySelector('#ns-slot').value = '';
       toast('타임을 만들었어요'); openSession(sid); return;
     }
@@ -1040,6 +1055,12 @@ document.addEventListener('click', async e => {
       case 'att-all': { const att = {}; rosterList(A.cur).forEach(p => { att[p.id] = true; }); await DB.set(`sessions/${A.sid}/pub/att`, att); return toast('전원 출석으로 표시했어요'); }
       case 'att-reset': { if (!(await confirmBox('출석 체크를 초기화할까요?', '모든 분이 미체크 상태가 되고, 투표 화면에는 다시 전원이 보여요.', '초기화'))) return; await DB.remove(`sessions/${A.sid}/pub/att`); return toast('초기화했어요'); }
       case 'toggle-past': A.showPast = !A.showPast; renderA(); return;
+      case 'cohort-end': {
+        const c = b.dataset.v; if (!(await confirmBox(`${c}을 종료로 내릴까요?`, '모든 탭에서 종료된 기수로 내려가고, 신청 페이지에서도 이 기수 신청이 닫혀요. 투표·결과는 그대로 남아요.', '종료로 내리기'))) return;
+        await DB.set(`apply/cohorts/${ckeyOf(c)}`, { name: c, status: 'ended', keep: false });
+        await closeApplySlots(c); toast(`${c}을 종료로 내렸어요`); return;
+      }
+      case 'cohort-reopen': { const c = b.dataset.v; await DB.set(`apply/cohorts/${ckeyOf(c)}`, { name: c, status: 'ready', keep: true }); A.pastOpen = ''; toast(`${c}을 진행 중으로 올렸어요`); return; }
       case 'past-open': A.pastOpen = A.pastOpen === b.dataset.v ? '' : b.dataset.v; renderA(); return;
       case 'past-more': A.pastN = (A.pastN || 5) + 10; renderA(); return;
       case 'import-refresh': A.applyCache = null; return loadApply();
