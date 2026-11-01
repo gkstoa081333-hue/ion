@@ -71,7 +71,9 @@ a{color:var(--green)}
 .dark .input{border:0}
 textarea.input{height:auto;min-height:130px;padding:14px 16px;line-height:1.6;resize:vertical}
 select.input{appearance:none;-webkit-appearance:none}
-.input:focus{outline:3px solid var(--gold);outline-offset:1px}
+.input:focus{outline:3px solid var(--green);outline-offset:1px}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+.dark :focus-visible{outline-color:var(--gold)}
 .err{color:#F3C6BC;font-size:14px;min-height:20px}
 .err.on-cream{color:var(--danger)}
 
@@ -1249,5 +1251,6 @@ ${reviewURL(pub)}
 })();
 window.addEventListener('hashchange', () => location.reload());
 </script>
+<script src="ion-a11y.js?v=20261102"></script>
 </body>
 </html>

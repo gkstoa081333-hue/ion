@@ -75,7 +75,9 @@ a{color:var(--green)}
 .input{height:50px;padding:0 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--paper);color:var(--green);width:100%}
 .dark .input{border:0}
 textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;resize:vertical}
-.input:focus{outline:3px solid var(--gold);outline-offset:1px}
+.input:focus{outline:3px solid var(--green);outline-offset:1px}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+.dark :focus-visible{outline-color:var(--gold)}
 .err{color:#F3C6BC;font-size:14px;min-height:20px}
 
 .card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:16px}
@@ -473,6 +475,33 @@ async function moveApp(id, to) {
   } catch (e) { toast('옮기지 못했어요: ' + e.message); }
 }
 
+/* ---------- 보관 기간 관리 (처리방침: 신청 상세 행사 후 6개월, 참가 이력 마지막 참여 후 3년) ---------- */
+const DETAIL_FIELDS = ['region', 'job', 'churchAddr', 'denom', 'faithYears', 'attend', 'source', 'note'];
+function evDate(r) {
+  const m = String(r.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return null;
+  const b = new Date(r.at || Date.now()); let d = new Date(b.getFullYear(), +m[1] - 1, +m[2]);
+  if (d < new Date(b.getTime() - 60 * 864e5)) d = new Date(b.getFullYear() + 1, +m[1] - 1, +m[2]);
+  return d;
+}
+function retentionDue() {
+  const now = Date.now(), SIX = 183 * 864e5, THREE = 3 * 365 * 864e5;
+  const detail = apps().filter(r => { const e = evDate(r); return e && now - e > SIX && DETAIL_FIELDS.some(k => r[k]); });
+  const byPerson = {}; apps().forEach(r => { const k = digits(r.phone) || r.id; (byPerson[k] = byPerson[k] || []).push(r); });
+  const history = [];
+  Object.values(byPerson).forEach(list => {
+    const lastEv = Math.max(...list.map(r => { const e = evDate(r); return e ? e.getTime() : (r.at || 0); }));
+    if (now - lastEv > THREE) history.push(...list);
+  });
+  return { detail, history };
+}
+function retentionBanner() {
+  const { detail, history } = retentionDue(); if (!detail.length && !history.length) return '';
+  return `<div class="conflict" style="margin-top:12px">보관 기간이 지난 개인정보가 있어요.
+    ${detail.length ? `<div class="between" style="margin-top:6px"><span>· 행사 후 6개월 지난 신청 상세(지역·직업·교회 위치 등) <b>${detail.length}건</b></span><button class="mini" data-act="ret-detail">상세 정리</button></div>` : ''}
+    ${history.length ? `<div class="between" style="margin-top:6px"><span>· 마지막 참여 후 3년 지난 참가 이력 <b>${history.length}건</b></span><button class="mini del" data-act="ret-history">이력 삭제</button></div>` : ''}
+    <div style="font-size:12px;margin-top:6px">정리하면 되돌릴 수 없어요. 결제·환불 기록처럼 따로 보관해야 하는 기록은 먼저 CSV로 내려받아 두세요.</div></div>`;
+}
+
 /* ---------- 영구삭제 (취소·환불 건만) ---------- */
 async function purge(ids) {
   const up = {};
@@ -544,6 +573,7 @@ function viewMain() {
     ${appHead('apply')}
     ${installHint()}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
+    ${retentionBanner()}
     ${cohortPicker(A.cohort, 'cohort')}
     ${viewStatus()}
     <div class="row" style="margin-top:14px;flex-wrap:nowrap"><input class="input" style="flex-grow:1" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 전화번호로 찾기" aria-label="검색" inputmode="search">
@@ -660,7 +690,7 @@ function card(r, showCohort) {
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
-    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
+    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
     ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
@@ -674,10 +704,10 @@ function card(r, showCohort) {
 function detail(r) {
   const st = r.status;
   const kv = [['출생연도', r.birthYear], ['거주지역', r.region], ['직업', r.job], ['출석교회', r.church], ['교회 위치', r.churchAddr], ['교단', r.denom],
-    ['신앙생활', r.faithYears], ['출석', r.attend], ['알게 된 경로', r.source], ['소식 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['요청사항', r.note]]
+    ['신앙생활', r.faithYears], ['출석', r.attend], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
-  if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
+  if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
   if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
@@ -1235,6 +1265,26 @@ document.addEventListener('click', async e => {
   else if (act === 'restore') { if (await confirmBox('입금대기로 되돌릴까요?', '입금 기한이 새로 잡혀요.', '되돌리기')) changeStatus(v, 'pending'); }
   else if (act === 'memo') { const ta = document.querySelector(`[data-memo="${v}"]`); if (await changeStatus(v, '', ta ? ta.value : '')) toast('메모를 저장했어요'); }
   else if (act === 'roster') { const { n, text } = rosterText(v); if (!n) return toast('이 타임에 확정자가 아직 없어요'); copyText(text, `확정 ${n}명 복사 · 매칭앱 참가자 탭 › 붙여넣기에 넣어주세요`); }
+  else if (act === 'creq') {
+    const r = row(v); const on = !r.cancelReqAt;
+    if (!(await confirmBox(on ? `${r.name}님 취소요청 접수` : '취소요청 표시를 해제할까요?', on ? '오픈채팅으로 받은 요청을 기록해요. 자리는 그대로 유지되니, 확인 후 취소 처리나 환불 처리를 따로 눌러 주세요.' : '', on ? '접수 기록' : '해제'))) return;
+    try { await IonStore.update('apply/apps/' + v, { cancelReqAt: on ? Date.now() : null, log: addLog(r, on ? '취소요청 접수' : '취소요청 해제') }); toast(on ? '취소요청을 기록했어요' : '해제했어요'); }
+    catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  }
+  else if (act === 'ret-detail') {
+    const { detail } = retentionDue(); if (!detail.length) return;
+    if (!(await confirmBox(`신청 상세 ${detail.length}건 정리`, '이름·연락처·출석교회·기수 기록은 남기고, 지역·직업·교회 위치·교단·신앙기간·출석·유입경로·요청사항을 지워요. 되돌릴 수 없어요.', '상세 정리', true))) return;
+    const up = {}; const now = Date.now();
+    detail.forEach(r => { DETAIL_FIELDS.forEach(k => { if (r[k] != null) up[`apps/${r.id}/${k}`] = null; }); up[`apps/${r.id}/detailClearedAt`] = now; });
+    try { await IonStore.update('apply', up); toast(`${detail.length}건의 상세 항목을 정리했어요`); } catch (e) { toast('정리하지 못했어요: ' + e.message); }
+  }
+  else if (act === 'ret-history') {
+    const { history } = retentionDue(); if (!history.length) return;
+    if (!(await confirmBox(`참가 이력 ${history.length}건 삭제`, '마지막 참여 후 3년이 지난 분들의 신청 기록을 모두 지워요. 재참가·재배정 확인에 더 이상 쓸 수 없고, 되돌릴 수 없어요.', '이력 삭제', true))) return;
+    const up = {};
+    history.forEach(r => { up['apps/' + r.id] = null; if (r.phoneKey && (((A.data.phones || {})[r.cohort] || {})[r.phoneKey] === r.id)) up[`phones/${r.cohort}/${r.phoneKey}`] = null; });
+    try { await IonStore.update('apply', up); toast(`${history.length}건을 삭제했어요`); } catch (e) { toast('삭제하지 못했어요: ' + e.message); }
+  }
   else if (act === 'csv') downloadCSV();
   else if (act === 'purge') {
     const r = row(v);
@@ -1254,5 +1304,6 @@ setInterval(() => { if (A.phase === 'main' && A.view === 'list' && document.visi
 
 start();
 </script>
+<script src="ion-a11y.js?v=20261102"></script>
 </body>
 </html>

@@ -60,11 +60,13 @@ a{color:var(--green)}
 /* 입력 */
 .field{display:flex;flex-direction:column;gap:8px}
 .field > label,.field > .lab{font-size:14px;color:var(--ink-2)}
-.req{color:var(--gold-d);margin-left:2px}
+.req{color:var(--gold-t);margin-left:2px}
 .input{height:54px;padding:0 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--paper);color:var(--green);width:100%}
 textarea.input{height:auto;min-height:110px;padding:14px 16px;line-height:1.6;resize:vertical}
 select.input{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2326453B' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px}
-.input:focus{outline:3px solid var(--gold);outline-offset:1px}
+.input:focus{outline:3px solid var(--green);outline-offset:1px}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+.dark :focus-visible{outline-color:var(--gold)}
 .err{color:var(--danger);font-size:14px;min-height:20px;line-height:1.5}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 
@@ -153,13 +155,13 @@ const OPT = {
   source: ['인스타그램', '지인 소개', '교회 광고', '기타']
 };
 /* 동의 문구 — 문구를 바꾸면 CONSENT_VER 날짜도 함께 바꿔 주세요 (신청서에 어떤 판의 문구에 동의했는지 저장됨) */
-const CONSENT_VER = '2026-11-02';
-const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 직업, 알게 된 경로, 요청사항, 입금자명
+const CONSENT_VER = '2026-11-02-2';
+const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 알게 된 경로, 입금자명 (선택: 직업, 요청사항)
 · 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 취소·환불 처리, 참여 후기 요청, 재참가 확인 및 이전에 만난 분과 같은 타임 배정 방지
 · 보유 기간: 이름·성별·출생 연도·연락처·참여 기수는 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월. 기간이 지나면 지체 없이 파기하며, 다른 법령에 보존 의무가 있는 정보는 그 기간 동안 보관합니다.
 · 신청 정보는 Google Firebase(싱가포르 서버)에 저장됩니다. 자세한 내용은 개인정보 처리방침에서 확인할 수 있어요.
 · 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
-const FAITH = `· 수집 항목: 출석교회명, 교회 위치, 교단, 신앙생활 기간, 교회 출석 여부
+const FAITH = `· 수집 항목: 출석교회명, 교회 출석 여부 (선택: 교회 위치)
 · 이용 목적: 크리스천 소개팅 참가 자격 확인, 같은 교회 성도가 이성으로 같은 타임에 배정되지 않도록 하기
 · 보유 기간: 출석교회명은 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월
 · 신앙 정보는 민감정보로 일반 개인정보와 별도로 동의를 받으며, 다른 참가자에게 공개하지 않습니다.
@@ -253,7 +255,7 @@ async function createApplication(d) {
   await IonStore.set('apply/apps/' + id, {
     id, uid, at: Date.now(), status, cohort: slot.cohort, slotId: slot.id, date: slot.date, time: slot.time, place: slot.place || '',
     gender: d.gender, name: d.name, birthYear: Number(d.birthYear), phone: fmtPhone(d.phone), region: d.region, job: d.job,
-    church: d.church, churchAddr: d.churchAddr, denom: d.denom, faithYears: d.faithYears, attend: d.attend, source: d.source,
+    church: d.church, churchAddr: d.churchAddr, attend: d.attend, source: d.source,
     note: d.note, newsAgree: d.mktOk ? '동의합니다' : '받지 않을게요', payName, deadline, phoneKey, log: '', memo: '',
     consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
   });
@@ -286,6 +288,7 @@ function render() {
   else if (S.phase === 'intro') html = viewIntro();
   else if (S.phase === 'form') html = [viewStep1, viewStep2, viewStep3][S.step]();
   else if (S.phase === 'done') html = viewDone();
+  else if (S.phase === 'cancel') html = viewCancel();
   $app.innerHTML = demoBanner() + html;
 }
 
@@ -377,7 +380,7 @@ function viewStep1() {
         <select id="f-birthYear" class="input" data-k="birthYear"><option value="">선택해 주세요</option>${years.map(y => `<option ${String(S.d.birthYear) === String(y) ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
       ${inp('phone', '연락처', 'type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" maxlength="13"')}
       ${etc('region', OPT.region, '거주 지역')}
-      ${inp('job', '직업', 'type="text" maxlength="30" placeholder="예) 회사원(IT), 교사, 간호사"')}
+      ${inp('job', '직업 (선택)', 'type="text" maxlength="30" placeholder="예) 회사원(IT), 교사, 간호사"', false)}
     </form>${foot('다음')}</div>`;
 }
 
@@ -386,8 +389,6 @@ function viewStep2() {
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       ${inp('church', '출석교회명', 'type="text" maxlength="40" placeholder="예) ○○교회"')}
       ${inp('churchAddr', '교회 위치', 'type="text" maxlength="60" placeholder="예) 대전 서구 (동네까지만 적어도 돼요)"', false)}
-      ${etc('denom', OPT.denom, '교단')}
-      <div class="field"><span class="lab">신앙생활 기간<span class="req">*</span></span>${opts('faithYears', OPT.faithYears)}</div>
       <div class="field"><span class="lab">현재 교회 출석 여부<span class="req">*</span></span>${opts('attend', OPT.attend)}</div>
       ${etc('source', OPT.source, '이온을 알게 된 경로')}
     </form>${foot('다음')}</div>`;
@@ -441,6 +442,7 @@ function viewDone() {
       </div>
       <div class="notice" style="text-align:left">${ICON.info}<span>지금은 입금하지 마세요. 자리가 확보되면 입금자명과 기한을 함께 안내드려요.</span></div>
       ${`<a class="btn line" style="min-height:50px" href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener">카카오톡 오픈채팅으로 문의하기</a>`}
+    <button class="btn line" style="min-height:50px" data-act="cancelreq">취소·환불 요청하기</button>
       <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
   }
   const acct = splitAccount(r.account);
@@ -466,7 +468,47 @@ function viewDone() {
     <button class="btn soft" data-act="copy" data-v="${esc(all)}">${ICON.copy}계좌·금액·입금자명 한 번에 복사</button>
     <div class="notice" style="text-align:left">${ICON.info}<span>기한까지 입금이 확인되지 않으면 자동으로 취소돼요. 이 화면을 캡처해 두시면 편해요.</span></div>
     ${`<a class="btn line" style="min-height:50px" href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener">카카오톡 오픈채팅으로 문의하기</a>`}
+    <button class="btn line" style="min-height:50px" data-act="cancelreq">취소·환불 요청하기</button>
     <div class="spacer"></div><span class="small" style="letter-spacing:.1em">이온 크리스천 소개팅</span></div>`;
+}
+
+/* ---------- 취소·환불 요청 (DB에 쓰지 않고, 운영진에게 보낼 요청 문구를 만들어 오픈채팅으로 연결) ---------- */
+function eventDay(dateStr, ref) {
+  const m = String(dateStr || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return null;
+  const base = new Date(ref || Date.now()); let d = new Date(base.getFullYear(), +m[1] - 1, +m[2]);
+  if (d < new Date(base.getTime() - 60 * 864e5)) d = new Date(base.getFullYear() + 1, +m[1] - 1, +m[2]);
+  return d;
+}
+function refundGuide(r) {
+  if (r.status === 'waiting') return '대기 신청이라 입금 전이에요. 취소 요청만 보내 주시면 대기 명단에서 빼 드려요.';
+  const ev = eventDay(r.date, r.savedAt || Date.now()); if (!ev) return '운영진이 환불 규정에 따라 금액을 안내해 드려요.';
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const days = Math.round((ev - t) / 864e5);
+  const unpaid = '아직 입금 전이라면 환불 없이 취소만 처리돼요.';
+  if (days < 0) return '이미 지난 행사예요. 문의 내용을 적어 보내 주세요.';
+  if (days >= 7) return `행사까지 ${days}일 남았어요. 입금하셨다면 전액 환불 대상이에요. ${unpaid}`;
+  if (days >= 3) return `행사까지 ${days}일 남았어요. 입금하셨다면 50%(20,000원) 환불 대상이에요. ${unpaid}`;
+  return `행사까지 ${days === 0 ? '오늘' : days + '일'} 남았어요. 행사 2일 전부터는 대관비·음료·운영 인건비가 미리 지출되어 환불이 어려워요. 같은 성별 참가자 양도(2일 전까지)나 다른 기수 변경을 먼저 문의해 주세요. ${unpaid}`;
+}
+function cancelText(r) {
+  return `[이온 취소·환불 요청]\n신청번호: ${r.id}\n신청: ${r.cohort} ${r.date} ${r.time}\n입금자명: ${r.payName || '-'}\n환불받을 계좌(은행·계좌번호·예금주): \n취소 사유(선택): `;
+}
+function viewCancel() {
+  const r = S.result; const txt = cancelText(r); const oc = esc(S.cfg.openchat || ION_DEFAULTS.config.openchat);
+  return `<div class="wrap">
+    <div class="top"><button class="icon-btn" data-act="cancelback" aria-label="이전으로">${ICON.back}</button><span class="brand" style="font-size:18px">ION</span><span style="width:34px"></span></div>
+    <div class="stack" style="gap:10px;margin-top:10px"><h1 class="h2">취소·환불 요청</h1>
+      <p class="p">${esc(r.id)} · ${esc(r.cohort)} ${esc(r.date)} ${esc(r.time)}</p></div>
+    <div class="notice" style="margin-top:16px;text-align:left">${ICON.info}<span>${esc(refundGuide(r))}</span></div>
+    <div class="stack" style="gap:8px;margin-top:20px"><span class="lab" style="font-size:14px;color:var(--ink-2)">1. 아래 요청 문구를 복사해 계좌 정보를 채워 주세요</span>
+      <div class="terms" style="padding:14px 16px;border-radius:14px">${esc(txt)}</div>
+      <button class="btn soft" data-act="copy" data-v="${esc(txt)}">${ICON.copy}요청 문구 복사</button></div>
+    <div class="stack" style="gap:8px;margin-top:18px"><span class="lab" style="font-size:14px;color:var(--ink-2)">2. 카카오톡 오픈채팅으로 보내 주세요</span>
+      <a class="btn" style="min-height:52px" href="${oc}" target="_blank" rel="noopener">오픈채팅 열기</a>
+      <p class="small">운영진이 24시간 안에 접수 여부와 환불 금액을 알려드리고, 확인 후 3영업일 안에 신청자 명의 계좌로 환불해 드려요.</p></div>
+    <details style="margin-top:16px"><summary class="small" style="cursor:pointer">환불 규정 전체 보기</summary><div class="terms" style="margin-top:8px;border-radius:12px">${esc(S.cfg.refund || '')}</div></details>
+    <div class="spacer" style="min-height:20px"></div>
+  </div>`;
 }
 
 function splitAccount(a) {
@@ -487,12 +529,9 @@ function check(step) {
     { const s = S.cfg.slots.find(x => x.id === d.slotId); if (s && !ionAgeOk(s, d.birthYear)) return `선택한 ${s.time} 타임은 ${ionAgeText(s)} 대상이에요. 다른 타임을 골라주세요.`; }
     if (!/^01\d{8,9}$/.test(digits(d.phone))) return '연락처를 확인해 주세요. (010으로 시작하는 번호)';
     if (!val('region')) return '거주 지역을 입력해 주세요.';
-    if (!d.job.trim()) return '직업을 입력해 주세요.';
   }
   if (step === 1) {
     if (!d.church.trim()) return '출석교회명을 입력해 주세요.';
-    if (!val('denom')) return '교단을 선택해 주세요.';
-    if (!d.faithYears) return '신앙생활 기간을 선택해 주세요.';
     if (!d.attend) return '교회 출석 여부를 선택해 주세요.';
     if (!val('source')) return '알게 된 경로를 선택해 주세요.';
   }
@@ -505,7 +544,7 @@ function check(step) {
 async function submit() {
   S.busy = true; S.err = ''; render();
   const d = S.d;
-  const data = { ...d, consentAt: Date.now(), name: d.name.trim(), phone: digits(d.phone), region: val('region'), denom: val('denom'), source: val('source'),
+  const data = { ...d, consentAt: Date.now(), name: d.name.trim(), phone: digits(d.phone), region: val('region'), source: val('source'),
     job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), note: d.note.trim() };
   try {
     if (data.website) throw new Error('신청을 처리할 수 없어요.');
@@ -538,6 +577,8 @@ document.addEventListener('click', e => {
   else if (act === 'terms') { S.open[v] = !S.open[v]; render(); }
   else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'shareOk'].forEach(k => { S.d[k] = on; }); render(); }
   else if (act === 'copy') copyText(v);
+  else if (act === 'cancelreq') { S.phase = 'cancel'; render(); window.scrollTo(0, 0); }
+  else if (act === 'cancelback') { S.phase = 'done'; render(); window.scrollTo(0, 0); }
   else if (act === 'next') {
     const msg = check(S.step);
     if (msg) { S.err = msg; const el = document.getElementById('err'); if (el) el.textContent = msg; return; }
@@ -549,5 +590,6 @@ document.addEventListener('submit', e => e.preventDefault());
 
 load();
 </script>
+<script src="ion-a11y.js?v=20261102"></script>
 </body>
 </html>
