@@ -152,16 +152,36 @@ const OPT = {
   attend: ['매주 출석', '격주·가끔 출석', '현재 쉬는 중'],
   source: ['인스타그램', '지인 소개', '교회 광고', '기타']
 };
-const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 직업, 요청사항
-· 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 참여 후기 요청
-· 보유 기간: 행사 종료 후 6개월 (이후 파기, 다음 기수 소식 수신에 동의한 경우 이름·연락처만 동의 철회 시까지)
+/* 동의 문구 — 문구를 바꾸면 CONSENT_VER 날짜도 함께 바꿔 주세요 (신청서에 어떤 판의 문구에 동의했는지 저장됨) */
+const CONSENT_VER = '2026-11-02';
+const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 직업, 알게 된 경로, 요청사항, 입금자명
+· 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 취소·환불 처리, 참여 후기 요청, 재참가 확인 및 이전에 만난 분과 같은 타임 배정 방지
+· 보유 기간: 이름·성별·출생 연도·연락처·참여 기수는 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월. 기간이 지나면 지체 없이 파기하며, 다른 법령에 보존 의무가 있는 정보는 그 기간 동안 보관합니다.
+· 신청 정보는 Google Firebase(싱가포르 서버)에 저장됩니다. 자세한 내용은 개인정보 처리방침에서 확인할 수 있어요.
 · 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
-const FAITH = `· 수집 항목: 출석교회명, 교회 주소, 교단, 신앙생활 기간, 교회 출석 여부
-· 이용 목적: 크리스천 소개팅 참가 자격 확인 및 타임 배정
-· 보유 기간: 행사 종료 후 6개월
-· 종교 정보는 민감정보로, 일반 개인정보와 별도로 동의를 받습니다. 거부 시 참가 신청이 어렵습니다.`;
-const SHARE = `· 매칭이 성사된 경우에 한해, 상대방에게 이름과 연락처를 카카오톡으로 전달합니다.
-· 매칭되지 않은 분의 연락처는 누구에게도 전달되지 않습니다.`;
+const FAITH = `· 수집 항목: 출석교회명, 교회 위치, 교단, 신앙생활 기간, 교회 출석 여부
+· 이용 목적: 크리스천 소개팅 참가 자격 확인, 같은 교회 성도가 이성으로 같은 타임에 배정되지 않도록 하기
+· 보유 기간: 출석교회명은 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월
+· 신앙 정보는 민감정보로 일반 개인정보와 별도로 동의를 받으며, 다른 참가자에게 공개하지 않습니다.
+· 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
+const SHARE = `· 제공받는 자: 나와 매칭이 성사된 상대 참가자
+· 제공 목적: 서로 연락하기 위함
+· 제공 항목: 이름, 연락처 (운영진이 카카오톡으로 전달)
+· 받는 분의 보유 기간: 상대방이 직접 관리하며, 이온이 회수하거나 삭제할 수 없습니다.
+· 매칭되지 않은 분의 연락처는 누구에게도 전달되지 않습니다.
+· 동의를 거부할 수 있으나, 거부 시 매칭 진행이 불가해 참가 신청이 어렵습니다.`;
+const MARKETING = `· 수집 항목: 이름, 연락처, 동의 일시
+· 이용 목적: 다음 기수·행사 모집 등 광고성 정보를 문자·카카오톡으로 보내기 위함
+· 보유 기간: 동의를 철회할 때까지 (동의일부터 2년마다 수신 동의 여부를 다시 확인합니다)
+· 메시지에 적힌 수신거부 방법이나 카카오톡 오픈채팅으로 언제든 철회할 수 있습니다.
+· 동의하지 않아도 참가 신청과 행사 참여에는 아무 영향이 없습니다.`;
+
+/* 처리방침·약관·사업자 정보 링크 (신청 첫 화면·마지막 화면 하단) */
+function legalFoot(dark) {
+  const c = dark ? 'var(--sub)' : 'var(--muted)';
+  const a = (href, t) => `<a href="${href}" target="_blank" rel="noopener" style="color:${c}">${t}</a>`;
+  return `<p class="small center" style="margin-top:14px;color:${c}">${a('privacy.html', '<b>개인정보 처리방침</b>')} · ${a('terms.html', '이용약관')} · ${a('terms.html#refund', '취소·환불')} · ${a('terms.html#biz', '사업자 정보')}</p>`;
+}
 
 /* ---------- 유틸 ---------- */
 const $app = document.getElementById('app');
@@ -234,7 +254,8 @@ async function createApplication(d) {
     id, uid, at: Date.now(), status, cohort: slot.cohort, slotId: slot.id, date: slot.date, time: slot.time, place: slot.place || '',
     gender: d.gender, name: d.name, birthYear: Number(d.birthYear), phone: fmtPhone(d.phone), region: d.region, job: d.job,
     church: d.church, churchAddr: d.churchAddr, denom: d.denom, faithYears: d.faithYears, attend: d.attend, source: d.source,
-    note: d.note, newsAgree: d.newsAgree, payName, deadline, phoneKey, log: '', memo: ''
+    note: d.note, newsAgree: d.mktOk ? '동의합니다' : '받지 않을게요', payName, deadline, phoneKey, log: '', memo: '',
+    consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
   });
   return { id, status, payName, deadline, fee: cfg.fee, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
 }
@@ -243,7 +264,7 @@ async function createApplication(d) {
 const S = { phase: 'loading', step: 0, cfg: null, busy: false, err: '', open: {}, result: null,
   d: { gender: '', slotId: '', name: '', birthYear: '', phone: '', region: '', regionEtc: '', job: '', church: '', churchAddr: '',
     denom: '', denomEtc: '', faithYears: '', attend: '', source: '', sourceEtc: '', note: '', newsAgree: '',
-    refundOk: false, privacyOk: false, faithOk: false, shareOk: false, website: '' } };
+    refundOk: false, privacyOk: false, faithOk: false, shareOk: false, mktOk: false, website: '' } };
 
 async function load() {
   try {
@@ -295,11 +316,12 @@ function viewIntro() {
       <p class="p">대전·세종·청주 지역 크리스천 청년을 위한 소규모 소개팅이에요. 신청 후 안내되는 계좌로 입금하시면 참가가 확정돼요.</p>
     </div>
     <div class="stack" style="margin-top:26px;gap:10px">${cards}</div>
-    <div class="notice" style="margin-top:14px">${ICON.info}<span>참가비 ${won(S.cfg.fee)}원 · 원활한 진행을 위해 참가자 연령(±7세 내외)을 고려해 운영진이 타임을 조정할 수 있어요.</span></div>
+    <div class="notice" style="margin-top:14px">${ICON.info}<span>참가비 ${won(S.cfg.fee)}원 · 타임마다 대상 출생연도가 달라요. 내 출생연도에 맞는 타임으로 신청해 주세요.</span></div>
     ${lastCard()}
     <div class="spacer" style="min-height:26px"></div>
     <button class="btn gold" data-act="start">신청 시작하기</button>
     <p class="small center" style="margin-top:12px">약 3분 걸려요 · 문의 <a href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener" style="color:var(--gold)">카카오톡 오픈채팅</a></p>
+    ${legalFoot(true)}
   </div>`;
 }
 
@@ -373,7 +395,7 @@ function viewStep2() {
 
 function agreeRow(key, label, terms, required = true) {
   return `<div class="agree-row"><input type="checkbox" id="a-${key}" data-k="${key}" ${S.d[key] ? 'checked' : ''}>
-    <label for="a-${key}">${required ? '<span style="color:var(--gold-d)">[필수]</span> ' : ''}${label}</label>
+    <label for="a-${key}">${required ? '<span style="color:var(--gold-t)">[필수]</span> ' : '<span style="color:var(--muted)">[선택]</span> '}${label}</label>
     ${terms ? `<button type="button" class="more" data-act="terms" data-v="${key}" aria-expanded="${!!S.open[key]}">${S.open[key] ? '접기' : '보기'}</button>` : ''}</div>
     ${terms && S.open[key] ? `<div class="terms">${esc(terms)}</div>` : ''}`;
 }
@@ -390,7 +412,6 @@ function viewStep3() {
       </div>
       <div class="field"><label for="f-note">요청사항 또는 운영진에게 하고 싶은 말</label>
         <textarea id="f-note" class="input" data-k="note" maxlength="500" placeholder="자유롭게 적어주세요 (선택)">${esc(S.d.note)}</textarea></div>
-      <div class="field"><span class="lab">다음 기수 소식을 받아보실래요?<span class="req">*</span></span>${opts('newsAgree', ['동의합니다', '받지 않을게요'])}</div>
       <div class="agree">
         <div class="agree-row agree-all"><input type="checkbox" id="a-all" data-act="all" ${all ? 'checked' : ''}><label for="a-all">필수 항목 모두 동의</label></div>
         ${agreeRow('refundOk', '입금 계좌 안내 및 환불 규정 확인', S.cfg.refund)}
@@ -398,7 +419,10 @@ function viewStep3() {
         ${agreeRow('faithOk', '신앙 정보(민감정보) 수집 동의', FAITH)}
         ${agreeRow('shareOk', '매칭 성사 시 상대방에게 연락처 제공 동의', SHARE)}
       </div>
-    </form>${foot('신청하기')}</div>`;
+      <div class="agree">
+        ${agreeRow('mktOk', '다음 기수 소식 등 광고성 정보(문자·카카오톡) 수신 동의', MARKETING, false)}
+      </div>
+    </form>${foot('신청하기')}${legalFoot(false)}</div>`;
 }
 
 function viewDone() {
@@ -473,7 +497,6 @@ function check(step) {
     if (!val('source')) return '알게 된 경로를 선택해 주세요.';
   }
   if (step === 2) {
-    if (!d.newsAgree) return '다음 기수 소식 수신 여부를 선택해 주세요.';
     if (!(d.refundOk && d.privacyOk && d.faithOk && d.shareOk)) return '필수 동의 항목을 모두 체크해 주세요.';
   }
   return '';
@@ -482,7 +505,7 @@ function check(step) {
 async function submit() {
   S.busy = true; S.err = ''; render();
   const d = S.d;
-  const data = { ...d, name: d.name.trim(), phone: digits(d.phone), region: val('region'), denom: val('denom'), source: val('source'),
+  const data = { ...d, consentAt: Date.now(), name: d.name.trim(), phone: digits(d.phone), region: val('region'), denom: val('denom'), source: val('source'),
     job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), note: d.note.trim() };
   try {
     if (data.website) throw new Error('신청을 처리할 수 없어요.');
