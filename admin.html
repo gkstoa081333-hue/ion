@@ -997,7 +997,7 @@ function viewSettings() {
           <div class="chips">${[[true, '열기'], [false, '전체 닫기']].map(([v, l]) => `<button class="chipbtn ${d.config.open === v ? 'on' : ''}" data-act="open" data-v="${v}">${l}</button>`).join('')}</div></div>
         ${applyState(d)}
         ${cf('account', '입금 계좌', d.config.account)}
-        <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '문의처', d.config.contact)}
+        <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '기타 문의처 (선택 · 예: 인스타그램 DM)', d.config.contact)}
           ${cf('openchat', '오픈채팅 링크 (문의·안내용)', d.config.openchat)}
           ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
         <div class="field"><label for="c-refund">환불 규정 (신청 페이지에 표시)</label><textarea id="c-refund" class="input" data-c="refund" style="min-height:120px">${esc(d.config.refund)}</textarea></div>
@@ -1151,11 +1151,12 @@ function openTable(sortKey) {
   let rows = ids.map(id => (A.data.apps || {})[id]).filter(Boolean);
   if (A.tSort) rows = rows.slice().sort((a, b) => String(cellOf(a, A.tSort)).localeCompare(String(cellOf(b, A.tSort)), 'ko', { numeric: true }));
   const m = document.getElementById('modal');
+  const cols = TCOLS.filter(([k]) => ['name', 'status', 'phone'].includes(k) || rows.some(r => r[k] !== undefined && r[k] !== ''));
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal wide" role="dialog" aria-modal="true" aria-label="신청자 명단 표">
     <div class="between"><div class="stack" style="gap:2px"><span class="round" style="font-size:19px">${esc(A.qAll && A.q.trim() ? '전체 기수 검색 결과' : `${A.cohort} · ${A.tab === 'cancelled' ? '취소·환불' : ION_STATUS[A.tab]}`)} ${rows.length}명</span>
       <span class="small">제목을 누르면 정렬 · 줄을 누르면 상세 · 옆으로 밀어서 더 보기</span></div><button class="btn line sm" data-close="1" style="flex-shrink:0">닫기</button></div>
-    <div class="atbl-wrap"><table class="atbl"><thead><tr>${TCOLS.map(([k, l]) => `<th scope="col" data-sort="${k}">${l}${A.tSort === k ? ' ▾' : ''}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map(r => `<tr data-row="${r.id}">${TCOLS.map(([k]) => `<td class="${k === 'name' ? 'nm' : ''}" title="${esc(cellOf(r, k))}">${esc(cellOf(r, k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div>`;
+    <div class="atbl-wrap"><table class="atbl"><thead><tr>${cols.map(([k, l]) => `<th scope="col" data-sort="${k}">${l}${A.tSort === k ? ' ▾' : ''}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr data-row="${r.id}">${cols.map(([k]) => `<td class="${k === 'name' ? 'nm' : ''}" title="${esc(cellOf(r, k))}">${esc(cellOf(r, k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div>`;
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
   m.querySelectorAll('[data-sort]').forEach(th => th.onclick = () => openTable(th.dataset.sort));
   m.querySelectorAll('[data-row]').forEach(tr => tr.onclick = () => openPerson(tr.dataset.row));
@@ -1164,7 +1165,7 @@ function openPerson(id) {
   const r = (A.data.apps || {})[id]; if (!r) return; const m = document.getElementById('modal');
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="신청자 상세">
     <div class="between"><span class="round" style="font-size:19px">${esc(r.name)} <span class="small">${ION_STATUS[r.status]} · ${esc(r.id)}</span></span><button class="mini" id="pp-back">← 표로</button></div>
-    <div>${TCOLS.filter(([k]) => k !== 'name').map(([k, l]) => `<div class="kv"><span>${l}</span><span>${esc(cellOf(r, k)) || '-'}</span></div>`).join('')}</div>
+    <div>${TCOLS.filter(([k]) => k !== 'name' && r[k] !== undefined && r[k] !== '').map(([k, l]) => `<div class="kv"><span>${l}</span><span>${esc(cellOf(r, k))}</span></div>`).join('')}</div>
     <div class="row" style="flex-wrap:nowrap"><a class="btn soft" style="flex:1" href="tel:${digits(r.phone)}">전화</a><button class="btn" style="flex:1" id="pp-msg">${ICON.msg}문자·카톡</button></div>
     <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
@@ -1188,6 +1189,7 @@ function downloadCSV() {
     ['신청일시', r => dt(r.at, true)], ['입금기한', r => dt(r.deadline)], ['확정일시', r => dt(r.confirmedAt)], ['발송기록', 'log'], ['메모', 'memo']];
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = rowsOf(A.cohort).sort((a, b) => a.at - b.at);
+  for (let i = cols.length - 1; i >= 0; i--) { const f = cols[i][1]; if (typeof f === 'string' && !['id', 'name', 'phone'].includes(f) && !rows.some(r => r[f] !== undefined && r[f] !== '')) cols.splice(i, 1); }
   const csv = '﻿' + [cols.map(c => cell(c[0])).join(',')].concat(rows.map(r => cols.map(([, f]) => cell(typeof f === 'function' ? f(r) : r[f])).join(','))).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
