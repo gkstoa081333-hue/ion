@@ -155,7 +155,7 @@ select.input{appearance:none;-webkit-appearance:none}
 .modal{width:100%;max-width:440px;background:var(--cream);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:14px;margin-bottom:env(safe-area-inset-bottom)}
 @media (min-width:600px){.modal-bg{align-items:center}}
 @media print{.noprint{display:none!important} body{background:#fff}}
-.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
+.nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
 .nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
 .nav .on{background:var(--green);color:var(--cream)}
 
@@ -773,7 +773,7 @@ function viewHome() {
   return `<div class="wrap wide">
     <div class="between" style="min-height:44px"><div class="row"><span class="brand">ION</span><span class="pill" style="border-color:var(--gold-d);color:var(--gold-t)">운영</span></div>
       <button class="btn line sm" data-act="logout">로그아웃</button></div>
-    <nav class="nav" aria-label="운영 메뉴"><a href="admin.html">신청</a><a class="on" href="index.html#admin">매칭</a><a href="admin.html#reviews">후기</a><a href="admin.html#settings">설정</a></nav>
+    <nav class="nav" aria-label="운영 메뉴"><a href="admin.html">신청</a><a class="on" href="index.html#admin">매칭</a><a href="admin.html#reviews">후기</a><a href="admin.html#ledger">정산</a><a href="admin.html#settings">설정</a></nav>
     <span class="h2" style="margin-top:4px">매칭 · 기수 · 타임 관리</span>
     <div class="stack" style="margin-top:16px;gap:12px">${items || '<div class="card empty">아직 만든 타임이 없어요. 아래에서 첫 타임을 만들어 보세요.</div>'}</div>
     <button class="btn soft sm" style="width:100%;margin-top:18px" data-act="toggle-new" aria-expanded="${!!A.showNew}">${A.showNew ? '접기' : '+ 신청 없이 따로 타임 만들기'}</button>
