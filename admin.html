@@ -585,7 +585,6 @@ function viewMain() {
   A.curList = list.map(r => r.id);
   return `<div class="wrap">
     ${appHead('apply')}
-    ${installHint()}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
     ${retentionBanner()}
     ${cohortPicker(A.cohort, 'cohort')}
@@ -661,6 +660,34 @@ function repeatOf(r) {
   const prev = apps().filter(x => x.id !== r.id && x.cohort !== r.cohort && x.status === 'confirmed' && digits(x.phone) === d && x.at < r.at).map(x => x.cohort);
   return [...new Set(prev)].join('·');
 }
+/* ---------- 전체 백업 ---------- */
+async function downloadBackup() {
+  try {
+    const [apply, sessions, reviews] = await Promise.all([IonStore.get('apply'), IonStore.get('sessions'), IonStore.get('reviews')]);
+    const data = { app: 'ion', exportedAt: new Date().toISOString(), apply: apply || {}, sessions: sessions || {}, reviews: reviews || {} };
+    const n = Object.keys((apply || {}).apps || {}).length, ns = Object.keys(sessions || {}).length, nr = Object.keys(reviews || {}).length;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+    a.download = `ion_backup_${TODAY()}.json`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    await IonStore.update('apply/config', { lastBackup: Date.now() });
+    toast(`백업 파일을 받았어요 · 신청 ${n} · 매칭 타임 ${ns} · 후기 ${nr}`);
+  } catch (e) { toast('백업하지 못했어요: ' + e.message); }
+}
+
+/* ---------- 지난 기수 출석·불참 (매칭 출석 체크 기록) ---------- */
+function attendIndex() {
+  if (A._att && A._attSrc === A.sessRaw) return A._att;
+  const idx = {}; const t = TODAY();
+  Object.values(A.sessRaw || {}).forEach(x => {
+    if (!x || !x.roster || !x.pub) return; const att = x.pub.att || {};
+    if (!Object.keys(att).length || !(x.pub.status === 'closed' || (x.pub.date && x.pub.date < t))) return;   // 출석 체크를 한 지난 타임만
+    const lab = `${x.pub.cohort || ''} ${x.pub.slot || ''}`.trim();
+    Object.entries(x.roster).forEach(([pid, p]) => { const d = digits(p && p.phone); if (!d) return; const e = (idx[d] = idx[d] || { ok: [], no: [] }); (att[pid] ? e.ok : e.no).push(lab); });
+  });
+  A._att = idx; A._attSrc = A.sessRaw; return idx;
+}
+
 /* ---------- 겹침 경고: 같은 교회(이성) · 이전 만남(이성) ---------- */
 const ACTIVE = ['pending', 'confirmed', 'waiting'];
 const normChurch = n => String(n || '').replace(/\(.*?\)/g, '').replace(/[\s·.,\-_]/g, '').replace(/교회$/, '').replace(/^(대한예수교|기독교|예수교)/, '').toLowerCase();
@@ -705,7 +732,7 @@ function card(r, showCohort) {
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
-    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
+    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${(() => { const a = attendIndex()[digits(r.phone)]; return a && a.no.length ? `<span class="chip bad" title="불참: ${esc(a.no.join(', '))}">지난 불참 ${a.no.length}회</span>` : ''; })()}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
     ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
@@ -718,7 +745,8 @@ function card(r, showCohort) {
 
 function detail(r) {
   const st = r.status;
-  const kv = [['출생연도', r.birthYear], ['거주지역', r.region], ['직업', r.job], ['출석교회', r.church], ['교회 위치', r.churchAddr], ['교단', r.denom],
+  const ai = attendIndex()[digits(r.phone)];
+  const kv = [['참여 이력', ai ? [ai.ok.length ? `출석: ${ai.ok.join(', ')}` : '', ai.no.length ? `불참: ${ai.no.join(', ')}` : ''].filter(Boolean).join(' / ') : ''], ['출생연도', r.birthYear], ['거주지역', r.region], ['직업', r.job], ['출석교회', r.church], ['교회 위치', r.churchAddr], ['교단', r.denom],
     ['신앙생활', r.faithYears], ['출석', r.attend], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
@@ -742,8 +770,8 @@ function reviewLinkCard() {
   const cs = A.rCohort ? [A.rCohort] : cohortIndex().live.map(c => c.name);
   const rows = cs.flatMap(c => cohortTimes(c).map(t => ({ c, t })));
   if (!rows.length) return '';
-  return `<div class="card stack" style="gap:10px;margin-top:12px">
-    <div class="between"><span class="round" style="font-size:16px">후기 받기 · 링크와 QR</span><span class="small">${A.rCohort ? '' : '진행 중 기수'}</span></div>
+  return `<div class="stack" style="gap:10px">
+    <div class="between"><span class="round" style="font-size:17px">후기 받기 · 링크와 QR</span><span class="small">${A.rCohort ? '' : '진행 중 기수'}</span></div>
     ${rows.map(({ c, t }) => `<div class="between" style="gap:8px;border-top:1px solid var(--line-3);padding-top:10px"><span class="round" style="font-size:15px">${esc(c)} · ${esc(t)}</span>
       <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="mini" data-act="revcopy" data-c="${esc(c)}" data-t="${esc(t)}">${ICON.copy}링크</button><button class="mini go" data-act="revqr" data-c="${esc(c)}" data-t="${esc(t)}">QR</button></div></div>`).join('')}
     <span class="small">링크는 카톡으로 보내고, QR은 화면에 띄우거나 저장해서 출력하면 돼요. 기수·타임이 미리 채워진 후기 페이지로 열려요.</span></div>`;
@@ -792,8 +820,11 @@ function viewReviews() {
   const filtered = A.rTime || A.rStar || A.rShare || A.rq.trim();
   return `<div class="wrap">
     ${appHead('reviews')}
-    <div class="row" style="flex-wrap:nowrap;align-items:center;gap:8px"><div style="flex-grow:1;min-width:0">${cohortPicker(A.rCohort, 'rcohort', { all: true })}</div><button class="mini" data-act="rform" style="flex-shrink:0">✎ 문항 편집</button></div>
-    ${reviewList().length ? `<button class="btn gold" style="margin-bottom:12px" data-act="rreport">📊 후기 한눈에 보기${A.rCohort ? ` · ${esc(A.rCohort)}` : ' · 전체'}</button>` : ''}
+    ${cohortPicker(A.rCohort, 'rcohort', { all: true })}
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:-4px 0 12px">
+      <button class="mini go" style="justify-content:center" data-act="rreport" ${n || reviewList().length ? '' : 'disabled'}>📊 한눈에 보기</button>
+      <button class="mini" style="justify-content:center" data-act="rlinks">🔗 링크·QR</button>
+      <button class="mini" style="justify-content:center" data-act="rform">✎ 문항 편집</button></div>
     <div class="card hero stack" style="gap:12px">
       <div class="between"><span class="eyebrow">${A.rCohort ? esc(A.rCohort) : '전체 기수'} 후기 요약${filtered ? ' · 필터 적용' : ''}</span><span class="small">응답 ${n}명</span></div>
       <div class="sgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -801,10 +832,7 @@ function viewReviews() {
         <div><div class="small">재참여 의향</div><div class="round" style="font-size:26px;color:var(--gold)">${again}<span class="small">%</span></div></div>
         <div><div class="small">추천 지수(NPS)</div><div class="round" style="font-size:26px;color:var(--gold)">${n ? nps : '-'}</div></div>
       </div>
-      ${n ? `<div class="small" style="line-height:1.8">걱정됐던 점: ${tally('worry').slice(0, 3).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}<br>소규모 진행: ${tally('size').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}${rs.some(r => r.pace) ? `<br>대화 시간: ${tally('pace').map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}` : ''}</div>` : ''}
-      ${trend ? `<div class="stack" style="gap:2px"><span class="small">최근 기수별 평균 만족도 (누르면 그 기수만 보기)</span>${trend}</div>` : ''}
     </div>
-    ${reviewLinkCard()}
     <div class="stack" style="gap:8px;margin-top:12px">
       <input class="input" data-k="rq" value="${esc(A.rq)}" placeholder="후기 내용으로 찾기 (예: 진행, 시간, 분위기)" aria-label="후기 검색" inputmode="search">
       <div class="chips" style="flex-wrap:wrap">${times.length > 1 ? chip('rtime', '', A.rTime, '모든 타임') + times.map(t => chip('rtime', t, A.rTime, esc(t))).join('') + '<span style="width:6px"></span>' : ''}
@@ -997,14 +1025,18 @@ function viewSettings() {
           <div class="chips">${[[true, '열기'], [false, '전체 닫기']].map(([v, l]) => `<button class="chipbtn ${d.config.open === v ? 'on' : ''}" data-act="open" data-v="${v}">${l}</button>`).join('')}</div></div>
         ${applyState(d)}
         ${cf('account', '입금 계좌', d.config.account)}
-        <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('contact', '기타 문의처 (선택 · 예: 인스타그램 DM)', d.config.contact)}
-          ${cf('openchat', '오픈채팅 링크 (문의·안내용)', d.config.openchat)}
-          ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
+        <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}
+          ${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
+        ${cf('openchat', '오픈채팅 링크 (문의·안내용)', d.config.openchat)}
         <div class="field"><label for="c-refund">환불 규정 (신청 페이지에 표시)</label><textarea id="c-refund" class="input" data-c="refund" style="min-height:120px">${esc(d.config.refund)}</textarea></div>
       </div>
       <div class="between"><span class="eyebrow">기수 · 타임</span><button class="mini go" data-act="newcohort">+ 새 기수 개설</button></div>
       ${sl}
       <button class="btn" data-act="save" ${A.busy ? 'disabled' : ''}>${A.busy ? '저장 중…' : '저장하기'}</button>
+      <div class="card stack" style="gap:8px;margin-top:6px"><span class="round" style="font-size:16px">데이터 백업</span>
+        <span class="small">신청·매칭·후기·설정 전체를 파일 하나로 내려받아요. 기수가 끝날 때마다 받아두면 실수로 지워도 복구할 수 있어요.${conf().lastBackup ? ` · 마지막 백업 ${esc(dt(conf().lastBackup, true))}` : ''}</span>
+        <button class="btn soft" data-act="backup">${ICON.down}전체 백업 받기</button></div>
+      ${installHint()}
       <div class="row" style="justify-content:center"><a class="mini" href="apply.html" target="_blank" rel="noopener">신청 페이지 새 창으로 보기</a><button class="mini" data-act="copyapply">${ICON.copy}신청 링크 복사</button></div>
       <p class="small center">설정을 바꾼 뒤에는 <b>저장하기</b>를 눌러야 신청 페이지에 반영돼요.</p>
     </div>
@@ -1026,7 +1058,7 @@ async function saveSettings() {
   for (const s of d.slots) for (const k of ['ageFrom', 'ageTo']) { const y = Number(s[k]); if (s[k] !== '' && s[k] != null && !(y >= 1950 && y <= new Date().getFullYear())) return toast(`${s.cohort} ${s.time}: 대상 연령은 1990처럼 4자리 출생연도로 적어주세요`); }
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}) } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}) } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   // 타임의 날짜·시간·장소를 바꾸면 이미 들어온 신청서에도 함께 반영 (문자·명단·CSV가 최신 정보로)
   apps().forEach(r => { const ns = outSlots[r.slotId]; if (!ns) return; ['date', 'time', 'place'].forEach(k => { if ((r[k] || '') !== (ns[k] || '')) up[`apps/${r.id}/${k}`] = ns[k] || ''; }); });
@@ -1276,6 +1308,9 @@ document.addEventListener('click', async e => {
   else if (act === 'revcopy') copyText(REV_URL(b.dataset.c, b.dataset.t), `${b.dataset.c} ${b.dataset.t} 후기 링크를 복사했어요`);
   else if (act === 'revqr') openRevQR(b.dataset.c, b.dataset.t);
   else if (act === 'rform') openRForm();
+  else if (act === 'rlinks') { const h = reviewLinkCard(); const m = document.getElementById('modal');
+    m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="후기 링크와 QR">${h || '<div class="card empty">진행 중인 기수 타임이 없어요. 기수를 골라주세요.</div>'}<button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
+    m.querySelectorAll('[data-close]').forEach(x => x.onclick = ev => { if (ev.target === x) m.innerHTML = ''; }); }
   else if (act === 'rreport') { A.view = 'rreport'; render(); window.scrollTo(0, 0); }
   else if (act === 'rreport-back') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
   else if (act === 'rfback') { if (await confirmBox('편집을 그만둘까요?', '저장하지 않은 변경은 사라져요.', '그만두기')) { A.view = 'reviews'; render(); window.scrollTo(0, 0); } }
@@ -1301,6 +1336,7 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
+  else if (act === 'backup') downloadBackup();
   else if (act === 'copyapply') copyText(location.href.replace(/admin\.html.*$/, 'apply.html'), '신청 페이지 링크를 복사했어요');
   else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
   else if (act === 'addslot') {

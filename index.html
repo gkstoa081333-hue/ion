@@ -776,8 +776,8 @@ function viewHome() {
     <nav class="nav" aria-label="운영 메뉴"><a href="admin.html">신청</a><a class="on" href="index.html#admin">매칭</a><a href="admin.html#reviews">후기</a><a href="admin.html#settings">설정</a></nav>
     <span class="h2" style="margin-top:4px">매칭 · 기수 · 타임 관리</span>
     <div class="stack" style="margin-top:16px;gap:12px">${items || '<div class="card empty">아직 만든 타임이 없어요. 아래에서 첫 타임을 만들어 보세요.</div>'}</div>
-    <span class="section-t" style="margin-top:22px">따로 타임 만들기 (선택)</span>
-    <form class="card stack" style="margin-top:12px" data-form="new-session">
+    <button class="btn soft sm" style="width:100%;margin-top:18px" data-act="toggle-new" aria-expanded="${!!A.showNew}">${A.showNew ? '접기' : '+ 신청 없이 따로 타임 만들기'}</button>
+    ${A.showNew ? `<form class="card stack" style="margin-top:12px" data-form="new-session">
       <div class="field"><label for="ns-cohort">기수 이름</label><input id="ns-cohort" data-keep class="input" placeholder="예: 크리스천 3기" required maxlength="30"></div>
       <div class="grid2">
         <div class="field"><label for="ns-date">날짜</label><input id="ns-date" data-keep class="input" type="date" required></div>
@@ -786,7 +786,7 @@ function viewHome() {
       <div class="field"><label for="ns-st">기수 상태</label><select id="ns-st" data-keep class="input"><option value="">자동 (행사일 다음날 종료)</option><option value="ready">진행 예정</option><option value="ended">종료 (지난 기록 정리용)</option></select></div>
       <button class="btn" type="submit">타임 만들기</button>
       <p class="small">신청관리 › 설정에서 만든 타임은 위 목록에 <b>자동으로 생겨요</b>. 신청 없이 따로 진행하는 타임만 여기서 직접 만드세요.</p>
-    </form>
+    </form>` : ''}
     ${USE_FB ? '' : `<div class="grid2" style="margin-top:16px"><button class="btn soft sm" style="width:100%" data-act="demo-seed">예시 데이터 채우기</button><button class="btn danger sm" style="width:100%" data-act="demo-reset">데모 초기화</button></div>`}
   </div>`;
 }
@@ -895,7 +895,8 @@ function tabPeople(s) {
     ${locked ? `<div class="notice">${ICON.info}<span>투표가 시작돼 명단을 고칠 수 없어요. 고쳐야 하면 투표 탭에서 제출 기록을 초기화해 주세요.</span></div>` : `
     <span class="section-t">신청 명단에서 불러오기</span>
     <div class="card stack">${importBox(s)}</div>
-    <span class="section-t">한 명씩 추가</span>
+    <button class="btn soft sm" style="width:100%" data-act="toggle-add" aria-expanded="${!!A.showAdd}">${A.showAdd ? '접기' : '+ 직접 추가 (한 명씩 · 엑셀 붙여넣기)'}</button>
+    ${A.showAdd ? `<span class="section-t">한 명씩 추가</span>
     <form class="card stack" data-form="add-person">
       <div class="grid2">
         <div class="field"><label for="ap-g">성별</label><select id="ap-g" data-keep class="input"><option value="M">형제</option><option value="F">자매</option></select></div>
@@ -910,7 +911,7 @@ function tabPeople(s) {
       <textarea id="bk" data-keep class="input" placeholder="남&#9;김민준&#9;010-1234-5678&#10;여&#9;정서연&#9;010-2345-6789"></textarea></div>
       <button class="btn soft" type="submit">붙여넣은 명단 추가</button>
       <p class="small">신청관리 화면의 '매칭앱 명단' 버튼으로 복사한 내용을 그대로 붙여넣으면 돼요. 남/여, 형제/자매, 남성/여성 모두 알아봐요.</p>
-    </form>`}
+    </form>` : ''}`}
     <button class="btn danger sm" style="width:100%;margin-top:10px" data-act="del-session">이 타임 삭제</button>`;
 }
 
@@ -970,8 +971,8 @@ function followSection(s, R) {
   return `<span class="section-t">후속 안부 · 매칭 ${FOLLOW_DAYS}일 뒤</span>
     <div class="card stack" style="gap:10px;${ready && done < ids.length ? 'border:2px solid var(--gold-d)' : ''}">
       <div class="between"><span class="round" style="font-size:16px">${!due ? '투표를 마감하면 날짜가 정해져요' : ready ? (done < ids.length ? '지금 보내면 좋아요' : '모두 보냈어요') : `${md(due)}부터 보내면 좋아요`}</span><span class="small">${done}/${ids.length}명</span></div>
-      <span class="small">"연락 잘 이어가고 계신가요?" 안부와 후기 링크가 담긴 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
-      <div class="stack" style="gap:8px">${ids.map(btn).join('')}</div></div>`;
+      ${ready ? `<span class="small">"연락 잘 이어가고 계신가요?" 안부와 후기 링크가 담긴 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
+      <div class="stack" style="gap:8px">${ids.map(btn).join('')}</div>` : ''}</div>`;
 }
 function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
@@ -994,17 +995,15 @@ function tabResult(s) {
       <div class="stack" style="gap:4px"><span class="round" style="font-size:22px">매칭 ${n}건 성사</span>
       <span class="small">1순위 ${R.first.length}건 · 2순위 ${R.second.length}건 · 무효 ${R.voided.length}건</span></div></div>
     ${(() => { const total = Object.keys(roster).length; const rc = reviewCount(pub); const pct = total ? Math.min(100, Math.round(rc / total * 100)) : 0;
-      return `<div class="card stack" style="gap:10px"><div class="between"><span class="round" style="font-size:16px">후기 ${rc} / ${total}명 작성</span><span class="small">${pct}%</span></div>
-        <div class="bar" style="background:var(--line)"><i style="width:${pct}%"></i></div>
-        <span class="small">후기는 익명이라 누가 썼는지는 알 수 없어요. 아직 안 쓴 분이 있으면 아래 문구를 단체로 보내주세요.</span>
-        <button class="mini" data-act="copy-review-ask">${ICON.copy}후기 부탁 문구 복사 (링크 포함)</button></div>`; })()}
+      return pub.status === 'closed' ? `<div class="card between" style="padding:12px 16px"><span><span class="round" style="font-size:16px">후기 ${rc} / ${total}명</span> <span class="small">${pct}% · 익명</span></span>
+        <button class="mini" data-act="copy-review-ask">${ICON.copy}후기 부탁 문구</button></div>` : ''; })()}
     <button class="btn gold" data-act="vote-table">매칭 결과 표로 보기 (누가 누구를 골랐는지)</button>
     ${n ? `<span class="section-t">성사된 매칭</span>` : ''}
     ${R.first.map(p => pairCard(p, 1)).join('')}${R.second.map(p => pairCard(p, 2)).join('')}
     ${R.voided.length ? `<span class="section-t">자동 무효</span>` + R.voided.map(v => `<div class="card void stack" style="gap:6px">
       <div class="between"><span class="round strike" style="font-size:18px">${label(v.pair[0])} ↔ ${label(v.pair[1])}</span><span class="small">2순위</span></div>
       <span class="small">${v.who.map(label).join(', ')}이(가) 1순위로 성사되어 2순위 매칭은 무효 처리됐어요.</span></div>`).join('') : ''}
-    ${n ? followSection(s, R) : ''}
+    ${n && pub.status === 'closed' ? followSection(s, R) : ''}
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
     <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
@@ -1172,6 +1171,8 @@ document.addEventListener('click', async e => {
       case 'att': { const id = b.dataset.id; const on = !!(A.cur.pub.att || {})[id]; await DB.set(`sessions/${A.sid}/pub/att/${id}`, on ? null : true); return; }
       case 'att-all': { const att = {}; rosterList(A.cur).forEach(p => { att[p.id] = true; }); await DB.set(`sessions/${A.sid}/pub/att`, att); return toast('전원 출석으로 표시했어요'); }
       case 'att-reset': { if (!(await confirmBox('출석 체크를 초기화할까요?', '모든 분이 미체크 상태가 되고, 투표 화면에는 다시 전원이 보여요.', '초기화'))) return; await DB.remove(`sessions/${A.sid}/pub/att`); return toast('초기화했어요'); }
+      case 'toggle-new': A.showNew = !A.showNew; renderA(); return;
+      case 'toggle-add': A.showAdd = !A.showAdd; renderA(); return;
       case 'toggle-past': A.showPast = !A.showPast; renderA(); return;
       case 'cohort-end': {
         const c = b.dataset.v; if (!(await confirmBox(`${c}을 종료로 내릴까요?`, '모든 탭에서 종료된 기수로 내려가고, 신청 페이지에서도 이 기수 신청이 닫혀요. 투표·결과는 그대로 남아요.', '종료로 내리기'))) return;
