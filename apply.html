@@ -318,10 +318,20 @@ function viewIntro() {
     <div class="stack" style="margin-top:30px;gap:14px">
       <span class="eyebrow">ION CHRISTIAN</span>
       <h1 class="h1" style="font-size:32px">믿음 안에서<br>좋은 인연을 만나요</h1>
-      <p class="p">대전·세종·청주 지역 크리스천 청년을 위한 소규모 소개팅이에요. 신청 후 안내되는 계좌로 입금하시면 참가가 확정돼요.</p>
+      <p class="p" style="word-break:keep-all">혼자 기도하며 기다려 온 마음, 이제 같은 믿음을 가진 사람과 나눠 보세요.<br>대전·세종·청주 크리스천 청년들이 편안한 카페에서 소수로 만나 천천히 대화를 나누는 자리예요.</p>
+      <p class="p" style="margin-top:-4px;word-break:keep-all">어색해도 괜찮아요. 운영진이 처음부터 끝까지 곁에서 도와드릴게요.</p>
     </div>
     <div class="stack" style="margin-top:26px;gap:10px">${cards}</div>
-    <div class="notice" style="margin-top:14px">${ICON.info}<span>참가비 ${won(S.cfg.fee)}원${(S.cfg.repeatDiscount != null ? +S.cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount) > 0 ? ` (재참여 ${won((S.cfg.repeatDiscount != null ? +S.cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount))}원 할인)` : ''} · 타임마다 대상 출생연도가 달라요. 내 출생연도에 맞는 타임으로 신청해 주세요.<br>같은 교회 성도나 이전 기수에서 만난 분과 겹치지 않도록, 운영진이 같은 기수의 다른 타임으로 조정할 수 있어요.</span></div>
+    ${(() => { const rd = S.cfg.repeatDiscount != null ? +S.cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount;
+      const items = [
+        ['💛', `참가비는 ${won(S.cfg.fee)}원이에요.${rd > 0 ? ` 다시 와 주시는 분은 ${won(rd)}원 할인해 드려요.` : ''}`],
+        ['🎂', '타임마다 만나는 연령대가 달라요. 내 출생연도에 맞는 타임으로 신청해 주세요.'],
+        ['⛪', '같은 교회 분이나 이전 기수에서 만난 분과 겹치면, 같은 기수의 다른 타임으로 살짝 옮겨 드릴 수 있어요.'],
+        ['📩', '신청 후 안내드리는 계좌로 입금해 주시면 참가가 확정돼요.']];
+      return `<div class="notice" style="margin-top:14px;flex-direction:column;gap:0;padding:6px 14px">
+        <span class="round" style="font-size:14px;padding:8px 0 4px;color:var(--gold)">신청 전에 함께 봐 주세요</span>
+        ${items.map(([ic, t], i) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;${i ? 'border-top:1px dashed rgba(176,138,62,.35);' : ''}"><span aria-hidden="true" style="flex:none">${ic}</span><span style="word-break:keep-all">${t}</span></div>`).join('')}
+      </div>`; })()}
     ${lastCard()}
     <div class="spacer" style="min-height:26px"></div>
     <button class="btn gold" data-act="start">신청 시작하기</button>
