@@ -598,7 +598,7 @@ function viewMain() {
     ${cohortPicker(A.cohort, 'cohort')}
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:-4px 0 12px">
       <button class="mini go" style="justify-content:center" data-act="dash">📈 운영 대시보드</button>
-      <button class="mini" style="justify-content:center" data-act="promo">📣 모집 이미지 만들기</button></div>
+      <button class="mini" style="justify-content:center" data-act="promo">📣 홍보 이미지 만들기</button></div>
     ${viewStatus()}
     <div class="row" style="margin-top:14px;flex-wrap:nowrap"><input class="input" style="flex-grow:1" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 전화번호로 찾기" aria-label="검색" inputmode="search">
       <button class="chipbtn ${A.qAll ? 'on' : ''}" data-act="qall" aria-pressed="${A.qAll}">전체 기수</button></div>
@@ -682,13 +682,13 @@ function matchStats(sess) {   // 매칭앱 computeMatches와 같은 규칙 (1순
   ids.forEach(a => { const b = sc(a); if (b && a < b && roster[b] && sc(b) === a && !done.has(a) && !done.has(b)) { done.add(a); done.add(b); pairs++; } });
   return { people: ids.length, voted: ids.filter(id => votes[id]).length, pairs, matchedPeople: done.size };
 }
-const refundOf = r => r.status === 'refunded' ? (r.refundAmt != null ? +r.refundAmt : (+r.paidAmt || feeOf(r))) : 0;
+const refundOf = r => r.status === 'refunded' ? (r.refundAmt != null ? +r.refundAmt : (+r.paidAmt || feeOf(r))) : (+r.partialRefund || 0);   // 확정 후 재참여 할인은 부분 환불로
 const paidOf = r => (r.status === 'confirmed' || r.status === 'refunded' || r.confirmedAt) && r.status !== 'pending' && r.status !== 'waiting' ? (+r.paidAmt || feeOf(r)) : 0;
 function ledgerOf(c) { return Object.entries(((A.data && A.data.ledger) || {})[ckey(c)] || {}).map(([id, x]) => ({ id, ...x })).sort((a, b) => (a.at || 0) - (b.at || 0)); }
 function settle(c) {
   const rs = apps().filter(r => r.cohort === c); const paid = rs.reduce((t, r) => t + paidOf(r), 0); const refund = rs.reduce((t, r) => t + refundOf(r), 0);
   const items = ledgerOf(c); const spent = items.filter(x => x.kind !== 'in').reduce((t, x) => t + (+x.amount || 0), 0); const extra = items.filter(x => x.kind === 'in').reduce((t, x) => t + (+x.amount || 0), 0);
-  return { paid, refund, spent, extra, net: paid - refund + extra - spent, nPaid: rs.filter(r => paidOf(r)).length, nRefund: rs.filter(r => r.status === 'refunded').length, items };
+  return { paid, refund, spent, extra, net: paid - refund + extra - spent, nPaid: rs.filter(r => paidOf(r)).length, nRefund: rs.filter(r => refundOf(r) > 0).length, items };
 }
 function viewDash() {
   const idx = cohortIndex().all.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -789,60 +789,66 @@ function ledgerCSV() {
 
 
 /* =====================================================================
-   모집 이미지 만들기 (인스타 피드 1080×1350 · 스토리 1080×1920)
-   - 기본 디자인 5종 + '내 디자인 배경' 추가 (apply/promoBg 에 저장)
+   홍보 이미지 만들기 — 종류(모집 시작·현황·마감·후기·대기 접수) × 스타일(시그니처·점·파스텔·내 디자인)
+   크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
-const PROMO = { tpl: 'dots', size: 'feed', title: '', sub: '', note: '' };
-const PROMO_TPL = [
-  { id: 'dots', name: '모집 현황 (점)' }, { id: 'soft', name: '신청 현황 (파스텔)' },
-  { id: 'open', name: '모집 시작' }, { id: 'status', name: '실시간 현황' }, { id: 'hurry', name: '마감 임박' },
-  { id: 'full', name: '모집 완료' }, { id: 'wait', name: '대기 접수' }
-];
+const PROMO = { kind: 'status', style: 'dots', size: 'feed', title: '', sub: '', note: '' };
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수']];
+const PROMO_STYLES = [['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔']];
 function promoHour(t) { const m = String(t || '').match(/(\d{1,2})(?::(\d{2}))?/); if (!m) return t || ''; const h = +m[1]; const mm = m[2] && m[2] !== '00' ? ` ${+m[2]}분` : ''; return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시${mm}`; }
 function promoData() {
   const c = A.cohort; const ss = slots().filter(x => x.cohort === c);
   const held = (sid, g) => apps().filter(r => r.slotId === sid && r.gender === g && ION_HOLDING.includes(r.status)).length;
-  const conf_ = (sid, g) => apps().filter(r => r.slotId === sid && r.gender === g && r.status === 'confirmed').length;
-  const rows = ss.map(x => ({ time: x.time, hour: promoHour(x.time), age: ionAgeText(x), capM: +x.cap?.M || 0, capF: +x.cap?.F || 0, leftM: Math.max(0, (+x.cap?.M || 0) - held(x.id, 'M')), leftF: Math.max(0, (+x.cap?.F || 0) - held(x.id, 'F')), confM: conf_(x.id, 'M'), confF: conf_(x.id, 'F') }));
+  const rows = ss.map(x => ({ time: x.time, hour: promoHour(x.time), age: ionAgeText(x), capM: +x.cap?.M || 0, capF: +x.cap?.F || 0, leftM: Math.max(0, (+x.cap?.M || 0) - held(x.id, 'M')), leftF: Math.max(0, (+x.cap?.F || 0) - held(x.id, 'F')) }));
   const left = rows.reduce((t, r) => t + r.leftM + r.leftF, 0); const cap = rows.reduce((t, r) => t + r.capM + r.capF, 0);
-  return { cohort: c, date: (ss[0] || {}).date || '', place: (ss[0] || {}).place || '', rows, left, cap, filled: cap - left };
+  // 후기: 이 기수 후기, 없으면 후기가 있는 가장 최근 기수 · 홍보 동의한 후기만 인용
+  let rv = reviewList().filter(r => r.cohort === c); let rc = c;
+  if (!rv.length) { const last = cohortIndex().all.filter(x => x.nRev).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0]; if (last) { rc = last.name; rv = reviewList().filter(r => r.cohort === rc); } }
+  const yes = ((RFORM().q.find(x => x.id === 'again') || {}).options || [])[0] || '';
+  const review = { cohort: rc, n: rv.length, avg: rv.length ? (rv.reduce((t, r) => t + (+r.sat || 0), 0) / rv.length) : 0, again: rv.length ? Math.round(rv.filter(r => String(r.again).startsWith('다음') || r.again === yes).length / rv.length * 100) : 0,
+    quotes: rv.filter(r => r.share && String(r.felt || '').trim().length > 4).sort((a, b) => b.sat - a.sat).slice(0, 3).map(r => ({ text: String(r.felt).trim(), label: r.label || '참가자', sat: r.sat })) };
+  return { cohort: c, date: (ss[0] || {}).date || '', place: (ss[0] || {}).place || '', rows, left, cap, filled: cap - left, review };
 }
-function promoDefaults(t, d) {
-  return {
-    open: [`${d.cohort} 모집`, `${d.date} · ${d.place}`, '신청은 프로필 링크에서'],
-    status: [`${d.cohort} 모집 현황`, `${d.date} · ${d.place}`, '자리가 빨리 차고 있어요'],
-    hurry: ['마감 임박', `${d.cohort} · 남은 자리 ${d.left}`, '서둘러 신청해 주세요'],
-    full: [`${d.cohort} 모집 완료`, `${d.filled}명 모집 마감 · 감사합니다`, '다음 기수 소식도 기대해 주세요'],
-    wait: ['정원 마감', `${d.cohort} · 대기 신청 받아요`, '취소 자리가 나면 순서대로 연락드려요'],
-    dots: ['모집 현황', `남은 자리 ${d.left}석`, `${d.place} · 선착순`],
-    soft: ['신청현황', '좋은 인연, 하나님 안에서 만나세요', '함께하는 따뜻한 만남, 이온크리스천 소개팅']
-  }[t] || [`${d.cohort}`, '', ''];
+function promoDefaults(kind, style, d) {
+  const dp = `${d.date} · ${d.place}`; const rv = d.review;
+  const T = {
+    sig: { open: [`${d.cohort} 모집 시작`, dp, '신청은 프로필 링크에서'], status: [`${d.cohort} 모집 현황`, dp, '자리가 빨리 차고 있어요'], full: [`${d.cohort} 모집 완료`, `${d.filled}명 모집 마감 · 감사합니다`, '다음 기수 소식도 기대해 주세요'],
+      review: ['참여 후기', `${rv.cohort} · 후기 ${rv.n}건`, '다음 기수에서 만나요'], wait: ['정원 마감', `${d.cohort} · 대기 신청 받아요`, '취소 자리가 나면 순서대로 연락드려요'] },
+    dots: { open: ['모집 시작', `총 ${d.cap}석 오픈`, `${d.place} · 선착순`], status: ['모집 현황', `남은 자리 ${d.left}석`, `${d.place} · 선착순`], full: ['모집 마감', `${d.filled}명 모집 완료`, '감사합니다 · 다음 기수에서 만나요'],
+      review: ['참여 후기', `만족도 ${rv.avg ? rv.avg.toFixed(1) : '-'} / 5`, `${rv.cohort} 참가자 후기 · 홍보 동의분만 소개해요`], wait: ['정원 마감', '대기 신청 접수 중', '취소 자리가 나면 순서대로 연락드려요'] },
+    soft: { open: ['모집 시작', '좋은 인연, 하나님 안에서 만나세요', '함께하는 따뜻한 만남, 이온크리스천 소개팅'], status: ['신청현황', '좋은 인연, 하나님 안에서 만나세요', '함께하는 따뜻한 만남, 이온크리스천 소개팅'],
+      full: ['모집 마감', '귀한 걸음 감사합니다', '함께하는 따뜻한 만남, 이온크리스천 소개팅'], review: ['참여 후기', '좋은 인연, 하나님 안에서 만나세요', '함께하는 따뜻한 만남, 이온크리스천 소개팅'], wait: ['대기 접수', '취소 자리가 나면 연락드려요', '함께하는 따뜻한 만남, 이온크리스천 소개팅'] }
+  };
+  return (T[style] || T.sig)[kind];
 }
 function viewPromo() {
-  const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {});
-  if (!PROMO.title || PROMO._for !== `${PROMO.tpl}|${d.cohort}`) { [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.tpl.startsWith('bg:') ? 'status' : PROMO.tpl, d); PROMO._for = `${PROMO.tpl}|${d.cohort}`; }
-  const chip = (id, name) => `<button class="chipbtn ${PROMO.tpl === id ? 'on' : ''}" data-act="ptpl" data-v="${esc(id)}">${esc(name)}</button>`;
+  const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style;
+  const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}`;
+  if (PROMO._for !== key) { [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
+  const chip = (act, cur, id, name) => `<button class="chipbtn ${cur === id ? 'on' : ''}" data-act="${act}" data-v="${esc(id)}">${esc(name)}</button>`;
   return `<div class="wrap">
     ${appHead('apply')}
-    <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">모집 이미지 만들기</span><button class="mini" data-act="promo-back">← 신청으로</button></div>
+    <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">홍보 이미지 만들기</span><button class="mini" data-act="promo-back">← 신청으로</button></div>
     ${cohortPicker(A.cohort, 'cohort')}
     <div class="stack" style="gap:12px">
-      <div class="field"><span class="lab">디자인</span><div class="chips" style="flex-wrap:wrap">${PROMO_TPL.map(t => chip(t.id, t.name)).join('')}${bgs.map(([id, b]) => chip('bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
-      <div class="chips">${[['feed', '피드 4:5'], ['story', '스토리 9:16'], ['square', '정사각 1:1']].map(([k, l]) => `<button class="chipbtn ${PROMO.size === k ? 'on' : ''}" data-act="psize" data-v="${k}">${l}</button>`).join('')}</div>
+      <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${PROMO_KINDS.map(([k, n]) => chip('pkind', PROMO.kind, k, n)).join('')}</div></div>
+      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('')}${bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
+      <div class="chips">${[['feed', '피드 4:5'], ['story', '스토리 9:16'], ['square', '정사각 1:1']].map(([k, l]) => chip('psize', PROMO.size, k, l)).join('')}</div>
       <canvas id="promo-cv" style="width:100%;max-width:420px;align-self:center;border-radius:14px;box-shadow:0 8px 24px rgba(38,69,59,.15);background:#eee"></canvas>
+      ${PROMO.kind === 'review' && !d.review.quotes.length ? '<div class="notice">홍보에 동의한 후기가 아직 없어요. 만족도·재참여 숫자만 들어가요.</div>' : ''}
       <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="24"></div>
       <div class="field"><label for="ps">작은 제목</label><input id="ps" class="input" data-pf="sub" value="${esc(PROMO.sub)}" maxlength="40"></div>
-      <div class="field"><label for="pn">아래 문구</label><input id="pn" class="input" data-pf="note" value="${esc(PROMO.note)}" maxlength="40"></div>
-      <span class="small">타임별 남은 자리는 지금 신청 현황으로 자동으로 들어가요. 문구는 고쳐 쓸 수 있어요.</span>
+      <div class="field"><label for="pn">아래 문구</label><input id="pn" class="input" data-pf="note" value="${esc(PROMO.note)}" maxlength="44"></div>
+      <span class="small">남은 자리·인원·후기 숫자는 지금 기록으로 자동으로 들어가요. 문구는 고쳐 쓸 수 있어요.</span>
       <div class="row" style="flex-wrap:nowrap"><button class="btn" style="flex:1" data-act="psave">${ICON.down}이미지 저장</button>${navigator.share ? '<button class="btn soft" style="flex:1" data-act="pshare">공유 (인스타)</button>' : ''}</div>
       <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">내 디자인 배경 추가</span>
-        <span class="small">캔바 등에서 만든 배경 이미지를 올리면, 그 위에 기수·남은 자리 글자가 자동으로 얹혀요. 글자가 들어갈 자리는 비워두세요.</span>
+        <span class="small">캔바 등에서 만든 배경을 올리면 '스타일'에 🖼로 추가돼요. 그 위에 종류에 맞는 글자가 자동으로 얹혀요. 글자가 들어갈 자리는 비워두세요.</span>
         <div class="sgrid"><div class="field"><label for="pb-name">이름</label><input id="pb-name" class="input" placeholder="예) 가을 배경" maxlength="16"></div>
           <div class="field"><label for="pb-color">글자색</label><select id="pb-color" class="input"><option value="#FFFDF8">밝은 글자</option><option value="#26453B">초록 글자</option></select></div></div>
         <div class="field"><label for="pb-pos">글자 위치</label><select id="pb-pos" class="input"><option value="center">가운데</option><option value="bottom">아래쪽</option><option value="top">위쪽</option></select></div>
         <input id="pb-file" type="file" accept="image/*" class="input" style="padding:10px">
         <button class="btn soft sm" data-act="pbg-add">배경 등록</button>
-        ${PROMO.tpl.startsWith('bg:') ? `<button class="mini del" style="align-self:flex-start" data-act="pbg-del" data-v="${esc(PROMO.tpl.slice(3))}">선택한 내 디자인 삭제</button>` : ''}</div>
+        ${PROMO.style.startsWith('bg:') ? `<button class="mini del" style="align-self:flex-start" data-act="pbg-del" data-v="${esc(PROMO.style.slice(3))}">선택한 내 디자인 삭제</button>` : ''}</div>
     </div>
     <div class="spacer" style="min-height:20px"></div></div>`;
 }
@@ -854,123 +860,160 @@ function promoMark(ctx, x, y, w, ring, line, cross) {   // ④ 로고 (이+온 �
   ctx.strokeStyle = line; ctx.stroke(new Path2D('M108 22 V118 M196 70 V86 M158 88 H234 M172 102 V122 H238'));
   ctx.strokeStyle = cross; ctx.lineWidth = 7; ctx.stroke(new Path2D('M133 64 V100 M122 76 H144')); ctx.restore();
 }
+function wrapText(ctx, text, maxW, maxLines) {   // 한글 글자 단위 줄바꿈
+  const out = []; let line = '';
+  for (const ch of String(text)) { if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch.trim() ? ch : ''; if (out.length === maxLines) break; } else line += ch; }
+  if (out.length < maxLines && line) out.push(line);
+  if (out.length === maxLines && (out.join('').length < String(text).length)) out[maxLines - 1] = out[maxLines - 1].replace(/.$/, '…');
+  return out;
+}
+// 같은 크기 안에 내용이 넘치면 전체를 줄여서 그리기
+function fitScale(ctx, W, H, need) { const k = Math.min(1, H / need); if (k < 1) { ctx.save(); ctx.translate((W - W * k) / 2, 0); ctx.scale(k, k); } return { k, H: k < 1 ? need : H }; }
 async function drawPromo() {
   const cv = document.getElementById('promo-cv'); if (!cv) return;
-  try { await Promise.all([document.fonts.load('80px Jua'), document.fonts.load('40px "Gowun Dodum"')]); } catch (e) {}
+  try { await Promise.all([document.fonts.load('80px Jua'), document.fonts.load('40px "Gowun Dodum"'), document.fonts.load('700 60px "Gowun Batang"')]); } catch (e) {}
   const [W, H] = PZ[PROMO.size]; cv.width = W; cv.height = H; const ctx = cv.getContext('2d'); const d = promoData();
-  const C = { green: '#26453B', cream: '#FFFDF8', sand: '#F6F1E7', gold: '#B08A3E', goldL: '#D9C8A0', ink: '#3F5249' };
-  const T = PROMO.tpl;
-  if (T === 'dots') return drawDots(ctx, W, H, d);
-  if (T === 'soft') return drawSoft(ctx, W, H, d);
-  const bg = T.startsWith('bg:') ? ((A.data.promoBg || {})[T.slice(3)]) : null;
-  const dark = bg ? bg.color !== '#26453B' : ['open', 'full', 'wait'].includes(T);
-  const fg = bg ? bg.color : dark ? C.cream : C.green; const acc = dark ? C.goldL : C.gold; const sub = dark ? 'rgba(255,253,248,.82)' : C.ink;
-  const text = (t, x, y, size, color, font = 'Jua', align = 'center') => { ctx.fillStyle = color; ctx.font = `${size}px ${font === 'Jua' ? 'Jua' : '"Gowun Dodum"'}, sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y); };
-  const fit = (t, max, size, font = 'Jua') => { ctx.font = `${size}px ${font === 'Jua' ? 'Jua' : '"Gowun Dodum"'}, sans-serif`; let s2 = size; while (ctx.measureText(t).width > max && s2 > 20) { s2 -= 2; ctx.font = `${s2}px ${font === 'Jua' ? 'Jua' : '"Gowun Dodum"'}, sans-serif`; } return s2; };
+  if (PROMO.style === 'dots') return drawDots(ctx, W, H, d, PROMO.kind);
+  if (PROMO.style === 'soft') return drawSoft(ctx, W, H, d, PROMO.kind);
+  return drawSig(ctx, W, H, d, PROMO.kind, PROMO.style.startsWith('bg:') ? ((A.data.promoBg || {})[PROMO.style.slice(3)]) : null);
+}
+
+/* ---- 스타일: 시그니처 (이온 초록·크림·④ 로고) · 내 디자인 배경도 이 배치 사용 ---- */
+async function drawSig(ctx, W, H, d, kind, bg) {
+  const C = { green: '#26453B', cream: '#FFFDF8', gold: '#B08A3E', goldL: '#D9C8A0', ink: '#3F5249' };
+  const dark = bg ? bg.color !== '#26453B' : ['open', 'full', 'wait'].includes(kind);
+  const fg = bg ? bg.color : dark ? C.cream : C.green; const acc = dark ? C.goldL : C.gold; const sub = dark ? 'rgba(255,253,248,.85)' : C.ink;
+  const FF = f => f === 'J' ? 'Jua' : '"Gowun Dodum"';
+  const text = (t, x, y, size, color, f = 'J', align = 'center') => { ctx.fillStyle = color; ctx.font = `${size}px ${FF(f)}, sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y); };
+  const fit = (t, max, size, f = 'J') => { let s2 = size; ctx.font = `${s2}px ${FF(f)}, sans-serif`; while (ctx.measureText(t).width > max && s2 > 20) { s2 -= 2; ctx.font = `${s2}px ${FF(f)}, sans-serif`; } return s2; };
   const round = (x, y, w, h, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); };
-  // 배경
   if (bg && bg.data) { const img = new Image(); await new Promise(res => { img.onload = res; img.onerror = res; img.src = bg.data; });
     const sc = Math.max(W / img.width, H / img.height); ctx.drawImage(img, (W - img.width * sc) / 2, (H - img.height * sc) / 2, img.width * sc, img.height * sc); }
-  else { ctx.fillStyle = dark ? C.green : C.cream; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = dark ? 'rgba(217,200,160,.35)' : 'rgba(176,138,62,.35)'; ctx.lineWidth = 3; ctx.strokeRect(40, 40, W - 80, H - 80); }
-  // 세로 배치 기준
-  const pos = bg ? bg.pos : 'center'; const blockH = 760; let top = pos === 'top' ? 140 : pos === 'bottom' ? H - blockH - 120 : (H - blockH) / 2;
-  if (!bg) { promoMark(ctx, W / 2 - 110, top - 10, 220, dark ? C.goldL : C.gold, fg, dark ? C.goldL : C.gold); top += 150; } else top += 30;
+  else { ctx.fillStyle = dark ? C.green : C.cream; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = dark ? 'rgba(217,200,160,.35)' : 'rgba(176,138,62,.35)'; ctx.lineWidth = 3; ctx.strokeRect(40, 40, W - 80, H - 80); }
+  const bodyH = kind === 'review' ? 520 : kind === 'full' ? 220 : Math.max(1, d.rows.length) * 140;
+  const blockH = (bg ? 300 : 450) + bodyH + 80;
+  const sc = fitScale(ctx, W, H, blockH + 220); const HH = sc.H;
+  const pos = bg ? bg.pos : 'center'; let top = pos === 'top' ? 140 : pos === 'bottom' ? HH - blockH - 140 : (HH - blockH) / 2;
+  if (!bg) { promoMark(ctx, W / 2 - 110, top, 220, acc, fg, acc); top += 160; } else top += 20;
   text('ION CHRISTIAN', W / 2, top, 30, acc); top += 90;
-  text(PROMO.title, W / 2, top, fit(PROMO.title, W - 180, 120), fg); top += 110;
+  text(PROMO.title, W / 2, top, fit(PROMO.title, W - 180, 116), fg); top += 106;
   text(PROMO.sub, W / 2, top, fit(PROMO.sub, W - 200, 44, 'G'), sub, 'G'); top += 90;
-  // 본문: 템플릿별
   const boxW = W - 200, x0 = 100;
-  if (T === 'full') {
+  if (kind === 'full') {
     round(x0 + 120, top, boxW - 240, 170, 85, dark ? 'rgba(217,200,160,.18)' : '#EFE7D6');
-    text(`${d.filled}명`, W / 2, top + 72, 96, acc); text('모집 완료', W / 2, top + 140, 34, sub, 'G'); top += 210;
-  } else if (T === 'hurry') {
-    text(`${d.left}자리`, W / 2, top + 70, 150, acc); text('남았어요', W / 2, top + 170, 48, fg); top += 230;
+    text(`${d.filled}명`, W / 2, top + 72, 96, acc); text('모집 완료', W / 2, top + 140, 34, sub, 'G'); top += 220;
+  } else if (kind === 'review') {
+    const rv = d.review;
+    text(`★ ${rv.avg ? rv.avg.toFixed(1) : '-'}`, W / 2, top + 50, 100, acc); text(`후기 ${rv.n}건 · 다시 참여하고 싶어요 ${rv.again}%`, W / 2, top + 130, 34, sub, 'G'); top += 190;
+    rv.quotes.slice(0, 2).forEach(q => { round(x0, top, boxW, 150, 28, dark ? 'rgba(255,253,248,.10)' : '#FFFFFF'); ctx.font = `34px ${FF('G')}, sans-serif`;
+      wrapText(ctx, `“${q.text}”`, boxW - 80, 2).forEach((ln, i) => text(ln, W / 2, top + 48 + i * 44, 34, fg, 'G')); text(`— ${q.label}`, W / 2, top + 128, 24, acc, 'G'); top += 166; });
   } else {
     d.rows.forEach(r => {
       round(x0, top, boxW, 120, 28, dark ? 'rgba(255,253,248,.10)' : '#FFFFFF');
-      text(r.time, x0 + 36, top + 44, 40, fg, 'Jua', 'left'); if (r.age) text(r.age, x0 + 36, top + 88, 26, sub, 'G', 'left');
-      const tag = (lab, n, cx) => { const full = n <= 0; round(cx - 120, top + 32, 240, 58, 29, full ? (dark ? 'rgba(255,253,248,.2)' : '#E6E0D4') : (dark ? C.goldL : C.green)); text(full ? `${lab} 마감` : `${lab} ${n}자리`, cx, top + 62, 32, full ? sub : (dark ? C.green : C.cream)); };
-      if (T === 'wait') { text('대기 접수 중', x0 + boxW - 150, top + 62, 34, acc); } else { tag('형제', r.leftM, x0 + boxW - 400); tag('자매', r.leftF, x0 + boxW - 140); }
+      text(r.time, x0 + 36, top + 44, 40, fg, 'J', 'left'); if (r.age) text(r.age, x0 + 36, top + 88, 26, sub, 'G', 'left');
+      const tag = (lab, txt, on, cx) => { round(cx - 120, top + 32, 240, 58, 29, on ? (dark ? C.goldL : C.green) : (dark ? 'rgba(255,253,248,.2)' : '#E6E0D4')); text(`${lab} ${txt}`, cx, top + 62, 32, on ? (dark ? C.green : C.cream) : sub); };
+      if (kind === 'wait') text('대기 접수 중', x0 + boxW - 150, top + 62, 34, acc);
+      else if (kind === 'open') { tag('형제', `${r.capM}명`, true, x0 + boxW - 400); tag('자매', `${r.capF}명`, true, x0 + boxW - 140); }
+      else { tag('형제', r.leftM ? `${r.leftM}자리` : '마감', r.leftM > 0, x0 + boxW - 400); tag('자매', r.leftF ? `${r.leftF}자리` : '마감', r.leftF > 0, x0 + boxW - 140); }
       top += 140;
     });
     if (!d.rows.length) { text('타임 정보 없음', W / 2, top + 40, 34, sub, 'G'); top += 100; }
   }
   top += 40; text(PROMO.note, W / 2, top, fit(PROMO.note, W - 200, 40, 'G'), sub, 'G');
-  text('이온 크리스천 소개팅 · 대전·세종·청주', W / 2, H - 90, 28, acc);
+  text('이온 크리스천 소개팅 · 대전·세종·청주', W / 2, HH - 90, 28, acc);
+  if (sc.k < 1) ctx.restore();
 }
 
-/* ---- 템플릿: 모집 현황 (점) — 예전 인스타 '남은 자리 n석' 스타일 ---- */
-function drawDots(ctx, W, H, d) {
+/* ---- 스타일: 점 — 예전 인스타 '모집 현황 · 남은 자리 n석' 디자인 ---- */
+function drawDots(ctx, W, H, d, kind) {
   const C = { bg: '#F4EFE5', card: '#FFFDF8', line: '#E6DECD', green: '#26453B', gold: '#B08A3E', pill: '#E9DDC0', sub: '#8A938D' };
-  const F = (sz, f) => `${sz}px ${f === 'B' ? '"Gowun Batang", serif' : f === 'J' ? 'Jua, sans-serif' : '"Gowun Dodum", sans-serif'}`;
+  const F = (sz, f) => `${f === 'B' ? '700 ' : ''}${sz}px ${f === 'B' ? '"Gowun Batang", serif' : f === 'J' ? 'Jua, sans-serif' : '"Gowun Dodum", sans-serif'}`;
   const t = (s, x, y, sz, col, f, al = 'left') => { ctx.font = F(sz, f); ctx.fillStyle = col; ctx.textAlign = al; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); return ctx.measureText(s).width; };
   const rr = (x, y, w, h, r, fill, stroke) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
   ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  const bodyH = kind === 'review' ? 260 + Math.min(3, d.review.quotes.length) * 190 : d.rows.length * 326 + 60;
+  const sc = fitScale(ctx, W, H, 560 + bodyH + 160); H = sc.H;
   const L = 96, R = W - 96; const now = new Date();
-  let y = Math.max(84, (H - 1350) / 2 + 84);
+  let y = Math.max(84, (H - (560 + bodyH + 160)) / 2 + 84);
   ctx.save(); ctx.font = F(30, 'J'); ctx.fillStyle = C.green; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; let x = L; for (const ch of 'ION') { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + 8; } ctx.restore();
   t(`${now.getMonth() + 1}.${String(now.getDate()).padStart(2, '0')} 기준`, R, y, 26, C.sub, 'D', 'right');
-  y += 78; const pill = `크리스천 ${d.cohort} · ${String(d.date).replace(/^(\d+)\/(\d+)/, '$1월 $2일')}`; ctx.font = F(30, 'J'); const pw = ctx.measureText(pill).width + 52;
+  y += 78; const pill = kind === 'review' ? `크리스천 ${d.review.cohort} 참가자 후기` : `크리스천 ${d.cohort} · ${String(d.date).replace(/^(\d+)\/(\d+)/, '$1월 $2일')}`; ctx.font = F(30, 'J'); const pw = ctx.measureText(pill).width + 52;
   rr(L, y - 30, pw, 60, 30, C.pill); t(pill, L + 26, y + 1, 30, C.green, 'J');
   y += 100; t(PROMO.title, L, y, 72, C.green, 'B'); y += 92; t(PROMO.sub, L, y, 72, C.gold, 'B'); y += 84;
   const dot = (cx, cy, on) => { ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2); if (on) { ctx.fillStyle = C.green; ctx.fill(); } else { ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.stroke(); } };
-  d.rows.forEach((r, i) => {
-    const ch = 300; rr(L, y, R - L, ch, 28, C.card, C.line);
-    t(`${i + 1}타임`, L + 50, y + 70, 30, C.gold, 'J'); t(r.hour + (r.age ? '' : ''), L + 142, y + 66, 50, C.green, 'B'); if (r.age) t(r.age, R - 50, y + 70, 26, C.sub, 'D', 'right');
-    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L + 50, y + 122); ctx.lineTo(R - 50, y + 122); ctx.stroke();
-    [['남성', r.capM, r.leftM], ['여성', r.capF, r.leftF]].forEach(([lab, cap, left], k) => {
-      const yy = y + 172 + k * 76; t(lab, L + 50, yy, 32, C.green, 'J');
-      const filled = cap - left; const n = Math.min(cap, 8);
-      for (let q = 0; q < n; q++) dot(L + 182 + q * 58, yy, q < filled);
-      t(left > 0 ? `${left}자리 남음` : '마감', R - 50, yy, 32, left > 0 ? C.gold : C.sub, 'J', 'right');
+  if (kind === 'review') {
+    const rv = d.review; rr(L, y, R - L, 200, 28, C.card, C.line);
+    t('평균 만족도', L + 50, y + 60, 30, C.gold, 'J'); t(`${rv.avg ? rv.avg.toFixed(1) : '-'}`, L + 50, y + 130, 70, C.green, 'B'); t('/ 5', L + 170, y + 140, 32, C.sub, 'D');
+    t('다시 참여하고 싶어요', R - 50, y + 60, 30, C.gold, 'J', 'right'); t(`${rv.again}%`, R - 50, y + 130, 70, C.green, 'B', 'right');
+    y += 230;
+    rv.quotes.forEach(q => { rr(L, y, R - L, 170, 28, C.card, C.line); t('“', L + 40, y + 50, 70, C.gold, 'B'); ctx.font = F(32, 'D');
+      wrapText(ctx, q.text, R - L - 160, 2).forEach((ln, i) => t(ln, L + 100, y + 56 + i * 44, 32, C.green, 'D')); t(`— ${q.label}`, R - 50, y + 140, 24, C.sub, 'D', 'right'); y += 190; });
+  } else {
+    d.rows.forEach((r, i) => {
+      const ch = 300; rr(L, y, R - L, ch, 28, C.card, C.line);
+      t(`${i + 1}타임`, L + 50, y + 70, 30, C.gold, 'J'); t(r.hour, L + 142, y + 66, 50, C.green, 'B'); if (r.age) t(r.age, R - 50, y + 70, 26, C.sub, 'D', 'right');
+      ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L + 50, y + 122); ctx.lineTo(R - 50, y + 122); ctx.stroke();
+      [['남성', r.capM, r.leftM], ['여성', r.capF, r.leftF]].forEach(([lab, cap, left], k) => {
+        const yy = y + 172 + k * 76; t(lab, L + 50, yy, 32, C.green, 'J');
+        const filled = kind === 'open' ? 0 : kind === 'full' || kind === 'wait' ? cap : cap - left; const n = Math.min(cap, 8);
+        for (let q = 0; q < n; q++) dot(L + 182 + q * 58, yy, q < filled);
+        const right = kind === 'open' ? `${cap}명 모집` : kind === 'full' ? '마감' : kind === 'wait' ? '대기 접수' : left > 0 ? `${left}자리 남음` : '마감';
+        t(right, R - 50, yy, 32, (kind === 'status' && left <= 0) || kind === 'full' ? C.sub : C.gold, 'J', 'right');
+      });
+      y += ch + 26;
     });
-    y += ch + 26;
-  });
-  y += 10; ctx.beginPath(); ctx.arc(L + 12, y, 12, 0, Math.PI * 2); ctx.fillStyle = C.green; ctx.fill();
-  t('신청 완료', L + 44, y, 26, C.green, 'D');
-  ctx.beginPath(); ctx.arc(L + 190, y, 12, 0, Math.PI * 2); ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.stroke(); t('남은 자리', L + 212, y, 26, C.green, 'D');
-  const caps = [...new Set(d.rows.map(r => r.capM === r.capF ? r.capM : null))]; if (caps.length === 1 && caps[0]) t(`타임별 남녀 각 ${caps[0]}명`, R, y, 26, C.sub, 'D', 'right');
-  const fy = H - Math.max(84, (H - 1350) / 2 + 84);
+    y += 10; ctx.beginPath(); ctx.arc(L + 12, y, 12, 0, Math.PI * 2); ctx.fillStyle = C.green; ctx.fill(); t('신청 완료', L + 44, y, 26, C.green, 'D');
+    ctx.beginPath(); ctx.arc(L + 190, y, 12, 0, Math.PI * 2); ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.stroke(); t('남은 자리', L + 212, y, 26, C.green, 'D');
+    const caps = [...new Set(d.rows.map(r => r.capM === r.capF ? r.capM : null))]; if (caps.length === 1 && caps[0]) t(`타임별 남녀 각 ${caps[0]}명`, R, y, 26, C.sub, 'D', 'right');
+  }
+  const fy = H - Math.max(84, (H - (560 + bodyH + 160)) / 2 + 84);
   ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L, fy - 42); ctx.lineTo(R, fy - 42); ctx.stroke();
   t(PROMO.note, L, fy, 26, C.sub, 'D');
+  if (sc.k < 1) ctx.restore();
 }
 
-/* ---- 템플릿: 신청 현황 (파스텔) — 예전 인스타 '이온크리스천 소개팅 신청현황' 스타일 ---- */
-function drawSoft(ctx, W, H0in, d) { let H = H0in;
+/* ---- 스타일: 파스텔 — 예전 인스타 '이온크리스천 소개팅 신청현황' 디자인 ---- */
+function drawSoft(ctx, W, H, d, kind) {
   const C = { bg1: '#FBF7F4', bg2: '#F1E9E6', ink: '#2E3140', pink: '#C2687F', pinkL: '#E9C9D2', blue: '#6F8AB5', blueL: '#DCE4F1', card: 'rgba(255,255,255,.72)', sub: '#5D5F6B', brown: '#9C6A4E' };
   const F = (sz, f) => `${sz}px ${f === 'J' ? 'Jua, sans-serif' : '"Gowun Dodum", sans-serif'}`;
   const t = (s, x, y, sz, col, f = 'J', al = 'center') => { ctx.font = F(sz, f); ctx.fillStyle = col; ctx.textAlign = al; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); return ctx.measureText(s).width; };
   const rr = (x, y, w, h, r, fill) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); };
   const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, C.bg1); g.addColorStop(1, C.bg2); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const need = 1340; const k = Math.min(1, H / need); const H0 = H; if (k < 1) { ctx.save(); ctx.translate((W - W * k) / 2, 0); ctx.scale(k, k); H = need; }
-  // 잎사귀 장식 (오른쪽 위)
+  const bodyH = kind === 'review' ? 200 + Math.min(3, d.review.quotes.length) * 190 : d.rows.length * 202;
+  const sc = fitScale(ctx, W, H, 560 + bodyH + 340); H = sc.H;
   ctx.save(); ctx.translate(W - 120, 150); ctx.fillStyle = 'rgba(122,146,104,.55)';
   for (let i = 0; i < 6; i++) { ctx.save(); ctx.rotate(-0.9 + i * 0.32); ctx.translate(0, -40 - i * 18); ctx.beginPath(); ctx.ellipse(0, 0, 16, 40, 0.5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } ctx.restore();
-  const cx = W / 2; let y = Math.max(70, (H - 1170) / 2 + 70);
-  // 십자가 + 선
+  const cx = W / 2; let y = Math.max(70, (H - (560 + bodyH + 340)) / 2 + 70); const y0 = y;
   ctx.strokeStyle = C.brown; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 130, y + 2); ctx.lineTo(cx - 40, y + 2); ctx.moveTo(cx + 40, y + 2); ctx.lineTo(cx + 130, y + 2); ctx.stroke();
   ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx, y - 26); ctx.lineTo(cx, y + 34); ctx.moveTo(cx - 18, y - 6); ctx.lineTo(cx + 18, y - 6); ctx.stroke();
   y += 120; t('이온크리스천', cx, y, 118, C.ink); y += 130; t('소개팅', cx, y, 118, C.pink);
-  // 하트 곡선
   ctx.strokeStyle = C.pink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx + 190, y + 20); ctx.bezierCurveTo(cx + 260, y + 50, cx + 300, y + 10, cx + 330, y - 10); ctx.stroke();
   y += 110; ctx.font = F(48, 'J'); const pw = ctx.measureText(PROMO.title).width + 110; rr(cx - pw / 2, y - 40, pw, 80, 40, C.pink); t(PROMO.title, cx, y + 2, 48, '#FFFFFF');
-  ctx.strokeStyle = C.pink; ctx.lineWidth = 3; [[-1], [1]].forEach(([sgn]) => { const bx = cx + sgn * (pw / 2 + 30); ctx.beginPath(); ctx.moveTo(bx, y - 18); ctx.lineTo(bx + sgn * 26, y - 28); ctx.moveTo(bx, y); ctx.lineTo(bx + sgn * 32, y); ctx.moveTo(bx, y + 18); ctx.lineTo(bx + sgn * 26, y + 28); ctx.stroke(); });
-  y += 80;
-  const person = (px, py, col, girl) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py - 22, 22, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(px - 40, py + 40); ctx.quadraticCurveTo(px - 38, py + 2, px, py + 2); ctx.quadraticCurveTo(px + 38, py + 2, px + 40, py + 40); ctx.closePath(); ctx.fill(); if (girl) { ctx.beginPath(); ctx.ellipse(px, py - 20, 28, 30, 0, Math.PI, Math.PI * 2); ctx.fill(); } };
-  const L = 100, R = W - 100;
-  d.rows.forEach((r, i) => {
-    const h = 180; const blue = i % 2 === 0; rr(L, y, R - L, h, 40, C.card);
-    rr(L + 22, y + 22, 300, h - 44, (h - 44) / 2, blue ? C.blue : C.pink);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(L + 82, y + 72, 20, 0, Math.PI * 2); ctx.moveTo(L + 82, y + 60); ctx.lineTo(L + 82, y + 72); ctx.lineTo(L + 92, y + 78); ctx.stroke();
-    t(r.hour, L + 200, y + 72, 46, '#fff'); rr(L + 112, y + 104, 170, 44, 22, blue ? C.blueL : C.pinkL); t(`${i + 1}타임`, L + 197, y + 127, 28, C.ink, 'D');
-    const col = (bx, lab, n, c, girl, under) => { person(bx - 80, y + 92, c, girl); t(lab, bx + 10, y + 52, 32, C.ink, 'D'); t(`${n}`, bx - 6, y + 112, 76, C.ink); t('명', bx + 50, y + 118, 44, C.ink);
-      ctx.strokeStyle = under; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(bx - 50, y + 160); ctx.quadraticCurveTo(bx + 20, y + 150, bx + 90, y + 156); ctx.stroke(); };
-    ctx.strokeStyle = '#E2DCDC'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L + 355, y + 40); ctx.lineTo(L + 355, y + h - 40); ctx.moveTo(L + 625, y + 40); ctx.lineTo(L + 625, y + h - 40); ctx.stroke();
-    col(L + 510, '형제', r.capM - r.leftM, C.blue, false, '#B9C7E2'); col(L + 780, '자매', r.capF - r.leftF, C.pink, true, '#E7B6C3');
-    y += h + 22;
-  });
-  // 하단 정보 카드
+  ctx.strokeStyle = C.pink; ctx.lineWidth = 3; [-1, 1].forEach(sgn => { const bx = cx + sgn * (pw / 2 + 30); ctx.beginPath(); ctx.moveTo(bx, y - 18); ctx.lineTo(bx + sgn * 26, y - 28); ctx.moveTo(bx, y); ctx.lineTo(bx + sgn * 32, y); ctx.moveTo(bx, y + 18); ctx.lineTo(bx + sgn * 26, y + 28); ctx.stroke(); });
+  y += 80; const L = 100, R = W - 100;
+  if (kind === 'review') {
+    const rv = d.review; rr(L, y, R - L, 170, 40, C.card);
+    t('평균 만족도', L + (R - L) / 4, y + 52, 30, C.sub, 'D'); t(`★ ${rv.avg ? rv.avg.toFixed(1) : '-'}`, L + (R - L) / 4, y + 112, 64, C.pink);
+    t('다시 참여할래요', L + (R - L) * 3 / 4, y + 52, 30, C.sub, 'D'); t(`${rv.again}%`, L + (R - L) * 3 / 4, y + 112, 64, C.blue);
+    y += 192;
+    rv.quotes.forEach((q, i) => { rr(L, y, R - L, 170, 40, C.card); ctx.font = F(32, 'D');
+      wrapText(ctx, `“${q.text}”`, R - L - 100, 2).forEach((ln, j) => t(ln, cx, y + 56 + j * 44, 32, C.ink, 'D')); t(`— ${q.label}`, cx, y + 140, 24, i % 2 ? C.blue : C.pink, 'D'); y += 190; });
+  } else {
+    const person = (px, py, col, girl) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py - 22, 22, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(px - 40, py + 40); ctx.quadraticCurveTo(px - 38, py + 2, px, py + 2); ctx.quadraticCurveTo(px + 38, py + 2, px + 40, py + 40); ctx.closePath(); ctx.fill(); if (girl) { ctx.beginPath(); ctx.ellipse(px, py - 20, 28, 30, 0, Math.PI, Math.PI * 2); ctx.fill(); } };
+    d.rows.forEach((r, i) => {
+      const h = 180; const blue = i % 2 === 0; rr(L, y, R - L, h, 40, C.card);
+      rr(L + 22, y + 22, 300, h - 44, (h - 44) / 2, blue ? C.blue : C.pink);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(L + 82, y + 72, 20, 0, Math.PI * 2); ctx.moveTo(L + 82, y + 60); ctx.lineTo(L + 82, y + 72); ctx.lineTo(L + 92, y + 78); ctx.stroke();
+      t(r.hour, L + 200, y + 72, 46, '#fff'); rr(L + 112, y + 104, 170, 44, 22, blue ? C.blueL : C.pinkL); t(`${i + 1}타임`, L + 197, y + 127, 28, C.ink, 'D');
+      const col = (bx, lab, n, c, girl, under) => { person(bx - 80, y + 92, c, girl); t(lab, bx + 10, y + 52, 32, C.ink, 'D');
+        if (typeof n === 'number') { t(`${n}`, bx - 6, y + 112, 76, C.ink); t('명', bx + 50, y + 118, 44, C.ink); } else t(n, bx + 20, y + 112, 46, C.ink);
+        ctx.strokeStyle = under; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(bx - 50, y + 160); ctx.quadraticCurveTo(bx + 20, y + 150, bx + 90, y + 156); ctx.stroke(); };
+      ctx.strokeStyle = '#E2DCDC'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L + 355, y + 40); ctx.lineTo(L + 355, y + h - 40); ctx.moveTo(L + 625, y + 40); ctx.lineTo(L + 625, y + h - 40); ctx.stroke();
+      const val = (cap, left) => kind === 'open' ? cap : kind === 'full' ? '마감' : kind === 'wait' ? '대기' : cap - left;
+      col(L + 510, kind === 'open' ? '형제 모집' : '형제', val(r.capM, r.leftM), C.blue, false, '#B9C7E2'); col(L + 780, kind === 'open' ? '자매 모집' : '자매', val(r.capF, r.leftF), C.pink, true, '#E7B6C3');
+      y += h + 22;
+    });
+  }
   const ih = 200; rr(L - 20, y + 4, R - L + 40, ih, 34, C.card); const cw = (R - L + 40) / 4;
   [['일정', d.date], ['장소', d.place], ['대상', '대전·청주·세종\n충청권 크리스천 청년'], ['신청방법', '인스타DM /\n카카오오픈채팅']].forEach(([k, v], i) => {
     const bx = L - 20 + cw * i + cw / 2; t(k, bx, y + 54, 30, C.ink, 'D');
@@ -979,9 +1022,8 @@ function drawSoft(ctx, W, H0in, d) { let H = H0in;
   });
   y += ih + 60; t('♥', cx, y, 26, C.pink, 'D'); ctx.strokeStyle = '#D9CBC5'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - 140, y); ctx.lineTo(cx - 24, y); ctx.moveTo(cx + 24, y); ctx.lineTo(cx + 140, y); ctx.stroke();
   t(PROMO.note, cx, y + 50, 30, C.sub, 'D');
-  // 손글씨 메모 (왼쪽 위)
-  ctx.save(); ctx.translate(96, Math.max(70, (H - 1170) / 2 + 70) - 10); ctx.rotate(-0.16); String(PROMO.sub).split(/,\s*|\s(?=하나님)/).slice(0, 3).forEach((ln, j) => t(ln, 0, j * 34, 24, C.sub, 'D', 'left')); ctx.restore();
-  if (k < 1) ctx.restore();
+  ctx.save(); ctx.translate(96, y0 - 10); ctx.rotate(-0.16); String(PROMO.sub).split(/,\s*|\s(?=하나님)/).slice(0, 3).forEach((ln, j) => t(ln, 0, j * 34, 24, C.sub, 'D', 'left')); ctx.restore();
+  if (sc.k < 1) ctx.restore();
 }
 
 async function promoBlob() { const cv = document.getElementById('promo-cv'); await drawPromo(); return new Promise(res => cv.toBlob(res, 'image/png')); }
@@ -993,7 +1035,7 @@ async function addPromoBg() {
   URL.revokeObjectURL(url);
   const id = IonStore.newId('apply/promoBg');
   try { await IonStore.set(`apply/promoBg/${id}`, { name: (document.getElementById('pb-name').value || '내 디자인').trim().slice(0, 16), color: document.getElementById('pb-color').value, pos: document.getElementById('pb-pos').value, data, at: Date.now() });
-    PROMO.tpl = 'bg:' + id; PROMO.title = ''; toast('배경을 등록했어요'); render(); setTimeout(drawPromo, 30); } catch (e) { toast('등록하지 못했어요: ' + e.message); }
+    PROMO.style = 'bg:' + id; toast('배경을 등록했어요'); render(); } catch (e) { toast('등록하지 못했어요: ' + e.message); }
 }
 
 /* ---------- 전체 백업 ---------- */
@@ -1073,7 +1115,7 @@ function card(r, showCohort) {
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
-    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${r.discount > 0 ? (repeatRecord(r) ? `<span class="chip ok" title="${esc(repeatRecord(r))}">할인 ${won(r.discount)} ✓</span>` : `<span class="chip warn" title="참여 기록을 찾지 못했어요">할인 ${won(r.discount)} · 기록 확인</span>`) : (repeatRecord(r) && ACTIVE.includes(r.status) && discOf() > 0 ? `<span class="chip warn" title="이전 참여: ${esc(repeatRecord(r))}">재참여인데 할인 없음</span>` : '')}${(() => { const a = attendIndex()[digits(r.phone)]; return a && a.no.length ? `<span class="chip bad" title="불참: ${esc(a.no.join(', '))}">지난 불참 ${a.no.length}회</span>` : ''; })()}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
+    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${r.discount > 0 ? (repeatRecord(r) ? `<span class="chip ok" title="${esc(repeatRecord(r))}">할인 ${won(r.discount)} ✓</span>` : `<span class="chip warn" title="참여 기록을 찾지 못했어요">할인 ${won(r.discount)} · 기록 확인</span>`) : (repeatRecord(r) && ACTIVE.includes(r.status) && discOf() > 0 ? `<button class="chip warn" style="border:0;cursor:pointer;font:inherit" data-act="disc-on" data-v="${r.id}" title="이전 참여: ${esc(repeatRecord(r))} · 누르면 할인 적용">재참여인데 할인 없음 · 적용하기</button>` : '')}${(() => { const a = attendIndex()[digits(r.phone)]; return a && a.no.length ? `<span class="chip bad" title="불참: ${esc(a.no.join(', '))}">지난 불참 ${a.no.length}회</span>` : ''; })()}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
     ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
@@ -1092,7 +1134,7 @@ function detail(r) {
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
   if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
-  if (['pending', 'waiting'].includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
+  if (['pending', 'waiting', 'confirmed'].includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
   if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
@@ -1706,9 +1748,14 @@ document.addEventListener('click', async e => {
   else if (act === 'toggle') { A.open[v] = !A.open[v]; render(); }
   else if (act === 'msg') { A._moveFrom = ''; openMsg(v); }
   else if (act === 'move') openMove(v);
-  else if (act === 'disc-on' || act === 'disc-off') { const r = row(v); const base = +conf().fee || 0; const on = act === 'disc-on'; const disc = on ? discOf() : 0;
-    try { await IonStore.update('apply', { [`apps/${v}/fee`]: Math.max(0, base - disc), [`apps/${v}/discount`]: disc, [`apps/${v}/repeatClaim`]: on, [`apps/${v}/log`]: addLog(r, on ? '재참여 할인 적용' : '재참여 할인 해제') });
-      toast(`${r.name}님 참가비를 ${won(Math.max(0, base - disc))}원으로 바꿨어요${r.status === 'pending' ? ' · 입금 안내를 다시 보내주세요' : ''}`); if (r.status === 'pending') setTimeout(() => openMsg(v, 'pay'), 300); } catch (e) { toast('바꾸지 못했어요: ' + e.message); } }
+  else if (act === 'disc-on' || act === 'disc-off') { const r = row(v); const base = +conf().fee || 0; const on = act === 'disc-on'; const disc = on ? discOf() : 0; const paidAlready = r.status === 'confirmed';
+    if (paidAlready && on && !confirm(`${r.name}님은 이미 입금 확정이에요.\n${won(disc)}원을 돌려드리는 것으로 정산에 기록할까요?`)) return;
+    const up = { [`apps/${v}/fee`]: Math.max(0, base - disc), [`apps/${v}/discount`]: disc, [`apps/${v}/repeatClaim`]: on };
+    if (paidAlready) { up[`apps/${v}/paidAmt`] = +r.paidAmt || feeOf(r); up[`apps/${v}/partialRefund`] = on ? disc : null; }
+    up[`apps/${v}/log`] = addLog(r, on ? (paidAlready ? `재참여 할인 적용 · ${won(disc)}원 돌려드림` : '재참여 할인 적용') : '재참여 할인 해제');
+    try { await IonStore.update('apply', up);
+      toast(paidAlready ? (on ? `${r.name}님께 ${won(disc)}원 돌려드려야 해요 · 정산에 기록했어요` : '할인을 해제했어요') : `${r.name}님 참가비를 ${won(Math.max(0, base - disc))}원으로 바꿨어요${r.status === 'pending' ? ' · 입금 안내를 다시 보내주세요' : ''}`);
+      if (r.status === 'pending') setTimeout(() => openMsg(v, 'pay'), 300); } catch (e) { toast('바꾸지 못했어요: ' + e.message); } }
   else if (act === 'bulk') openBulk(A.curList || []);
   else if (act === 'dash') { A.view = 'dash'; render(); window.scrollTo(0, 0); }
   else if (act === 'dash-back' || act === 'promo-back') { A.view = 'list'; render(); window.scrollTo(0, 0); }
@@ -1719,12 +1766,13 @@ document.addEventListener('click', async e => {
     try { await IonStore.set(`apply/ledger/${ckey(A.cohort)}/${IonStore.newId('apply/ledger')}`, { label: l.slice(0, 40), amount: Math.round(n), kind: v, at: Date.now() }); toast('기록했어요'); } catch (e) { toast('저장하지 못했어요: ' + e.message); } }
   else if (act === 'led-del') { if (await confirmBox('이 기록을 지울까요?', '', '삭제', true)) { try { await IonStore.update('apply', { [`ledger/${ckey(A.cohort)}/${v}`]: null }); } catch (e) { toast('삭제하지 못했어요'); } } }
   else if (act === 'led-csv') ledgerCSV();
-  else if (act === 'ptpl') { PROMO.tpl = v; PROMO.title = ''; render(); setTimeout(drawPromo, 30); }
-  else if (act === 'psize') { PROMO.size = v; render(); setTimeout(drawPromo, 30); }
-  else if (act === 'psave') { const b0 = await promoBlob(); const a = document.createElement('a'); a.href = URL.createObjectURL(b0); a.download = `ion_${PROMO.tpl.replace(/\W/g, '')}_${TODAY()}.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+  else if (act === 'pkind') { PROMO.kind = v; render(); }
+  else if (act === 'pstyle') { PROMO.style = v; render(); }
+  else if (act === 'psize') { PROMO.size = v; render(); }
+  else if (act === 'psave') { const b0 = await promoBlob(); const a = document.createElement('a'); a.href = URL.createObjectURL(b0); a.download = `ion_${PROMO.kind}_${PROMO.style.replace(/\W/g, '')}_${TODAY()}.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
   else if (act === 'pshare') { const b0 = await promoBlob(); const file = new File([b0], `ion_${TODAY()}.png`, { type: 'image/png' }); try { await navigator.share({ files: [file] }); } catch (e) { if (e.name !== 'AbortError') toast('공유하지 못했어요 · 이미지 저장을 이용해 주세요'); } }
   else if (act === 'pbg-add') addPromoBg();
-  else if (act === 'pbg-del') { if (await confirmBox('이 배경을 삭제할까요?', '', '삭제', true)) { await IonStore.update('apply', { [`promoBg/${v}`]: null }); PROMO.tpl = 'status'; PROMO.title = ''; render(); setTimeout(drawPromo, 30); } }
+  else if (act === 'pbg-del') { if (await confirmBox('이 배경을 삭제할까요?', '', '삭제', true)) { await IonStore.update('apply', { [`promoBg/${v}`]: null }); PROMO.style = 'sig'; render(); } }
   else if (act === 'table') openTable();
   else if (act === 'confirm') {
     const r = row(v);
