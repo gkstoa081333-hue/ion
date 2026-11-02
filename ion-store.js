@@ -17,6 +17,7 @@ const ION_DEFAULTS = {
   config: {
     open: true,
     fee: 40000,
+    repeatDiscount: 5000,   // 재참여 할인(원)
     account: '카카오뱅크 3333309382128 (예금주: 김한샘)',
     payHours: 24,
     promoteHours: 12,
