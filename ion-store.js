@@ -62,6 +62,11 @@ function ionReviewForm(saved) {
   return { q: list };
 }
 
+// 새 신청 알림 (ntfy.sh 무료 푸시) — 실패해도 신청에는 영향 없음
+async function ionNotify(topic, title, message, click) {
+  if (!topic) return false;
+  try { const r = await fetch('https://ntfy.sh/', { method: 'POST', body: JSON.stringify({ topic, title, message, tags: ['bell'], ...(click ? { click } : {}) }) }); return r.ok; } catch (e) { return false; }
+}
 async function ionSha(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');

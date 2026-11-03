@@ -161,7 +161,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261103a"></script>
+<script src="ion-store.js?v=20261103b"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -466,6 +466,22 @@ async function changeStatus(id, to, memo) {
 }
 
 /* ---------- 타임 변경 ---------- */
+/* ---------- 새 신청 알림 (ntfy 무료 푸시: 신청 페이지가 신청 완료 시 알림 주소로 한 줄 보냄 · 이름·연락처는 안 보냄) ---------- */
+function notifyCard() {
+  const t = conf().notify;
+  if (!t) return `<div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">🔔 새 신청 알림</span>
+    <span class="small">신청이 들어오면 휴대폰에 바로 알림이 와요. 무료 앱 <b>ntfy</b>를 쓰고, 알림에는 기수·타임·성별만 들어가요 (이름·연락처 X).</span>
+    <button class="btn soft" data-act="ntfy-on">알림 켜기</button></div>`;
+  return `<div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">🔔 새 신청 알림 · 켜짐</span>
+    <div class="between"><span class="small">알림 주소</span><button class="mini" data-act="ntfy-copy">${ICON.copy}${esc(t)}</button></div>
+    <ol class="small" style="margin:0;padding-left:18px;line-height:1.8">
+      <li>앱스토어·플레이스토어에서 <b>ntfy</b> 설치 (무료)</li>
+      <li>앱에서 <b>＋</b> → 주소칸에 위 알림 주소 붙여넣기 → 구독</li>
+      <li>아래 <b>테스트 알림</b>으로 확인</li></ol>
+    <span class="small">운영진 여러 명이 같은 주소를 구독하면 모두 받아요. 주소를 아는 사람만 받을 수 있으니 밖에 공유하지 마세요.</span>
+    <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" data-act="ntfy-test">테스트 알림</button><button class="btn line" style="flex:1;min-height:48px" data-act="ntfy-off">끄기</button></div></div>`;
+}
+
 /* ---------- 지난 기수 명단 넣기: 매칭 기록(sessions)으로 저장 → 재참여·만난 사람 확인에 사용 ---------- */
 function parsePast(txt) {
   const out = [], bad = [];
@@ -1606,6 +1622,7 @@ function viewSettings() {
       <div class="card stack" style="gap:8px;margin-top:6px"><span class="round" style="font-size:16px">데이터 백업</span>
         <span class="small">신청·매칭·후기·설정 전체를 파일 하나로 내려받아요. 기수가 끝날 때마다 받아두면 실수로 지워도 복구할 수 있어요.${conf().lastBackup ? ` · 마지막 백업 ${esc(dt(conf().lastBackup, true))}` : ''}</span>
         <button class="btn soft" data-act="backup">${ICON.down}전체 백업 받기</button></div>
+      ${notifyCard()}
       <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">지난 기수 명단 넣기</span>
         <span class="small">신청 페이지 없이 진행했던 기수(예: 1기) 참가자를 붙여넣어요. 넣어두면 재참여 할인 칩과 '이전 기수에서 만난 사람' 겹침 경고가 이 명단까지 확인해요.</span>
         <button class="btn soft" data-act="import-past">명단 붙여넣기</button></div>
@@ -1631,7 +1648,7 @@ async function saveSettings() {
   for (const s of d.slots) for (const k of ['ageFrom', 'ageTo']) { const y = Number(s[k]); if (s[k] !== '' && s[k] != null && !(y >= 1950 && y <= new Date().getFullYear())) return toast(`${s.cohort} ${s.time}: 대상 연령은 1990처럼 4자리 출생연도로 적어주세요`); }
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}) } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   // 타임의 날짜·시간·장소를 바꾸면 이미 들어온 신청서에도 함께 반영 (문자·명단·CSV가 최신 정보로)
   apps().forEach(r => { const ns = outSlots[r.slotId]; if (!ns) return; ['date', 'time', 'place'].forEach(k => { if ((r[k] || '') !== (ns[k] || '')) up[`apps/${r.id}/${k}`] = ns[k] || ''; }); });
@@ -1912,6 +1929,11 @@ document.addEventListener('click', async e => {
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'backup') downloadBackup();
   else if (act === 'import-past') openImport();
+  else if (act === 'ntfy-on') { const t = 'ion-' + Array.from(crypto.getRandomValues(new Uint8Array(8)), x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('');
+    try { await IonStore.update('apply', { 'config/notify': t }); toast('알림 주소를 만들었어요 · 아래 순서대로 구독해 주세요'); } catch (e) { toast('저장하지 못했어요: ' + e.message); } }
+  else if (act === 'ntfy-off') { if (!(await confirmBox('새 신청 알림을 끌까요?', '휴대폰 ntfy 앱의 구독도 지워주세요.', '끄기', true))) return; try { await IonStore.update('apply', { 'config/notify': null }); toast('알림을 껐어요'); } catch (e) { toast('실패: ' + e.message); } }
+  else if (act === 'ntfy-test') { const ok = await ionNotify(conf().notify, '이온 알림 테스트', '알림이 잘 오면 설정 끝이에요 🙌'); toast(ok ? '테스트 알림을 보냈어요 · 휴대폰을 확인해 주세요' : '보내지 못했어요 · 인터넷 연결을 확인해 주세요'); }
+  else if (act === 'ntfy-copy') copyText(conf().notify, '알림 주소를 복사했어요');
   else if (act === 'copyapply') copyText(location.href.replace(/admin\.html.*$/, 'apply.html'), '신청 페이지 링크를 복사했어요');
   else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
   else if (act === 'addslot') {

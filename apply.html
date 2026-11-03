@@ -139,7 +139,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261103a"></script>
+<script src="ion-store.js?v=20261103b"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -572,6 +572,7 @@ async function submit() {
   try {
     if (data.website) throw new Error('신청을 처리할 수 없어요.');
     const r = await createApplication(data);
+    if (!IonStore.demo) ionNotify(S.cfg.notify, `새 신청 · ${r.cohort}`, `${r.time} · ${data.gender === 'M' ? '형제' : '자매'} · ${r.status === 'waiting' ? '대기' : '입금대기'} (${r.id})`, location.href.replace(/apply\.html.*$/, 'admin.html'));
     S.result = r; S.phase = 'done';
     try { localStorage.setItem('ion_last_apply', JSON.stringify({ ...r, savedAt: Date.now() })); } catch (e) {}
     window.scrollTo(0, 0);
