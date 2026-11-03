@@ -250,7 +250,15 @@ async function createApplication(d) {
   try { got = (await IonStore.txn(`apply/counts/${slot.id}/${d.gender}`, cur => ((cur || 0) >= cap ? undefined : (cur || 0) + 1))).committed; }
   catch (e) { got = false; }
   const status = got ? 'pending' : 'waiting';
-  const payName = got ? d.name.replace(/\s/g, '').slice(0, 4) + String(seq % 1000).padStart(3, '0') : '';
+  // 입금자명: 이름 그대로. 입금 대기 중인 같은 이름이 있으면 연락처 뒤 4자리를 붙임 (apply/phones/_pay 에 먼저 자리 잡기)
+  let payName = '';
+  if (got) {
+    const base = d.name.replace(/[.$#\[\]\/\s]/g, '').slice(0, 6);
+    for (const n of [base, base + String(d.phone).replace(/\D/g, '').slice(-4)]) {
+      try { await IonStore.set(`apply/phones/_pay/${n}`, id); payName = n; break; } catch (e) {}
+    }
+    if (!payName) payName = base + String(seq % 1000).padStart(3, '0');
+  }
   const deadline = got ? Date.now() + (Number(cfg.payHours) || 24) * 3600e3 : 0;
   // 4) 신청서 저장
   await IonStore.set('apply/apps/' + id, {

@@ -275,7 +275,12 @@ function confirmBox(title, body, okText = '확인', danger = false) {
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { m.innerHTML = ''; resolve(b.dataset.c === '1'); });
   });
 }
-const payNameOf = r => String(r.name).replace(/\s/g, '').slice(0, 4) + String(Number(digits(r.id)) % 1000).padStart(3, '0');
+// 입금자명: 기본은 이름 그대로, 입금 대기 중인 같은 이름이 있을 때만 연락처 뒤 4자리를 붙임
+const payKey = s => String(s || '').replace(/[.$#\[\]\/\s]/g, '');
+function payNameOf(r, list = apps()) {
+  const base = payKey(r.name).slice(0, 6); const taken = n => list.some(x => x.id !== r.id && x.status === 'pending' && x.payName === n);
+  if (!taken(base)) return base; const b2 = base + digits(r.phone).slice(-4); return taken(b2) ? base + String(Number(digits(r.id)) % 1000).padStart(3, '0') : b2;
+}
 const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' + what;
 
 /* ---------- 상태 ---------- */
@@ -400,7 +405,7 @@ function plan(list, extra = {}) {
     mine.filter(r => r.status === 'waiting').sort((a, b) => a.at - b.at).forEach(r => {
       if (held >= (s.cap?.[g] || 0)) return;
       r.status = 'pending'; r.deadline = now + (Number(conf().promoteHours) || 12) * 3600e3;
-      if (!r.payName) r.payName = payNameOf(r);
+      if (!r.payName) r.payName = payNameOf(r, list);
       r.log = addLog(r, '승격'); touched.add(r.id); promoted.push(r); held++;
     });
     const cur = ((A.data.counts || {})[s.id] || {})[g] || 0;
@@ -417,6 +422,10 @@ function plan(list, extra = {}) {
       if (!['cancelled', 'refunded'].includes(r.status) && !on) up[ph] = r.id;
     }
   });
+  // 입금자명 중복 확인용 기록(phones/_pay): 입금 대기 중인 이름만 남김 → 신청 페이지가 같은 이름이면 번호를 붙임
+  const reg = ((A.data.phones || {})._pay) || {};
+  Object.entries(reg).forEach(([k, id]) => { const r = byId[id]; if (!r || r.status !== 'pending' || payKey(r.payName) !== k) up[`phones/_pay/${k}`] = null; });
+  list.filter(r => r.status === 'pending' && r.payName).forEach(r => { const k = payKey(r.payName); if (k && reg[k] !== r.id) up[`phones/_pay/${k}`] = r.id; });
   return { up, promoted, expired };
 }
 async function maintain(force) {
@@ -442,7 +451,7 @@ async function changeStatus(id, to, memo) {
     if (to === 'confirmed' && !r.paidAmt) r.paidAmt = feeOf(r);
     if (to === 'pending') {
       r.deadline = Date.now() + (Number(conf().promoteHours) || 12) * 3600e3;
-      if (!r.payName) r.payName = payNameOf(r);
+      if (!r.payName) r.payName = payNameOf(r, list);
       if (from === 'waiting') r.log = addLog(r, '승격');
     }
   }
@@ -1801,7 +1810,7 @@ async function demoSeed() {
     seq++; const id = 'ION-' + String(seq).padStart(4, '0'); const s = ss[i % ss.length];
     up['apps/' + id] = { id, uid: 'demo', at: Date.now() - (10 - i) * 3600e3, status: st, cohort: s.cohort, slotId: s.id, date: s.date, time: s.time, place: s.place, gender: g, name, birthYear: y,
       phone: '010-1234-' + (1000 + seq), region: '대전 서구', job: '회사원', church: '예시교회', churchAddr: '', denom: '장로교', faithYears: '10년 이상', attend: '매주 출석', source: '인스타그램',
-      note: '', newsAgree: '동의합니다', payName: st === 'waiting' ? '' : name + String(seq % 1000).padStart(3, '0'), deadline: st === 'pending' ? Date.now() + (i + 2) * 3600e3 : 0,
+      note: '', newsAgree: '동의합니다', payName: st === 'waiting' ? '' : name, deadline: st === 'pending' ? Date.now() + (i + 2) * 3600e3 : 0,
       confirmedAt: st === 'confirmed' ? Date.now() : 0, phoneKey: 'demo' + seq, log: '', memo: '' };
   });
   up.seq = seq;
