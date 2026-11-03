@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Gowun+Batang:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700&display=swap" rel="stylesheet">
 <style>
 /* ===== 이온 디자인 토큰 (매칭앱 index.html 과 동일) ===== */
 :root{
@@ -836,9 +836,10 @@ function ledgerCSV() {
    홍보 이미지 만들기 — 종류(모집 시작·현황·마감·후기·대기 접수) × 스타일(시그니처·점·파스텔·내 디자인)
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
-const PROMO = { kind: 'status', style: 'dots', size: 'feed', title: '', sub: '', note: '' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수']];
-const PROMO_STYLES = [['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔']];
+const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 발표 표지'], ['result', '매칭 결과']];
+const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔']];
+const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
 function promoHour(t) { const m = String(t || '').match(/(\d{1,2})(?::(\d{2}))?/); if (!m) return t || ''; const h = +m[1]; const mm = m[2] && m[2] !== '00' ? ` ${+m[2]}분` : ''; return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시${mm}`; }
 function promoData() {
   const c = A.cohort; const ss = slots().filter(x => x.cohort === c);
@@ -851,7 +852,31 @@ function promoData() {
   const yes = ((RFORM().q.find(x => x.id === 'again') || {}).options || [])[0] || '';
   const review = { cohort: rc, n: rv.length, avg: rv.length ? (rv.reduce((t, r) => t + (+r.sat || 0), 0) / rv.length) : 0, again: rv.length ? Math.round(rv.filter(r => String(r.again).startsWith('다음') || r.again === yes).length / rv.length * 100) : 0,
     quotes: rv.filter(r => r.share && String(r.felt || '').trim().length > 4).sort((a, b) => b.sat - a.sat).slice(0, 3).map(r => ({ text: String(r.felt).trim(), label: r.label || '참가자', sat: r.sat })) };
-  return { cohort: c, date: (ss[0] || {}).date || '', place: (ss[0] || {}).place || '', rows, left, cap, filled: cap - left, review };
+  // 결과·현장용: 끝난 기수(지금 고른 기수가 끝났으면 그 기수, 아니면 가장 최근에 끝난 기수)
+  const idx = cohortIndex().all; const cur = idx.find(x => x.name === c);
+  const pc = cur && cur.ended ? c : ((idx.filter(x => x.ended).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] || {}).name || c);
+  const ms = Object.values(A.sessRaw || {}).filter(x => x && x.pub && x.pub.cohort === pc && !x.pub.imported).map(matchStats);
+  const result = { cohort: pc, date: cohortDate(pc), pairs: ms.reduce((t, x) => t + x.pairs, 0), people: ms.reduce((t, x) => t + x.people, 0) };
+  return { cohort: c, date: (ss[0] || {}).date || '', place: (ss[0] || {}).place || '', rows, left, cap, filled: cap - left, review, result, fee: +conf().fee || 40000 };
+}
+const WEEK_EN = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+function promoEnDate(txt) { const iso = slotIsoDate(txt); if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return `${d.getMonth() + 1}.${d.getDate()} ${WEEK_EN[d.getDay()]}`; }
+function nextTueAfter(iso) { const d = iso ? new Date(iso + 'T00:00:00') : new Date(); do d.setDate(d.getDate() + 1); while (d.getDay() !== 2); return `${d.getMonth() + 1}.${d.getDate()} TUE   8PM`; }
+function ionDefaults(kind, d) {   // [큰 제목, 작은 제목, 아래 문구, 안내 문구] — 큰 제목의 / 는 줄바꿈
+  const city = String(d.place || '').split(/\s+/)[0] || '대전'; const r = d.result; const maxCap = Math.max(0, ...d.rows.map(x => Math.max(x.capM, x.capF)));
+  const fee = `타임별 ${maxCap > 4 ? `4:4 ~ ${maxCap}:${maxCap}` : `${maxCap}:${maxCap}`} · 참가비 ${won(d.fee)}원`; const top = `${promoEnDate(d.date)}  ·  ${city}`;
+  const two = PROMO.photos.length >= 2;
+  return {
+    open: [`${d.cohort}에서 만나요`, top, fee, '아래 링크로 신청해 주세요'],
+    status: [`${d.cohort}에서 만나요`, top, `남은 자리 ${d.left}석 · 참가비 ${won(d.fee)}원`, '아래 링크로 신청해 주세요'],
+    full: [`${d.cohort} 모집 마감`, top, `${d.filled}분과 함께해요 · 감사합니다`, '다음 기수 소식도 기대해 주세요'],
+    wait: [`${d.cohort} 대기 접수 중`, top, '취소 자리가 나면 순서대로 연락드려요', '아래 링크로 대기 신청해 주세요'],
+    review: [`${d.review.cohort} 참여 후기`, `이온 크리스천 소개팅 · ${d.review.cohort}`, '다음 기수에서 만나요', ''],
+    teaser: ['좋은 소식은/화요일에 전할게요', `이온 크리스천 소개팅 ${r.cohort} 결과`, nextTueAfter(r.date), ''],
+    scene: two ? ['이런 자리였어요', `${r.cohort} 현장`, '커피 한 잔, 그리고 1:1로 나누는 대화', ''] : PROMO.layout === 'full' ? ['기도로 준비한 자리에/귀한 분들이 와주셨어요', `이온 크리스천 소개팅 · ${r.cohort}`, '', ''] : ['처음 만난 사이인데도/이야기가 참 따뜻했어요', '', '', ''],
+    cover: ['좋은 소식 전해요', '약속드린 화요일,', '넘겨서 확인해 주세요  →', ''],
+    result: ['귀한 인연이 이어졌어요', `이온 크리스천 소개팅 ${r.cohort}`, `함께해 주신 ${r.people}분 모두,/진심으로 감사했습니다`, '']
+  }[kind];
 }
 function promoDefaults(kind, style, d) {
   const dp = `${d.date} · ${d.place}`; const rv = d.review;
@@ -866,9 +891,11 @@ function promoDefaults(kind, style, d) {
   return (T[style] || T.sig)[kind];
 }
 function viewPromo() {
-  const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style;
-  const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}`;
-  if (PROMO._for !== key) { [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
+  if (PROMO_ION_ONLY.includes(PROMO.kind) && PROMO.style !== 'ion') { PROMO.style = 'ion'; PROMO.size = 'story'; }
+  const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style; const ion = st === 'ion';
+  const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}|${PROMO.photos.length >= 2 ? 2 : PROMO.layout}`;
+  if (PROMO._for !== key) { if (ion) [PROMO.title, PROMO.sub, PROMO.note, PROMO.cta] = ionDefaults(PROMO.kind, d); else [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
+  const only = PROMO_ION_ONLY.includes(PROMO.kind); const recruit = ['open', 'status', 'full', 'wait'].includes(PROMO.kind);
   const chip = (act, cur, id, name) => `<button class="chipbtn ${cur === id ? 'on' : ''}" data-act="${act}" data-v="${esc(id)}">${esc(name)}</button>`;
   return `<div class="wrap">
     ${appHead('apply')}
@@ -876,13 +903,19 @@ function viewPromo() {
     ${cohortPicker(A.cohort, 'cohort')}
     <div class="stack" style="gap:12px">
       <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${PROMO_KINDS.map(([k, n]) => chip('pkind', PROMO.kind, k, n)).join('')}</div></div>
-      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('')}${bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
+      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${only ? chip('pstyle', 'ion', 'ion', '이온 스토리') + '<span class="small" style="align-self:center">이 종류는 이온 스토리 전용이에요</span>' : PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
+      ${ion ? `<div class="card stack" style="gap:8px;padding:14px"><span class="round" style="font-size:15px">사진 ${PROMO.kind === 'scene' ? '(1~2장)' : PROMO.kind === 'teaser' ? '(1장)' : '(배경으로 흐리게 깔려요 · 선택)'}</span>
+        <span class="small">얼굴은 모자이크한 사진으로 올려주세요. 사진은 이 화면에서만 쓰고 어디에도 저장되지 않아요.</span>
+        <input type="file" accept="image/*" multiple class="input" style="padding:10px" onchange="promoPhotos(this)">
+        ${PROMO.photos.length ? `<div class="row"><span class="small">${PROMO.photos.length}장 올림</span><button class="mini" data-act="pphoto-clear">사진 지우기</button></div>` : ''}
+        ${PROMO.kind === 'scene' && PROMO.photos.length === 1 ? `<div class="chips">${chip('playout', PROMO.layout, 'frame', '액자형')}${chip('playout', PROMO.layout, 'full', '꽉 차게')}</div>` : ''}</div>` : ''}
       <div class="chips">${[['feed', '피드 4:5'], ['story', '스토리 9:16'], ['square', '정사각 1:1']].map(([k, l]) => chip('psize', PROMO.size, k, l)).join('')}</div>
       <canvas id="promo-cv" style="width:100%;max-width:420px;align-self:center;border-radius:14px;box-shadow:0 8px 24px rgba(38,69,59,.15);background:#eee"></canvas>
       ${PROMO.kind === 'review' && !d.review.quotes.length ? '<div class="notice">홍보에 동의한 후기가 아직 없어요. 만족도·재참여 숫자만 들어가요.</div>' : ''}
-      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="24"></div>
+      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
       <div class="field"><label for="ps">작은 제목</label><input id="ps" class="input" data-pf="sub" value="${esc(PROMO.sub)}" maxlength="40"></div>
       <div class="field"><label for="pn">아래 문구</label><input id="pn" class="input" data-pf="note" value="${esc(PROMO.note)}" maxlength="44"></div>
+      ${ion && recruit ? `<div class="field"><label for="pc">안내 문구</label><input id="pc" class="input" data-pf="cta" value="${esc(PROMO.cta)}" maxlength="30"></div>` : ''}
       <span class="small">남은 자리·인원·후기 숫자는 지금 기록으로 자동으로 들어가요. 문구는 고쳐 쓸 수 있어요.</span>
       <div class="row" style="flex-wrap:nowrap"><button class="btn" style="flex:1" data-act="psave">${ICON.down}이미지 저장</button>${navigator.share ? '<button class="btn soft" style="flex:1" data-act="pshare">공유 (인스타)</button>' : ''}</div>
       <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">내 디자인 배경 추가</span>
@@ -915,11 +948,111 @@ function wrapText(ctx, text, maxW, maxLines) {   // 한글 글자 단위 줄바�
 function fitScale(ctx, W, H, need) { const k = Math.min(1, H / need); if (k < 1) { ctx.save(); ctx.translate((W - W * k) / 2, 0); ctx.scale(k, k); } return { k, H: k < 1 ? need : H }; }
 async function drawPromo() {
   const cv = document.getElementById('promo-cv'); if (!cv) return;
-  try { await Promise.all([document.fonts.load('80px Jua'), document.fonts.load('40px "Gowun Dodum"'), document.fonts.load('700 60px "Gowun Batang"')]); } catch (e) {}
+  try { await Promise.all([document.fonts.load('80px Jua'), document.fonts.load('40px "Gowun Dodum"'), document.fonts.load('700 60px "Gowun Batang"'), document.fonts.load('700 60px "Noto Serif KR"'), document.fonts.load('400 40px "Noto Sans KR"'), document.fonts.load('700 40px "Noto Sans KR"'), document.fonts.load('900 80px "Noto Sans KR"')]); } catch (e) {}
   const [W, H] = PZ[PROMO.size]; cv.width = W; cv.height = H; const ctx = cv.getContext('2d'); const d = promoData();
+  if (PROMO.style === 'ion') return drawIon(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'dots') return drawDots(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'soft') return drawSoft(ctx, W, H, d, PROMO.kind);
   return drawSig(ctx, W, H, d, PROMO.kind, PROMO.style.startsWith('bg:') ? ((A.data.promoBg || {})[PROMO.style.slice(3)]) : null);
+}
+
+/* ---- 스타일: 이온 스토리 — 인스타 스토리 고정 양식 (원형 ION 로고 · 명조 제목 · 초록/크림) ---- */
+let ION_BG = null;
+function promoPhotos(inp) {
+  const files = [...(inp.files || [])].slice(0, 2); if (!files.length) return;
+  Promise.all(files.map(f => new Promise(res => { const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = fr.result; }; fr.readAsDataURL(f); })))
+    .then(ims => { PROMO.photos = ims.filter(Boolean); render(); });
+}
+function ionBgImage() { if (ION_BG) return Promise.resolve(ION_BG); return new Promise(res => { const im = new Image(); im.onload = () => { ION_BG = im; res(im); }; im.onerror = () => res(null); im.src = 'assets/ion-story-bg.jpg'; }); }
+async function drawIon(ctx, W, H, d, kind) {
+  const SANS = '"Noto Sans KR", "Noto Sans CJK KR", sans-serif', SERIF = '"Noto Serif KR", "Noto Serif CJK KR", serif';
+  const C = { cream: '#F6F3EC', green: '#2C5A47', ink: '#2B2B2B', gold: '#C9A25A', goldT: '#B8913F', sub: '#5E6661' };
+  const ph = PROMO.photos; const lines = t => String(t || '').split('/').map(x => x.trim()).filter(Boolean);
+  const cover = (im, x, y, w, h) => { const sc = Math.max(w / im.width, h / im.height); const sw = w / sc, sh = h / sc; ctx.drawImage(im, (im.width - sw) / 2, (im.height - sh) / 2, sw, sh, x, y, w, h); };
+  const blurBg = async (im, tint) => {   // 작게 줄였다 키워서 흐리게 (아이폰 사파리도 되게)
+    const t = document.createElement('canvas'); t.width = 36; t.height = Math.round(36 * H / W); const tc = t.getContext('2d'); const sc = Math.max(t.width / im.width, t.height / im.height);
+    tc.drawImage(im, (t.width - im.width * sc) / 2, (t.height - im.height * sc) / 2, im.width * sc, im.height * sc);
+    const t2 = document.createElement('canvas'); t2.width = 144; t2.height = Math.round(144 * H / W); const c2 = t2.getContext('2d'); c2.imageSmoothingQuality = 'high'; c2.drawImage(t, 0, 0, t2.width, t2.height);
+    ctx.imageSmoothingQuality = 'high'; ctx.drawImage(t2, 0, 0, W, H); if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, W, H); }
+  };
+  const darkBg = async () => { if (ph[0]) return blurBg(ph[0], 'rgba(30,60,48,.62)'); const im = await ionBgImage(); if (im) { ctx.imageSmoothingQuality = 'high'; cover(im, 0, 0, W, H); } else { ctx.fillStyle = '#2F4F43'; ctx.fillRect(0, 0, W, H); } };
+  // 1080×1920 기준으로 그리고 크기에 맞춰 줄임
+  const k = H / 1920; const ox = (W - 1080 * k) / 2;
+  const T = (txt, x, y, size, color, o = {}) => { ctx.save(); ctx.font = `${o.w || 400} ${size}px ${o.f || SANS}`; ctx.fillStyle = color; ctx.textAlign = o.a || 'center'; ctx.textBaseline = 'middle'; if (o.shadow) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 18; }
+    if (o.sp) { const chars = [...txt]; const ws = chars.map(ch => ctx.measureText(ch).width); const tot = ws.reduce((a, b) => a + b, 0) + o.sp * (chars.length - 1); let cx = o.a === 'left' ? x : x - tot / 2; ctx.textAlign = 'left'; chars.forEach((ch, i) => { ctx.fillText(ch, cx, y); cx += ws[i] + o.sp; }); }
+    else { let s2 = size; while (o.max && ctx.measureText(txt).width > o.max && s2 > 20) { s2 -= 2; ctx.font = `${o.w || 400} ${s2}px ${o.f || SANS}`; } ctx.fillText(txt, x, y); } ctx.restore(); };
+  const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  const head = (y, fg, big) => { const r = big ? 56 : 40; ctx.strokeStyle = C.gold; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(540, y, r, 0, Math.PI * 2); ctx.stroke();
+    T('ION', 542, y + 1, big ? 34 : 23, fg, { w: 500, sp: big ? 6 : 4 }); T('ION CHRISTIAN DATE', 540, y + (big ? 108 : 81), big ? 30 : 24, fg, { w: 500, sp: big ? 9 : 7 }); };
+  const photoBox = (im, x, y, w, h, r = 28) => { ctx.save(); rr(x, y, w, h, r); ctx.clip(); if (im) cover(im, x, y, w, h); else { ctx.fillStyle = '#E6E0D2'; ctx.fillRect(x, y, w, h); T('사진을 올려주세요', x + w / 2, y + h / 2, 36, '#9A9384'); } ctx.restore(); };
+  const tri = y => { ctx.fillStyle = C.gold; ctx.beginPath(); ctx.moveTo(522, y); ctx.lineTo(558, y); ctx.lineTo(540, y + 26); ctx.closePath(); ctx.fill(); };
+  const light = ['teaser', 'cover'].includes(kind) || (kind === 'scene' && ph.length >= 2);
+  // 배경 (전체 캔버스)
+  if (kind === 'scene' && ph.length === 1 && PROMO.layout === 'full') { cover(ph[0], 0, 0, W, H); const g = ctx.createLinearGradient(0, H * .5, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, 0, W, H * .3); }
+  else if (kind === 'scene' && ph.length === 1) await blurBg(ph[0], 'rgba(40,48,52,.55)');
+  else if (light) { ctx.fillStyle = C.cream; ctx.fillRect(0, 0, W, H); }
+  else await darkBg();
+  ctx.save(); ctx.translate(ox, 0); ctx.scale(k, k);
+  const tl = lines(PROMO.title);
+  if (['open', 'status', 'full', 'wait'].includes(kind)) {
+    head(330, '#FFFFFF');
+    T(PROMO.sub, 540, 537, 46, C.gold, { w: 700, sp: 3 });
+    tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 655 + i * 118 - (tl.length > 1 ? 50 : 0), 104, '#FFFFFF', { w: 700, f: SERIF, max: 980, shadow: true }));
+    const n = Math.max(1, d.rows.length), ch = n >= 3 ? 166 : 190, gap = n >= 3 ? 24 : 30; let y = n >= 3 ? 790 : 810;
+    d.rows.forEach((r, i) => {
+      ctx.fillStyle = C.cream; rr(110, y, 860, ch, 28); ctx.fill();
+      T(`${i + 1}타임`, 166, y + ch / 2, 54, C.green, { w: 700, a: 'left' });
+      const tm = String(r.time).replace(/\s*~\s*/, ' – ');
+      if (r.age) { T(tm, 441, y + ch / 2 - 22, 52, '#24302B', { w: 700, a: 'left' }); T(String(r.age).replace(/(\d{2})~(\d{2})년생/, (m, a, b) => `${+a < 30 ? 20 : 19}${a} – ${+b < 30 ? 20 : 19}${b}년생`), 441, y + ch / 2 + 40, 36, C.sub, { w: 500, a: 'left' }); }
+      else T(tm, 441, y + ch / 2, 52, '#24302B', { w: 700, a: 'left' });
+      if (kind === 'status') { const lab = (g, l) => l > 0 ? `${g} ${l}자리` : `${g} 마감`; T(lab('형제', r.leftM), 935, y + ch / 2 - 22, 28, r.leftM > 0 ? C.goldT : '#9AA09C', { w: 700, a: 'right' }); T(lab('자매', r.leftF), 935, y + ch / 2 + 22, 28, r.leftF > 0 ? C.goldT : '#9AA09C', { w: 700, a: 'right' }); }
+      if (kind === 'full' || kind === 'wait') { const t = kind === 'full' ? '마감' : '대기 접수'; ctx.font = `700 28px ${SANS}`; const w = ctx.measureText(t).width + 40; ctx.fillStyle = kind === 'full' ? '#D9D4C8' : C.green; rr(935 - w, y + ch / 2 - 26, w, 52, 26); ctx.fill(); T(t, 935 - w / 2, y + ch / 2 + 1, 28, kind === 'full' ? '#6B706C' : '#FFFFFF', { w: 700 }); }
+      y += ch + gap;
+    });
+    if (!d.rows.length) { T('타임 정보가 없어요', 540, y + 60, 36, '#FFFFFF'); y += 160; }
+    y += 60; T(PROMO.note, 540, y, 36, 'rgba(255,255,255,.88)', { max: 940 });
+    if (PROMO.cta) { y += 115; T(PROMO.cta, 540, y, 42, '#FFFFFF', { w: 700, max: 940 }); if (kind !== 'full') tri(y + 42); }
+  } else if (kind === 'review') {
+    const rv = d.review; head(330, '#FFFFFF');
+    T(PROMO.sub, 540, 520, 38, 'rgba(255,255,255,.9)'); tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 625 + i * 104, 92, '#FFFFFF', { w: 700, f: SERIF, max: 980, shadow: true }));
+    let y = 625 + tl.length * 104 + 30;
+    T(`★ ${rv.avg ? rv.avg.toFixed(1) : '-'}`, 360, y, 64, C.gold, { w: 900 }); T(`다시 오고 싶어요 ${rv.again}%`, 720, y, 40, '#FFFFFF', { w: 700 }); y += 80;
+    rv.quotes.slice(0, 3).forEach(q => { ctx.fillStyle = C.cream; rr(110, y, 860, 210, 28); ctx.fill(); ctx.font = `700 38px ${SERIF}`;
+      wrapText(ctx, `“${q.text}”`, 760, 2).forEach((ln, j, a) => T(ln, 540, y + 82 + j * 54 - (a.length - 1) * 20, 38, C.green, { w: 700, f: SERIF })); T(`— ${q.label}`, 540, y + 172, 28, C.sub, { w: 500 }); y += 236; });
+    if (!rv.quotes.length) { T(`후기 ${rv.n}건`, 540, y + 40, 40, '#FFFFFF'); y += 120; }
+    T(PROMO.note, 540, Math.max(y + 60, 1560), 38, 'rgba(255,255,255,.88)');
+  } else if (kind === 'result') {
+    head(330, '#FFFFFF'); const r = d.result;
+    T(PROMO.sub, 540, 632, 42, 'rgba(255,255,255,.92)', { w: 500 });
+    ctx.font = `900 300px ${SANS}`; const nw = ctx.measureText(String(r.pairs)).width; ctx.font = `700 100px ${SANS}`; const sw = ctx.measureText('쌍').width; const x0 = 540 - (nw + 24 + sw) / 2;
+    T(String(r.pairs), x0, 880, 300, '#FFFFFF', { w: 900, a: 'left' }); T('쌍', x0 + nw + 24, 962, 100, C.gold, { w: 700, a: 'left' });
+    tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 1120 + i * 100, 84, '#FFFFFF', { w: 700, f: SERIF, max: 980, shadow: true }));
+    const ly = 1120 + tl.length * 100 + 10; ctx.fillStyle = C.gold; ctx.fillRect(500, ly, 80, 3);
+    lines(PROMO.note).forEach((ln, i) => T(ln, 540, ly + 93 + i * 65, 44, 'rgba(255,255,255,.88)'));
+  } else if (kind === 'teaser') {
+    head(330, C.green); photoBox(ph[0], 80, 480, 920, 760);
+    const a = tl.length > 1 ? tl[0] : '', b = tl.length > 1 ? tl[1] : tl[0] || '';
+    if (a) T(a, 540, 1340, 74, C.ink, { w: 700, f: SERIF, max: 940 }); T(b, 540, a ? 1432 : 1400, 88, C.green, { w: 700, f: SERIF, max: 960 });
+    T(PROMO.sub, 540, 1518, 40, C.ink, { w: 500 }); T(PROMO.note, 540, 1590, 40, C.gold, { w: 700, sp: 6 });
+  } else if (kind === 'cover') {
+    head(520, C.green, true); ctx.fillStyle = C.gold; ctx.fillRect(500, 759, 80, 3);
+    T(PROMO.sub, 540, 875, 46, C.ink, { w: 700 }); tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 1000 + i * 112, 100, C.green, { w: 700, f: SERIF, max: 980 }));
+    const hy = 1000 + tl.length * 112 + 10; ctx.fillStyle = C.gold; ctx.beginPath(); ctx.moveTo(540, hy + 28); ctx.bezierCurveTo(500, hy, 505, hy - 26, 525, hy - 22); ctx.bezierCurveTo(535, hy - 20, 540, hy - 12, 540, hy - 8); ctx.bezierCurveTo(540, hy - 12, 545, hy - 20, 555, hy - 22); ctx.bezierCurveTo(575, hy - 26, 580, hy, 540, hy + 28); ctx.fill();
+    T(PROMO.note, 540, 1587, 36, '#6B6B6B', { w: 500 });
+  } else if (kind === 'scene') {
+    if (ph.length >= 2) {
+      T(PROMO.sub, 540, 307, 38, C.goldT, { w: 700, sp: 6 }); tl.slice(0, 1).forEach(ln => T(ln, 540, 400, 84, C.green, { w: 700, f: SERIF, max: 960 }));
+      photoBox(ph[0], 80, 520, 920, 520); photoBox(ph[1], 80, 1070, 920, 520); T(PROMO.note, 540, 1660, 40, C.ink, { w: 500, max: 960 });
+    } else if (ph.length === 1 && PROMO.layout === 'full') {
+      head(330, '#FFFFFF'); tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 1340 + i * 110 - (tl.length > 1 ? 0 : 50), 84, '#FFFFFF', { w: 700, f: SERIF, max: 980, shadow: true }));
+      if (PROMO.sub) T(PROMO.sub, 540, 1565, 40, C.gold, { w: 500 });
+    } else {
+      photoBox(ph[0], 190, 300, 700, 932, 22);
+      tl.slice(0, 2).forEach((ln, i) => T(ln, 540, 1400 + i * 95, 70, '#FFFFFF', { w: 700, f: SERIF, max: 980, shadow: true }));
+      if (PROMO.sub) T(PROMO.sub, 540, 1400 + tl.length * 95 + 30, 36, C.gold, { w: 500 });
+    }
+  }
+  ctx.restore();
 }
 
 /* ---- 스타일: 시그니처 (이온 초록·크림·④ 로고) · 내 디자인 배경도 이 배치 사용 ---- */
@@ -1814,7 +1947,9 @@ document.addEventListener('click', async e => {
   else if (act === 'led-del') { if (await confirmBox('이 기록을 지울까요?', '', '삭제', true)) { try { await IonStore.update('apply', { [`ledger/${ckey(A.cohort)}/${v}`]: null }); } catch (e) { toast('삭제하지 못했어요'); } } }
   else if (act === 'led-csv') ledgerCSV();
   else if (act === 'pkind') { PROMO.kind = v; render(); }
-  else if (act === 'pstyle') { PROMO.style = v; render(); }
+  else if (act === 'pstyle') { if (v === 'ion' && PROMO.style !== 'ion') PROMO.size = 'story'; PROMO.style = v; render(); }
+  else if (act === 'playout') { PROMO.layout = v; render(); }
+  else if (act === 'pphoto-clear') { PROMO.photos = []; render(); }
   else if (act === 'psize') { PROMO.size = v; render(); }
   else if (act === 'psave') { const b0 = await promoBlob(); const a = document.createElement('a'); a.href = URL.createObjectURL(b0); a.download = `ion_${PROMO.kind}_${PROMO.style.replace(/\W/g, '')}_${TODAY()}.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
   else if (act === 'pshare') { const b0 = await promoBlob(); const file = new File([b0], `ion_${TODAY()}.png`, { type: 'image/png' }); try { await navigator.share({ files: [file] }); } catch (e) { if (e.name !== 'AbortError') toast('공유하지 못했어요 · 이미지 저장을 이용해 주세요'); } }
