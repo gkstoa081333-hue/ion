@@ -457,6 +457,50 @@ async function changeStatus(id, to, memo) {
 }
 
 /* ---------- 타임 변경 ---------- */
+/* ---------- 지난 기수 명단 넣기: 매칭 기록(sessions)으로 저장 → 재참여·만난 사람 확인에 사용 ---------- */
+function parsePast(txt) {
+  const out = [], bad = [];
+  String(txt || '').split(/\n/).map(l => l.trim()).filter(Boolean).forEach(l => {
+    const ph = (l.match(/01[016789][\s.\-]?\d{3,4}[\s.\-]?\d{4}/) || [])[0]; const g = (l.match(/(^|\s)(남|여|남자|여자|형제|자매|M|F)(?=\s|$)/i) || [])[2];
+    if (!ph || !g) return bad.push(l);
+    const gender = /^(남|남자|형제|m)$/i.test(g) ? 'M' : 'F';
+    const rest = l.replace(ph, ' ').replace(new RegExp('(^|\\s)' + g + '(?=\\s|$)'), ' ').trim().split(/\s+/);
+    out.push({ name: rest[0] || '', gender, phone: digits(ph), church: rest.slice(1).join(' ') });
+  });
+  return { out, bad };
+}
+function openImport() {
+  const m = document.getElementById('modal');
+  const draw = () => { const { out, bad } = parsePast((document.getElementById('ip-txt') || {}).value);
+    const box = document.getElementById('ip-prev'); if (!box) return;
+    box.innerHTML = !out.length && !bad.length ? '<span class="small">예) 홍길동 남 010.1234.5678 OO교회 — 한 줄에 한 명</span>'
+      : `<span class="small"><b>형제 ${out.filter(x => x.gender === 'M').length}명 · 자매 ${out.filter(x => x.gender === 'F').length}명</b> 인식${bad.length ? ` · <b style="color:var(--danger)">못 읽은 줄 ${bad.length}개</b>: ${bad.map(esc).join(' / ')}` : ''}</span>
+        ${out.map(x => `<span class="small">${G[x.gender]} · ${esc(x.name)} · ${esc(x.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3'))}${x.church ? ' · ' + esc(x.church) : ''}</span>`).join('')}`; };
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="지난 기수 명단 넣기">
+    <span class="round" style="font-size:19px">지난 기수 명단 넣기</span>
+    <div class="sgrid"><div class="field"><label for="ip-c">기수</label><input id="ip-c" class="input" value="1기" maxlength="12"></div>
+      <div class="field"><label for="ip-d">행사 날짜 (모르면 비워두기)</label><input id="ip-d" class="input" placeholder="예) 10/17"></div></div>
+    <div class="field"><label for="ip-txt">명단 (이름 · 성별 · 연락처 · 교회)</label><textarea id="ip-txt" class="input" style="min-height:150px" placeholder="홍길동 남 010.1234.5678 OO교회"></textarea></div>
+    <div id="ip-prev" class="stack" style="gap:4px"></div>
+    <div class="row" style="flex-wrap:nowrap"><button class="btn line" style="flex:1;min-height:48px" data-close="1">닫기</button><button class="btn" style="flex:1;min-height:48px" id="ip-ok">저장</button></div></div></div>`;
+  m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
+  document.getElementById('ip-txt').oninput = draw; draw();
+  document.getElementById('ip-ok').onclick = async () => {
+    const c = document.getElementById('ip-c').value.trim(); const dRaw = document.getElementById('ip-d').value.trim(); const { out, bad } = parsePast(document.getElementById('ip-txt').value);
+    if (!c) return toast('기수 이름을 입력해 주세요'); if (!out.length) return toast('읽을 수 있는 명단이 없어요');
+    if (bad.length && !(await confirmBox(`못 읽은 줄이 ${bad.length}개 있어요`, '읽은 사람만 저장할까요?', '읽은 사람만 저장'))) return;
+    const prev = Object.entries(A.sessRaw || {}).filter(([, x]) => x && x.pub && x.pub.cohort === c && x.pub.imported);
+    if (prev.length && !(await confirmBox(`${c} 명단이 이미 있어요`, '새로 붙여넣은 명단으로 바꿀까요?', '바꾸기', true))) return;
+    const roster = {}, cnt = { M: 0, F: 0 };
+    out.forEach(p => { cnt[p.gender]++; roster[p.gender + cnt[p.gender]] = { gender: p.gender, no: cnt[p.gender], name: p.name, phone: p.phone, ...(p.church ? { church: p.church } : {}) }; });
+    const sid = 'past-' + ckey(c).replace(/[^\w가-힣]/g, '') + '-' + Date.now().toString(36);
+    const up = {}; prev.forEach(([k]) => up[k] = null);
+    up[sid] = { pub: { cohort: c, date: dRaw ? slotIsoDate(dRaw) : '', slot: '지난 기수', status: 'closed', closedAt: Date.now(), imported: true, M: cnt.M, F: cnt.F }, roster };
+    try { await IonStore.update('sessions', up); await IonStore.update('apply', { [`cohorts/${ckey(c)}`]: { name: c, status: 'ended' } });
+      m.innerHTML = ''; toast(`${c} 명단 ${out.length}명을 넣었어요`); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  };
+}
+
 function openMove(id) {
   const r = (A.data.apps || {})[id]; if (!r) return;
   const held = (sid, g) => apps().filter(x => x.slotId === sid && x.gender === g && ION_HOLDING.includes(x.status) && x.id !== id).length;
@@ -1420,6 +1464,9 @@ function viewSettings() {
       <div class="card stack" style="gap:8px;margin-top:6px"><span class="round" style="font-size:16px">데이터 백업</span>
         <span class="small">신청·매칭·후기·설정 전체를 파일 하나로 내려받아요. 기수가 끝날 때마다 받아두면 실수로 지워도 복구할 수 있어요.${conf().lastBackup ? ` · 마지막 백업 ${esc(dt(conf().lastBackup, true))}` : ''}</span>
         <button class="btn soft" data-act="backup">${ICON.down}전체 백업 받기</button></div>
+      <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">지난 기수 명단 넣기</span>
+        <span class="small">신청 페이지 없이 진행했던 기수(예: 1기) 참가자를 붙여넣어요. 넣어두면 재참여 할인 칩과 '이전 기수에서 만난 사람' 겹침 경고가 이 명단까지 확인해요.</span>
+        <button class="btn soft" data-act="import-past">명단 붙여넣기</button></div>
       ${installHint()}
       <div class="row" style="justify-content:center"><a class="mini" href="apply.html" target="_blank" rel="noopener">신청 페이지 새 창으로 보기</a><button class="mini" data-act="copyapply">${ICON.copy}신청 링크 복사</button></div>
       <p class="small center">설정을 바꾼 뒤에는 <b>저장하기</b>를 눌러야 신청 페이지에 반영돼요.</p>
@@ -1722,6 +1769,7 @@ document.addEventListener('click', async e => {
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'backup') downloadBackup();
+  else if (act === 'import-past') openImport();
   else if (act === 'copyapply') copyText(location.href.replace(/admin\.html.*$/, 'apply.html'), '신청 페이지 링크를 복사했어요');
   else if (act === 'togglepastslots') { A.showPastSlots = !A.showPastSlots; render(); }
   else if (act === 'addslot') {
