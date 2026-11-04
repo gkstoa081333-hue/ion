@@ -161,7 +161,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261103b"></script>
+<script src="ion-store.js?v=20261104a"></script>
+<script src="ion-sms.js?v=20261104a"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -171,60 +172,12 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    - 주소 끝에 ?demo 를 붙이면 데모 모드
    ===================================================================== */
 
-/* ---------- 문자 문구 (자유롭게 고쳐 쓰세요) ---------- */
-const TPL = {
-  pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청 감사합니다 🙂
-
-입금 계좌: ${x.account}
-금액: ${x.fee}원${x.feeNote || ''}
-입금자명: ${r.payName} (꼭 이대로 적어주세요)
-입금 기한: ${x.deadline}
-
-기한까지 입금이 확인되지 않으면 자동 취소돼요.` },
-  promote: { label: '자리 확보(승격)', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 기다려 주셔서 감사해요! ${x.when} 자리가 생겼어요 🙌
-
-입금 계좌: ${x.account}
-금액: ${x.fee}원${x.feeNote || ''}
-입금자명: ${r.payName}
-입금 기한: ${x.deadline}
-
-기한이 지나면 다음 대기자분께 순서가 넘어가요.` },
-  confirm: { label: '참가 확정', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 입금 확인되어 참가가 확정되었어요 🎉
-
-일정: ${x.when}
-장소: ${x.place}
-신청번호: ${r.id}
-
-자세한 장소와 안내는 행사 전날 다시 보내드릴게요.` },
-  d1: { label: 'D-1 안내', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 내일 뵙겠습니다 🙂
-
-일정: ${x.when}
-장소: ${x.place}
-
-· 10분 전까지 도착해 주세요. 입구에서 번호표를 드려요.
-· 마지막에 테이블 QR로 마음에 남은 분을 골라주시면 돼요.
-· 늦거나 못 오시게 되면 이 번호로 꼭 연락 주세요.` },
-  wait: { label: '대기 안내', for: ['waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
-
-자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
-  move: { label: '타임 변경 안내', for: ['pending', 'confirmed', 'waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${r.cohort} 신청 감사합니다 🙂
-더 편안한 만남을 위해 참가 타임을 ${x.from ? x.from + ' → ' : ''}${r.date} ${r.time} 으로 조정해 드렸어요.
-${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리가 나면 바로 연락드릴게요.\n' : ''}일정이 어려우시면 편하게 말씀해 주세요. 감사합니다.` },
-  free: { label: '직접 쓰기', for: ['pending', 'confirmed', 'waiting', 'cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 안녕하세요 🙂
-
-(여기에 내용을 적어주세요)
-
-문의: 카카오톡 오픈채팅
-${x.chat || ''}` },
-  cancel: { label: '취소 안내', for: ['cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청이 취소되었어요.
-
-다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
-};
+/* ---------- 문자 문구: ion-sms.js (자동발송 엔진과 같은 문구를 씀) ---------- */
+const TPL = ION_SMS.T;
 
 /* ---------- 유틸 ---------- */
 const $app = document.getElementById('app');
 // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
-['pay', 'promote', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = TPL[k].make; TPL[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const digits = s => String(s || '').replace(/\D/g, '');
 const won = n => Number(n || 0).toLocaleString('ko-KR');
@@ -270,7 +223,7 @@ function confirmBox(title, body, okText = '확인', danger = false) {
   return new Promise(resolve => {
     const m = document.getElementById('modal');
     m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-      <p class="round" style="margin:0;font-size:19px">${esc(title)}</p>${body ? `<p class="p" style="font-size:14px">${esc(body)}</p>` : ''}
+      <p class="round" style="margin:0;font-size:19px">${esc(title)}</p>${body ? `<p class="p" style="font-size:14px;white-space:pre-wrap;max-height:55vh;overflow:auto">${esc(body)}</p>` : ''}
       <div class="row" style="flex-wrap:nowrap"><button class="btn soft" data-c="0">취소</button><button class="btn ${danger ? 'danger' : ''}" data-c="1">${esc(okText)}</button></div></div></div>`;
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { m.innerHTML = ''; resolve(b.dataset.c === '1'); });
   });
@@ -466,6 +419,23 @@ async function changeStatus(id, to, memo) {
 }
 
 /* ---------- 타임 변경 ---------- */
+/* ---------- 자동 문자 (구글 Apps Script 엔진 + 솔라피 · automation/ 폴더 참고) ---------- */
+const ASMS_KINDS = [['pay', '입금 안내 (신청 직후)'], ['wait', '대기 안내'], ['promote', '자리 확보 (대기→배정)'], ['confirm', '참가 확정 (입금확인 후)'], ['d1', 'D-1 안내 (전날 저녁 6시)']];
+function autoOn(kind) { const a = (A.data && A.data.autoSms) || {}; return a.mode === 'live' && (a.kinds || {})[kind] !== false; }
+function autoSmsCard() {
+  const a = A.data.autoSms || {}, eng = A.data.smsEngine || {}, mode = a.mode || 'off';
+  const alive = eng.lastRun && Date.now() - eng.lastRun < 5 * 60e3;
+  const logs = Object.entries(A.data.smsLog || {}).map(([id, x]) => ({ id, ...x })).sort((x, y) => (y.at || 0) - (x.at || 0)).slice(0, 8);
+  const chip = (v, l) => `<button class="chipbtn ${mode === v ? 'on' : ''}" data-act="asms-mode" data-v="${v}">${l}</button>`;
+  return `<div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">📱 자동 문자 ${mode === 'live' ? '· 실제 발송 중' : mode === 'test' ? '· 시험 모드' : ''}</span>
+    <span class="small">${alive ? `<b style="color:var(--green)">● 엔진 연결됨</b> · ${dt(eng.lastRun)} 확인${eng.err ? ` · <b style="color:var(--danger)">오류: ${esc(eng.err)}</b>` : ''}` : '<b style="color:var(--danger)">● 엔진 연결 안 됨</b> · 구글 Apps Script 설치가 필요해요 (automation 폴더 안내)'}</span>
+    <div class="chips">${chip('off', '끄기')}${chip('test', '시험 (기록만)')}${chip('live', '실제 발송')}</div>
+    <div class="stack" style="gap:4px">${ASMS_KINDS.map(([k, l]) => `<label class="row small" style="gap:8px"><input type="checkbox" data-act="asms-kind" data-v="${k}" ${(a.kinds || {})[k] !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--green)">${l}</label>`).join('')}</div>
+    <span class="small">밤 10시~아침 8시에 생긴 문자는 아침 8시에 보내요. 발신번호: 솔라피에 등록한 이온 번호</span>
+    ${logs.length ? `<div class="stack" style="gap:2px;margin-top:4px"><span class="small"><b>최근 기록</b> (누르면 내용)</span>${logs.map(x => `<button class="mini" style="justify-content:space-between;width:100%" data-act="asms-log" data-v="${esc(x.id)}"><span>${dt(x.at)} · ${esc(x.label || x.kind)} · ${esc(x.name || '')}</span><span style="color:${!x.ok ? 'var(--danger)' : x.mode === 'test' ? 'var(--gold-t, #8a6d2b)' : 'var(--green)'}">${!x.ok ? '실패' : x.mode === 'test' ? '시험' : '발송'}</span></button>`).join('')}</div>` : ''}
+  </div>`;
+}
+
 /* ---------- 새 신청 알림 (ntfy 무료 푸시: 신청 페이지가 신청 완료 시 알림 주소로 한 줄 보냄 · 이름·연락처는 안 보냄) ---------- */
 function notifyCard() {
   const t = conf().notify;
@@ -1317,7 +1287,7 @@ function card(r, showCohort) {
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
   return `<div class="card stack" style="gap:8px">
-    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${r.discount > 0 ? (repeatRecord(r) ? `<span class="chip ok" title="${esc(repeatRecord(r))}">할인 ${won(r.discount)} ✓</span>` : `<span class="chip warn" title="참여 기록을 찾지 못했어요">할인 ${won(r.discount)} · 기록 확인</span>`) : (repeatRecord(r) && ACTIVE.includes(r.status) && discOf() > 0 ? `<button class="chip warn" style="border:0;cursor:pointer;font:inherit" data-act="disc-on" data-v="${r.id}" title="이전 참여: ${esc(repeatRecord(r))} · 누르면 할인 적용">재참여인데 할인 없음 · 적용하기</button>` : '')}${(() => { const a = attendIndex()[digits(r.phone)]; return a && a.no.length ? `<span class="chip bad" title="불참: ${esc(a.no.join(', '))}">지난 불참 ${a.no.length}회</span>` : ''; })()}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${esc(r.id)}</span></div>
+    <div class="between"><div class="row"><span class="pn">${esc(r.payName || r.name)}</span><span class="chip ${chip}">${ION_STATUS[st] || st}${st === 'waiting' ? ' ' + waitNo(r) + '번' : ''}</span>${r.cancelReqAt && !['cancelled', 'refunded'].includes(st) ? '<span class="chip bad" title="오픈채팅으로 받은 취소·환불 요청">취소요청</span>' : ''}${rep ? `<span class="chip ok" title="이전 참여 기수">재참여 · ${esc(rep)}</span>` : ''}${r.discount > 0 ? (repeatRecord(r) ? `<span class="chip ok" title="${esc(repeatRecord(r))}">할인 ${won(r.discount)} ✓</span>` : `<span class="chip warn" title="참여 기록을 찾지 못했어요">할인 ${won(r.discount)} · 기록 확인</span>`) : (repeatRecord(r) && ACTIVE.includes(r.status) && discOf() > 0 ? `<button class="chip warn" style="border:0;cursor:pointer;font:inherit" data-act="disc-on" data-v="${r.id}" title="이전 참여: ${esc(repeatRecord(r))} · 누르면 할인 적용">재참여인데 할인 없음 · 적용하기</button>` : '')}${(() => { const a = attendIndex()[digits(r.phone)]; return a && a.no.length ? `<span class="chip bad" title="불참: ${esc(a.no.join(', '))}">지난 불참 ${a.no.length}회</span>` : ''; })()}${(() => { const sl = slots().find(x => x.id === r.slotId); return sl && !ionAgeOk(sl, r.birthYear) ? `<span class="chip bad" title="이 타임 대상 연령: ${ionAgeText(sl)}">연령 범위 밖</span>` : ''; })()}</div><span class="small">${r.sms ? `<span title="자동 문자: ${esc(Object.keys(r.sms).map(k => (TPL[k] || {}).label || k).join(', '))}">📱${Object.keys(r.sms).length} </span>` : ''}${esc(r.id)}</span></div>
     ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
@@ -1623,6 +1593,7 @@ function viewSettings() {
         <span class="small">신청·매칭·후기·설정 전체를 파일 하나로 내려받아요. 기수가 끝날 때마다 받아두면 실수로 지워도 복구할 수 있어요.${conf().lastBackup ? ` · 마지막 백업 ${esc(dt(conf().lastBackup, true))}` : ''}</span>
         <button class="btn soft" data-act="backup">${ICON.down}전체 백업 받기</button></div>
       ${notifyCard()}
+      ${autoSmsCard()}
       <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">지난 기수 명단 넣기</span>
         <span class="small">신청 페이지 없이 진행했던 기수(예: 1기) 참가자를 붙여넣어요. 넣어두면 재참여 할인 칩과 '이전 기수에서 만난 사람' 겹침 경고가 이 명단까지 확인해요.</span>
         <button class="btn soft" data-act="import-past">명단 붙여넣기</button></div>
@@ -1708,9 +1679,7 @@ async function syncSessions(removed) {
 /* ---------- 문자·카톡 모달 ---------- */
 function ctx(r) {
   const sl = slots().find(x => x.id === r.slotId) || {};   // 설정에서 바꾼 최신 날짜·시간·장소를 우선
-  const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
-  const chat = conf().openchat || ION_DEFAULTS.config.openchat;
-  return { chat, from: A._moveFrom || '', when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: conf().account, fee: won(feeOf(r)), feeNote: r.discount > 0 ? ` (재참여 ${won(r.discount)}원 할인 적용)` : '', deadline: dt(r.deadline, true) + '까지', waitNo: waitNo(r) };
+  return ION_SMS.ctx({ ...r, fee: feeOf(r) }, { ...conf(), openchat: conf().openchat || ION_DEFAULTS.config.openchat }, sl, { waitNo: waitNo(r), from: A._moveFrom || '' });
 }
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
@@ -1929,6 +1898,12 @@ document.addEventListener('click', async e => {
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
   else if (act === 'backup') downloadBackup();
   else if (act === 'import-past') openImport();
+  else if (act === 'asms-mode') {
+    const live = v === 'live';
+    if (live && !(await confirmBox('실제 문자 발송을 켤까요?', '지금 이후에 들어오는 신청·확정·배정부터 자동으로 보내요. 이미 있는 신청자에게는 보내지 않아요. D-1 안내는 행사 전날 저녁 6시에 확정자 모두에게 나가요.', '실제 발송 켜기'))) return;
+    try { await IonStore.update('apply', { 'autoSms/mode': v, ...(v !== 'off' ? { 'autoSms/since': Date.now() } : {}) }); toast(v === 'off' ? '자동 문자를 껐어요' : v === 'test' ? '시험 모드예요 · 실제로 보내지 않고 기록만 남겨요' : '실제 발송을 켰어요'); } catch (e) { toast('저장 실패: ' + e.message); } }
+  else if (act === 'asms-kind') { const k = (A.data.autoSms || {}).kinds || {}; try { await IonStore.update('apply', { [`autoSms/kinds/${v}`]: k[v] === false }); } catch (e) { toast('저장 실패: ' + e.message); } }
+  else if (act === 'asms-log') { const x = (A.data.smsLog || {})[v]; if (x) confirmBox(`${x.label} · ${x.name}`, x.text || x.err || '', '닫기'); }
   else if (act === 'ntfy-on') { const t = 'ion-' + Array.from(crypto.getRandomValues(new Uint8Array(8)), x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('');
     try { await IonStore.update('apply', { 'config/notify': t }); toast('알림 주소를 만들었어요 · 아래 순서대로 구독해 주세요'); } catch (e) { toast('저장하지 못했어요: ' + e.message); } }
   else if (act === 'ntfy-off') { if (!(await confirmBox('새 신청 알림을 끌까요?', '휴대폰 ntfy 앱의 구독도 지워주세요.', '끄기', true))) return; try { await IonStore.update('apply', { 'config/notify': null }); toast('알림을 껐어요'); } catch (e) { toast('실패: ' + e.message); } }
@@ -1989,13 +1964,13 @@ document.addEventListener('click', async e => {
   else if (act === 'table') openTable();
   else if (act === 'confirm') {
     const r = row(v);
-    if (!(await confirmBox(`${r.payName} 입금확인`, `${r.name}님을 확정으로 바꿀까요? 확정 문자 창이 이어서 열려요.`, '입금확인'))) return;
-    if (await changeStatus(v, 'confirmed')) { A.tab = 'confirmed'; render(); openMsg(v, 'confirm'); }
+    if (!(await confirmBox(`${r.payName} 입금확인`, `${r.name}님을 확정으로 바꿀까요? ${autoOn('confirm') ? '확정 문자는 1분 안에 자동으로 나가요.' : '확정 문자 창이 이어서 열려요.'}`, '입금확인'))) return;
+    if (await changeStatus(v, 'confirmed')) { A.tab = 'confirmed'; render(); if (autoOn('confirm')) toast('확정했어요 · 확정 문자는 1분 안에 자동 발송돼요'); else openMsg(v, 'confirm'); }
   }
   else if (act === 'promote') {
     const r = row(v);
     if (!(await confirmBox(`${r.name}님 자리 배정`, '대기에서 입금대기로 올리고 입금자명과 기한을 새로 만들어요. 정원을 넘길 수 있으니 현황을 확인해 주세요.', '자리 배정'))) return;
-    if (await changeStatus(v, 'pending')) { A.tab = 'pending'; render(); openMsg(v, 'promote'); }
+    if (await changeStatus(v, 'pending')) { A.tab = 'pending'; render(); if (autoOn('promote')) toast('배정했어요 · 입금 안내는 1분 안에 자동 발송돼요'); else openMsg(v, 'promote'); }
   }
   else if (act === 'cancel') { const r = row(v); if (await confirmBox(`${r.name}님 취소 처리`, '자리가 비면 같은 타임 대기 1번이 자동으로 입금대기가 돼요.', '취소 처리', true)) changeStatus(v, 'cancelled'); }
   else if (act === 'refund') openRefund(v);
