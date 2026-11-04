@@ -9,7 +9,8 @@
    ===================================================================== */
 const DB_URL = 'https://eon-signal-default-rtdb.asia-southeast1.firebasedatabase.app';
 const SITE = 'https://gkstoa081333-hue.github.io/ion/';
-const VERSION = '2026-11-04';
+const VERSION = '2026-11-04b';
+const RETRY_MIN = 10, RETRY_MAX = 5;  // 실패하면 10분 뒤 다시, 최대 5번
 const MAX_PER_RUN = 20;               // 한 번에 최대 발송 수 (사고 방지)
 const QUIET_FROM = 22, QUIET_TO = 8;  // 밤 10시~아침 8시는 보류했다가 8시에 발송
 
@@ -51,7 +52,9 @@ function tick() {
       if (r.status === 'confirmed' && on('confirm') && !done.confirm && (+r.confirmedAt || 0) >= since && !quiet) jobs.push([r, 'confirm', sl]);
       if (r.status === 'confirmed' && on('d1') && !done.d1 && isEveBefore(sl.date || r.date, now)) jobs.push([r, 'd1', sl]);
     });
-    jobs.slice(0, MAX_PER_RUN).forEach(([r, k, sl]) => {
+    const fails = r => (r.smsFail || {});
+    const ready = ([r, k]) => { const f = fails(r)[k]; return !f || (f.n < RETRY_MAX && now - f.at >= RETRY_MIN * 60e3); };
+    jobs.filter(ready).slice(0, MAX_PER_RUN).forEach(([r, k, sl]) => {
       const text = S.render(k, r, cfg, sl, { waitNo: waitNo(r) });
       const label = (S.T[k] || {}).label || k;
       if (mode === 'test') {
@@ -62,10 +65,12 @@ function tick() {
       db(`apply/apps/${r.id}/sms/${k}`, 'put', now);   // 먼저 표시해서 두 번 발송 방지
       try {
         solapi(r.phone, text);
+        if (fails(r)[k]) db(`apply/apps/${r.id}/smsFail/${k}`, 'delete');
         log({ at: now, id: r.id, name: r.name, kind: k, label, mode: 'live', ok: true, text });
         out.sent++;
       } catch (e) {
         db(`apply/apps/${r.id}/sms/${k}`, 'delete');
+        const f = fails(r)[k] || { n: 0 }; db(`apply/apps/${r.id}/smsFail/${k}`, 'put', { n: f.n + 1, at: now });
         log({ at: now, id: r.id, name: r.name, kind: k, label, mode: 'live', ok: false, err: String(e.message || e).slice(0, 300) });
         out.fail++;
       }
