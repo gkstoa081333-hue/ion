@@ -172,6 +172,14 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    - 주소 끝에 ?demo 를 붙이면 데모 모드
    ===================================================================== */
 
+/* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
+const BUILD = '20261104c';
+(async () => { try {
+  const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
+  const m = txt.match(/const BUILD = '(\w+)'/);
+  if (m && m[1] !== BUILD && sessionStorage.getItem('ion_reload') !== m[1]) { sessionStorage.setItem('ion_reload', m[1]); location.replace(location.pathname + '?v=' + m[1] + location.hash); }
+} catch (e) {} })();
+
 /* ---------- 문자 문구: ion-sms.js (자동발송 엔진과 같은 문구를 씀) ---------- */
 const TPL = ION_SMS.T;
 
