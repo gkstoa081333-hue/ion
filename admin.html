@@ -161,7 +161,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261104a"></script>
+<script src="ion-store.js?v=20261104b"></script>
 <script src="ion-sms.js?v=20261104a"></script>
 <script>
 /* =====================================================================
@@ -240,7 +240,7 @@ const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' 
 let START_HASH = (location.hash || '').replace('#', '');
 const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, unsubS: null, sess: {}, rCohort: '', rTime: '', rStar: '', rShare: false, rq: '', qAll: false };
 const apps = () => Object.values((A.data && A.data.apps) || {});
-const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort((a, b) => (a.order || 0) - (b.order || 0));
+const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort(ionSlotCmp);   // 날짜·시간순
 const conf = () => (A.data && A.data.config) || {};
 
 function start() {
@@ -1617,6 +1617,7 @@ async function saveSettings() {
   for (const s of d.slots) if (!s.cohort || !s.date || !s.time) return toast('타임마다 기수·날짜·시간을 입력해 주세요');
   const outSlots = {};
   for (const s of d.slots) for (const k of ['ageFrom', 'ageTo']) { const y = Number(s[k]); if (s[k] !== '' && s[k] != null && !(y >= 1950 && y <= new Date().getFullYear())) return toast(`${s.cohort} ${s.time}: 대상 연령은 1990처럼 4자리 출생연도로 적어주세요`); }
+  d.slots.sort(ionSlotCmp);   // 저장할 때 날짜·시간순으로 정리
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
   const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };

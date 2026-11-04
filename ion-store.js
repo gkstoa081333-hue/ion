@@ -62,6 +62,13 @@ function ionReviewForm(saved) {
   return { q: list };
 }
 
+// 타임 정렬: 날짜 → 시작 시간 순 (예: 11/14 12:00 → 15:00 → 17:00). 같은 날짜·시간이면 저장 순서
+function ionSlotKey(s) {
+  s = s || {}; const d = String(s.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); const t = String(s.time || '').match(/(\d{1,2})(?::(\d{2}))?/);
+  const p2 = n => String(n).padStart(2, '0');
+  return (d ? p2(d[1]) + p2(d[2]) : '9999') + (t ? p2(t[1]) + p2(t[2] || 0) : '9999');
+}
+function ionSlotCmp(a, b) { const ka = ionSlotKey(a), kb = ionSlotKey(b); return ka < kb ? -1 : ka > kb ? 1 : (a.order || 0) - (b.order || 0); }
 // 새 신청 알림 (ntfy.sh 무료 푸시) — 실패해도 신청에는 영향 없음
 async function ionNotify(topic, title, message, click) {
   if (!topic) return false;

@@ -846,7 +846,7 @@ function guessSlot(slots, pub) {
 }
 function importBox(s) {
   if (!A.applyCache) { if (!A.applyLoading) setTimeout(loadApply, 0); return '<p class="small">신청 명단을 불러오는 중…</p>'; }
-  const slots = Object.entries(A.applyCache.slots).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+  const slots = Object.entries(A.applyCache.slots).sort((a, b) => typeof ionSlotCmp === 'function' ? ionSlotCmp(a[1], b[1]) : (a[1].order || 0) - (b[1].order || 0));
   if (!slots.length) return `<p class="small">${A.applyCache.err ? '신청 명단을 읽지 못했어요.' : '신청관리에 등록된 타임이 없어요.'}</p>`;
   const pick = A.importSlot && A.applyCache.slots[A.importSlot] ? A.importSlot : (s.pub && s.pub.applySlot && A.applyCache.slots[s.pub.applySlot] ? s.pub.applySlot : guessSlot(slots, s.pub || {}));
   const gone = cancelledInRoster(s);

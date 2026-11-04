@@ -139,7 +139,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261103b"></script>
+<script src="ion-store.js?v=20261104b"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -223,7 +223,7 @@ async function loadConfig() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const notPast = s => { const m = String(s.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return true; let y = today.getFullYear(); let d = new Date(y, +m[1] - 1, +m[2]); if (d < new Date(y, today.getMonth() - 2, 1)) d = new Date(y + 1, +m[1] - 1, +m[2]); return d >= today; };
   const list = Object.entries(slots || {}).filter(([, s]) => s && s.public && notPast(s))
-    .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
+    .sort((a, b) => ionSlotCmp(a[1], b[1]))
     .map(([id, s]) => {
       const c = (counts || {})[id] || {};
       return { id, ...s, left: { M: Math.max(0, (s.cap?.M || 0) - (c.M || 0)), F: Math.max(0, (s.cap?.F || 0) - (c.F || 0)) } };
