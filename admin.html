@@ -173,7 +173,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261105a';
+const BUILD = '20261105b';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -840,7 +840,10 @@ function ledgerCSV() {
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
 const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 발표 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내']];
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내']];
+// 종류는 묶음별로 나눠 보여줌 (고른 묶음의 종류만 표시)
+const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
+const promoGroupOf = k => PROMO_GROUPS.find(g => g[2].includes(k)) || PROMO_GROUPS[0];
 const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔'], ['inv', '초대장']];
 const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
 const PROMO_INV_ONLY = ['invite', 'schedule', 'details', 'apply'];   // 초대장 스타일 전용 종류 (카드뉴스 01~04)
@@ -930,8 +933,9 @@ function viewPromo() {
     <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">홍보 이미지 만들기</span><button class="mini" data-act="promo-back">← 신청으로</button></div>
     ${cohortPicker(A.cohort, 'cohort')}
     <div class="stack" style="gap:12px">
-      <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${PROMO_KINDS.map(([k, n]) => chip('pkind', PROMO.kind, k, n)).join('')}</div></div>
-      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${only ? chip('pstyle', 'ion', 'ion', '이온 스토리') + '<span class="small" style="align-self:center">이 종류는 이온 스토리 전용이에요</span>' : invOnly ? chip('pstyle', 'inv', 'inv', '초대장') + '<span class="small" style="align-self:center">이 종류는 초대장 전용이에요</span>' : PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
+      <div class="field"><span class="lab">무엇을 만들까요?</span><div class="chips" style="flex-wrap:wrap">${PROMO_GROUPS.map(([id, n]) => chip('pgroup', promoGroupOf(PROMO.kind)[0], id, n)).join('')}</div></div>
+      <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${promoGroupOf(PROMO.kind)[2].map(k => chip('pkind', PROMO.kind, k, PROMO_KINDS.find(x => x[0] === k)[1])).join('')}</div></div>
+      ${only || invOnly ? '' : `<div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>`}
       ${ion ? `<div class="card stack" style="gap:8px;padding:14px"><span class="round" style="font-size:15px">사진 ${PROMO.kind === 'scene' ? '(1~2장)' : PROMO.kind === 'teaser' ? '(1장)' : '(배경으로 흐리게 깔려요 · 선택)'}</span>
         <span class="small">얼굴은 모자이크한 사진으로 올려주세요. 사진은 이 화면에서만 쓰고 어디에도 저장되지 않아요.</span>
         <input type="file" accept="image/*" multiple class="input" style="padding:10px" onchange="promoPhotos(this)">
@@ -2057,6 +2061,7 @@ document.addEventListener('click', async e => {
   else if (act === 'led-del') { if (await confirmBox('이 기록을 지울까요?', '', '삭제', true)) { try { await IonStore.update('apply', { [`ledger/${ckey(A.cohort)}/${v}`]: null }); } catch (e) { toast('삭제하지 못했어요'); } } }
   else if (act === 'led-csv') ledgerCSV();
   else if (act === 'pkind') { PROMO.kind = v; render(); }
+  else if (act === 'pgroup') { const g = PROMO_GROUPS.find(x => x[0] === v); PROMO.kind = g[2][0]; render(); }
   else if (act === 'pstyle') { if (v === 'ion' && PROMO.style !== 'ion') PROMO.size = 'story'; PROMO.style = v; render(); }
   else if (act === 'playout') { PROMO.layout = v; render(); }
   else if (act === 'pphoto-clear') { PROMO.photos = []; render(); }
