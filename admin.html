@@ -173,7 +173,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261104c';
+const BUILD = '20261105a';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -840,9 +840,10 @@ function ledgerCSV() {
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
 const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 발표 표지'], ['result', '매칭 결과']];
-const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔']];
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 발표 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내']];
+const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔'], ['inv', '초대장']];
 const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
+const PROMO_INV_ONLY = ['invite', 'schedule', 'details', 'apply'];   // 초대장 스타일 전용 종류 (카드뉴스 01~04)
 function promoHour(t) { const m = String(t || '').match(/(\d{1,2})(?::(\d{2}))?/); if (!m) return t || ''; const h = +m[1]; const mm = m[2] && m[2] !== '00' ? ` ${+m[2]}분` : ''; return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시${mm}`; }
 function promoData() {
   const c = A.cohort; const ss = slots().filter(x => x.cohort === c);
@@ -881,7 +882,30 @@ function ionDefaults(kind, d) {   // [큰 제목, 작은 제목, 아래 문구, 
     result: ['귀한 인연이 이어졌어요', `이온 크리스천 소개팅 ${r.cohort}`, `함께해 주신 ${r.people}분 모두,/진심으로 감사했습니다`, '']
   }[kind];
 }
+/* 진행 중인 기수(앞에서 2개)의 일정 — 초대장 스타일의 일정·참가 안내에 씀 */
+function invCohorts() {
+  const live = cohortIndex().live.map(x => x.name); const names = live.includes(A.cohort) ? live : [A.cohort, ...live];
+  return names.slice(0, 2).map(name => { const ss = slots().filter(x => x.cohort === name); const f = ss[0] || {};
+    return { name, date: f.date || '', place: f.place || '', spot: String(f.place || '').replace(/\s*카페$/, '').split(/\s+/).pop() || '', rows: ss.map(x => ({ time: x.time, start: String(x.time).split('~')[0], age: ionAgeText(x), cap: Math.max(+x.cap?.M || 0, +x.cap?.F || 0) })) }; }).filter(c => c.rows.length);
+}
+function invDefaults(kind, d) {   // [큰 제목, 작은 제목, 아래 문구] — 큰 제목의 / 는 줄바꿈, 마지막 줄이 포인트색
+  const cs = invCohorts(); const names = cs.map(c => c.name).join(' · '); const rv = d.review;
+  const m = (cs[0]?.date || '').match(/^(\d+)\//); const same = cs.every(c => c.date.match(/^(\d+)\//)?.[1] === m?.[1]); const nn = ['', '한', '두'][cs.length] || '';
+  const dp = `${String(d.date).replace(/^(\d+)\/(\d+)/, '$1월 $2일')} · ${d.place}`;
+  return {
+    invite: ['같은 믿음 안에서/새로운 인연을/초대합니다', '이온 크리스천 소개팅', `${names} 참가자 모집`],
+    schedule: [m && same ? `${m[1]}월의 ${nn} 토요일` : '모집 일정', '자신에게 맞는 연령대의 타임으로 신청해 주세요', ''],
+    details: ['참가 안내', '자세한 장소는 확정 후 문자로 안내드려요', '타임별 최소 인원(4대4)이 모이지 않으면/해당 타임은 취소될 수 있으며, 참가비는 전액 환불돼요'],
+    apply: ['당신의 자리를/준비해 둘게요', '프로필 링크에서 신청서 작성/→ 참가비 입금 → 확정 문자', '선착순 마감'],
+    open: [`${d.cohort}/참가자 모집`, dp, '프로필 링크에서 신청해 주세요'],
+    status: [`${d.cohort}/모집 현황`, dp, `남은 자리 ${d.left}석 · 선착순 마감`],
+    full: [`${d.cohort}/모집 마감`, `${d.filled}분과 함께해요 · 감사합니다`, '다음 기수 소식도 기대해 주세요'],
+    wait: ['정원이 다 찼어요/대기 접수 중', `${d.cohort} · ${dp}`, '취소 자리가 나면 순서대로 연락드려요'],
+    review: ['참여 후기', `${rv.cohort} · 후기 ${rv.n}건`, '다음 기수에서 만나요']
+  }[kind];
+}
 function promoDefaults(kind, style, d) {
+  if (style === 'inv') return invDefaults(kind, d);
   const dp = `${d.date} · ${d.place}`; const rv = d.review;
   const T = {
     sig: { open: [`${d.cohort} 모집 시작`, dp, '신청은 프로필 링크에서'], status: [`${d.cohort} 모집 현황`, dp, '자리가 빨리 차고 있어요'], full: [`${d.cohort} 모집 완료`, `${d.filled}명 모집 마감 · 감사합니다`, '다음 기수 소식도 기대해 주세요'],
@@ -895,10 +919,11 @@ function promoDefaults(kind, style, d) {
 }
 function viewPromo() {
   if (PROMO_ION_ONLY.includes(PROMO.kind) && PROMO.style !== 'ion') { PROMO.style = 'ion'; PROMO.size = 'story'; }
+  if (PROMO_INV_ONLY.includes(PROMO.kind) && PROMO.style !== 'inv') { PROMO.style = 'inv'; PROMO.size = 'feed'; }
   const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style; const ion = st === 'ion';
   const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}|${PROMO.photos.length >= 2 ? 2 : PROMO.layout}`;
   if (PROMO._for !== key) { if (ion) [PROMO.title, PROMO.sub, PROMO.note, PROMO.cta] = ionDefaults(PROMO.kind, d); else [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
-  const only = PROMO_ION_ONLY.includes(PROMO.kind); const recruit = ['open', 'status', 'full', 'wait'].includes(PROMO.kind);
+  const only = PROMO_ION_ONLY.includes(PROMO.kind); const invOnly = PROMO_INV_ONLY.includes(PROMO.kind); const recruit = ['open', 'status', 'full', 'wait'].includes(PROMO.kind);
   const chip = (act, cur, id, name) => `<button class="chipbtn ${cur === id ? 'on' : ''}" data-act="${act}" data-v="${esc(id)}">${esc(name)}</button>`;
   return `<div class="wrap">
     ${appHead('apply')}
@@ -906,7 +931,7 @@ function viewPromo() {
     ${cohortPicker(A.cohort, 'cohort')}
     <div class="stack" style="gap:12px">
       <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${PROMO_KINDS.map(([k, n]) => chip('pkind', PROMO.kind, k, n)).join('')}</div></div>
-      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${only ? chip('pstyle', 'ion', 'ion', '이온 스토리') + '<span class="small" style="align-self:center">이 종류는 이온 스토리 전용이에요</span>' : PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
+      <div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${only ? chip('pstyle', 'ion', 'ion', '이온 스토리') + '<span class="small" style="align-self:center">이 종류는 이온 스토리 전용이에요</span>' : invOnly ? chip('pstyle', 'inv', 'inv', '초대장') + '<span class="small" style="align-self:center">이 종류는 초대장 전용이에요</span>' : PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>
       ${ion ? `<div class="card stack" style="gap:8px;padding:14px"><span class="round" style="font-size:15px">사진 ${PROMO.kind === 'scene' ? '(1~2장)' : PROMO.kind === 'teaser' ? '(1장)' : '(배경으로 흐리게 깔려요 · 선택)'}</span>
         <span class="small">얼굴은 모자이크한 사진으로 올려주세요. 사진은 이 화면에서만 쓰고 어디에도 저장되지 않아요.</span>
         <input type="file" accept="image/*" multiple class="input" style="padding:10px" onchange="promoPhotos(this)">
@@ -915,7 +940,7 @@ function viewPromo() {
       <div class="chips">${[['feed', '피드 4:5'], ['story', '스토리 9:16'], ['square', '정사각 1:1']].map(([k, l]) => chip('psize', PROMO.size, k, l)).join('')}</div>
       <canvas id="promo-cv" style="width:100%;max-width:420px;align-self:center;border-radius:14px;box-shadow:0 8px 24px rgba(38,69,59,.15);background:#eee"></canvas>
       ${PROMO.kind === 'review' && !d.review.quotes.length ? '<div class="notice">홍보에 동의한 후기가 아직 없어요. 만족도·재참여 숫자만 들어가요.</div>' : ''}
-      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
+      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion || st === 'inv' ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
       <div class="field"><label for="ps">작은 제목</label><input id="ps" class="input" data-pf="sub" value="${esc(PROMO.sub)}" maxlength="40"></div>
       <div class="field"><label for="pn">아래 문구</label><input id="pn" class="input" data-pf="note" value="${esc(PROMO.note)}" maxlength="44"></div>
       ${ion && recruit ? `<div class="field"><label for="pc">안내 문구</label><input id="pc" class="input" data-pf="cta" value="${esc(PROMO.cta)}" maxlength="30"></div>` : ''}
@@ -956,6 +981,7 @@ async function drawPromo() {
   if (PROMO.style === 'ion') return drawIon(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'dots') return drawDots(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'soft') return drawSoft(ctx, W, H, d, PROMO.kind);
+  if (PROMO.style === 'inv') return drawInv(ctx, W, H, d, PROMO.kind);
   return drawSig(ctx, W, H, d, PROMO.kind, PROMO.style.startsWith('bg:') ? ((A.data.promoBg || {})[PROMO.style.slice(3)]) : null);
 }
 
@@ -1204,6 +1230,75 @@ function drawSoft(ctx, W, H, d, kind) {
   t(PROMO.note, cx, y + 50, 30, C.sub, 'D');
   ctx.save(); ctx.translate(96, y0 - 10); ctx.rotate(-0.16); String(PROMO.sub).split(/,\s*|\s(?=하나님)/).slice(0, 3).forEach((ln, j) => t(ln, 0, j * 34, 24, C.sub, 'D', 'left')); ctx.restore();
   if (sc.k < 1) ctx.restore();
+}
+
+/* ---- 스타일: 초대장 — 이중 테두리 · 베이지 · 테라코타 카드뉴스 (01 초대장 · 02 일정 · 03 참가 안내 · 04 신청 안내) ---- */
+function drawInv(ctx, W, H, d, kind) {
+  const C = { bg: '#F4ECE5', line: '#D7AC9E', line2: '#E9D0C6', acc: '#B9665A', ink: '#4A3B36', sub: '#9E7C70', body: '#7A625A', card: '#F9F4F0' };
+  const S = sz => `700 ${sz}px "Gowun Batang", serif`; const N = (sz, b) => `${b ? 700 : 400} ${sz}px "Noto Sans KR", sans-serif`;
+  const T = (s, x, y, font, col, al = 'center', sp = 0) => { ctx.font = font; ctx.fillStyle = col; ctx.textAlign = al; ctx.textBaseline = 'middle'; ctx.letterSpacing = sp + 'px'; ctx.fillText(s, x + (al === 'center' ? sp / 2 : 0), y); ctx.letterSpacing = '0px'; };
+  const fit = (s, maxW, sz, font) => { let z = sz; ctx.font = font(z); while (ctx.measureText(s).width > maxW && z > 20) { z -= 2; ctx.font = font(z); } return z; };
+  const box = (x, y, w, h, r, fill, stroke) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); };
+  const stars = (y, xs) => xs.forEach(x => { ctx.beginPath(); [[0, -24], [6, -6], [24, 0], [6, 6], [0, 24], [-6, 6], [-24, 0], [-6, -6]].forEach(([a, b], i) => ctx[i ? 'lineTo' : 'moveTo'](x + a, y + b)); ctx.closePath(); ctx.fillStyle = '#D0A896'; ctx.fill(); });
+  const hline = (a, b, y, dash) => { ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.setLineDash(dash ? [5, 5] : []); ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(b, y); ctx.stroke(); ctx.setLineDash([]); };
+  const titleLines = (y, gap, sz, accLast) => { const ls = String(PROMO.title).split('/').filter(x => x.trim()); ls.forEach((l, i) => { const z = fit(l.trim(), 840, sz, S); T(l.trim(), 540, y + i * gap, S(z), accLast && ls.length > 1 && i === ls.length - 1 ? C.acc : C.ink); }); return y + (ls.length - 1) * gap; };
+  // 바탕 · 이중 테두리 · 아래 표기
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.strokeRect(49, 49, W - 98, H - 98); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.strokeRect(60, 60, W - 120, H - 120);
+  const no = { invite: '01/04', schedule: '02/04', details: '03/04', apply: '04/04' }[kind];
+  T(`ion · CHRISTIAN DATE${no ? ' · ' + no : ''}`, W / 2, H - 142 + (H === 1080 ? 50 : 0), N(28), C.sub, 'center', 3);
+  // 내용은 1080×1350 기준으로 그린 뒤 크기에 맞춰 키우거나 줄임
+  const k = H >= 1900 ? 1.12 : H <= 1080 ? 0.8 : 1; ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - 1350 * k) / 2 - (H === 1080 ? 18 : 0)); ctx.scale(k, k);
+  const eyebrow = (t, y) => T(t, 540, y, N(30, 1), C.acc, 'center', 9);
+  const cs = invCohorts();
+  if (kind === 'invite') {
+    eyebrow('INVITATION', 280); stars(365, [455, 530, 605]);
+    const y = titleLines(505, 118, 92, true); String(PROMO.sub).split('/').concat(PROMO.note).filter(Boolean).forEach((l, i) => T(l, 540, y + 140 + i * 58, N(38), C.body));
+    stars(y + 335, [530]);
+  } else if (kind === 'schedule') {
+    eyebrow('SCHEDULE', 216); titleLines(320, 90, 78);
+    const n = cs.length; const gap = 30; const w = n > 1 ? (820 - gap) / 2 + 0 : 560; const x0 = n > 1 ? 130 : 260; const rmax = Math.max(1, ...cs.map(c => c.rows.length)); const ph = 322 + rmax * 47;
+    cs.forEach((c, i) => { const x = x0 + i * (w + gap), cx = x + w / 2, y = 396;
+      ctx.beginPath(); ctx.roundRect(x, y, w, ph, [w / 2, w / 2, 24, 24]); ctx.fillStyle = C.card; ctx.fill(); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.stroke();
+      T(c.name.replace(/(\d+)/, '$1 '), cx, y + 86, N(30, 1), C.acc, 'center', 2);
+      T((c.date.match(/^(\d+)\/(\d+)/) || []).slice(1).join('.') || c.date, cx, y + 170, S(92), C.ink);
+      T(`${(c.date.match(/\((.)\)/) || [, '토'])[1]}요일 · ${c.spot}`, cx, y + 238, N(28), C.sub); hline(cx - 30, cx + 30, y + 280);
+      c.rows.forEach((r, j) => { const yy = y + 324 + j * 47; ctx.font = N(26); const a = ctx.measureText(r.time.replace('~', ' – ')).width; const age = r.age || ''; ctx.font = N(26, 1); const b = ctx.measureText(age).width; const sx = cx - (a + 14 + b) / 2;
+        T(r.time.replace('~', ' – '), sx, yy, N(26), C.ink, 'left'); T(age, sx + a + 14, yy, N(26, 1), C.acc, 'left'); }); });
+    if (!n) T('공개된 일정이 없어요', 540, 600, N(34), C.sub);
+    const maxC = Math.max(0, ...cs.flatMap(c => c.rows.map(r => r.cap))); const by = 396 + ph + 88;
+    T(PROMO.sub, 540, 396 + ph + 54, N(fit(PROMO.sub, 800, 30, z => N(z))), C.body);
+    box(140, by + 12, 800, 118, 18, C.card, C.line2);
+    T(`타임별 최소 4대4${maxC > 4 ? ` ~ 최대 ${maxC}대${maxC}` : ''} · 참가비 ${Math.round(d.fee / 10000 * 10) / 10}만원`, 540, by + 54, N(30, 1), C.body); T('인원 미달 시 해당 타임은 취소될 수 있어요', 540, by + 96, N(28), C.body);
+  } else if (kind === 'details') {
+    eyebrow('DETAILS', 216); titleLines(320, 90, 88);
+    const row = (y, lab, main, subs) => { T(lab, 140, y, N(32, 1), C.acc, 'left'); T(main, 310, y, N(fit(main, 630, 36, z => N(z))), C.ink, 'left'); subs.forEach((t, i) => T(t, 310, y + 50 + i * 38, N(fit(t, 630, 26, z => N(z))), C.sub, 'left')); return y + 50 + subs.length * 38 + 2; };
+    const maxC = Math.max(0, ...cs.flatMap(c => c.rows.map(r => r.cap))); const first = cs[0]?.rows || []; const sameAge = cs.every(c => c.rows.map(r => r.start + r.age).join() === first.map(r => r.start + r.age).join());
+    let y = 424; y = row(y, '인원', `타임별 최소 4대4${maxC > 4 ? ` ~ 최대 ${maxC}대${maxC}` : ''}`, ['소규모로 깊이 있게 대화해요']) ; hline(140, 940, y - 14, 1); y += 32;
+    const ages = sameAge ? first.map(r => `${+r.start.split(':')[0]}시 ${r.age}`) : cs.map(c => `${c.name}  ${c.rows.map(r => `${+r.start.split(':')[0]}시 ${r.age}`).join(' · ')}`);
+    y = row(y, '연령', '자신에게 맞는 연령대로 신청해 주세요', ages.slice(0, 4)); hline(140, 940, y - 14, 1); y += 32;
+    y = row(y, '장소', cs.map(c => `${c.name} ${c.spot}`).join(' · ') + ' 카페', [PROMO.sub].filter(Boolean)); hline(140, 940, y - 14, 1); y += 32;
+    y = row(y, '참가비', `${won(d.fee)}원`, []); hline(140, 940, y - 22, 1);
+    const nt = String(PROMO.note).split('/').filter(Boolean); box(140, y + 6, 800, 66 + nt.length * 40, 18, C.card, C.line2); T('꼭 확인해 주세요', 540, y + 44, N(26, 1), C.acc); nt.forEach((l, i) => T(l, 540, y + 88 + i * 38, N(fit(l, 740, 26, z => N(z))), C.ink));
+  } else if (kind === 'apply') {
+    stars(345, [455, 530, 605]); const y = titleLines(490, 110, 88, true);
+    String(PROMO.sub).split('/').filter(Boolean).forEach((l, i) => T(l, 540, y + 140 + i * 60, N(fit(l, 760, 34, z => N(z))), C.ink));
+    if (PROMO.note) { ctx.font = N(36, 1); const w = ctx.measureText(PROMO.note).width + 124; ctx.beginPath(); ctx.roundRect(540 - w / 2, y + 306, w, 102, 51); ctx.strokeStyle = C.acc; ctx.lineWidth = 3; ctx.stroke(); T(PROMO.note, 540, y + 357, N(36, 1), C.acc); }
+  } else if (kind === 'review') {
+    eyebrow('REVIEW', 216); titleLines(320, 90, 88); T(PROMO.sub, 540, 410, N(30), C.body); const rv = d.review;
+    box(140, 460, 800, 170, 22, C.card, C.line2); T('평균 만족도', 340, 510, N(28), C.sub); T(`${rv.avg ? rv.avg.toFixed(1) : '-'} / 5`, 340, 572, S(60), C.ink); T('다시 참여하고 싶어요', 740, 510, N(28), C.sub); T(`${rv.again}%`, 740, 572, S(60), C.acc);
+    let y = 660; rv.quotes.forEach(q => { box(140, y, 800, 142, 22, C.card, C.line2); ctx.font = N(28); wrapText(ctx, `“${q.text}”`, 720, 2).forEach((ln, i) => T(ln, 540, y + 44 + i * 40, N(28), C.ink)); T(`— ${q.label}`, 900, y + 118, N(22), C.sub, 'right'); y += 158; });
+    T(PROMO.note, 540, Math.max(y + 30, 720), N(32), C.body);
+  } else {   // 모집 시작 · 현황 · 마감 · 대기
+    eyebrow(kind === 'status' ? 'STATUS' : kind === 'open' ? 'INVITATION' : 'NOTICE', 200); const y = titleLines(310, 104, 86, true); T(PROMO.sub, 540, y + 88, N(fit(PROMO.sub, 800, 34, z => N(z))), C.body);
+    const rows = d.rows.slice(0, 4); const yy0 = y + 146; const rh = 118; box(130, yy0, 820, rows.length * rh + 28, 26, C.card, C.line2);
+    rows.forEach((r, i) => { const yy = yy0 + 14 + i * rh; const mid = yy + rh / 2; T(r.time.replace('~', ' – '), 180, mid - 22, N(32, 1), C.ink, 'left'); T(r.age || '', 180, mid + 22, N(30, 1), C.acc, 'left');
+      const st = (lab, cap, left) => kind === 'open' ? `${lab} ${cap}자리` : kind === 'full' ? `${lab} 마감` : kind === 'wait' ? `${lab} 대기` : left > 0 ? `${lab} ${left}자리` : `${lab} 마감`;
+      T(st('형제', r.capM, r.leftM), 900, mid - 22, N(30), C.ink, 'right'); T(st('자매', r.capF, r.leftF), 900, mid + 22, N(30), C.ink, 'right'); if (i) hline(170, 910, yy, 1); });
+    if (!rows.length) T('타임 정보 없음', 540, yy0 + 60, N(30), C.sub);
+    T(PROMO.note, 540, yy0 + rows.length * rh + 90, N(fit(PROMO.note, 800, 34, z => N(z))), C.body);
+  }
+  ctx.restore();
 }
 
 async function promoBlob() { const cv = document.getElementById('promo-cv'); await drawPromo(); return new Promise(res => cv.toBlob(res, 'image/png')); }
