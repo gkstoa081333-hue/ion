@@ -840,14 +840,16 @@ function ledgerCSV() {
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
 const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트']];
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트'], ['dealend', '할인 마감 임박']];
 // 종류는 묶음별로 나눠 보여줌 (고른 묶음의 종류만 표시)
-const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait', 'deal']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
+const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['deal', '할인', ['deal', 'dealend']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
 const promoGroupOf = k => PROMO_GROUPS.find(g => g[2].includes(k)) || PROMO_GROUPS[0];
 const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔'], ['inv', '초대장']];
 const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
 const PROMO_INV_ONLY = ['invite', 'schedule', 'details', 'apply'];   // 초대장 스타일 전용 종류 (카드뉴스 01~04)
-const PROMO_DEAL_ONLY = ['deal'];   // 할인 쿠폰 디자인 전용 종류
+const PROMO_DEAL_ONLY = ['deal', 'dealend'];   // 할인 전용 종류 → 할인 스타일만 고름
+const PROMO_DEAL_STYLES = [['deal', '쿠폰'], ['dealbig', '큰 숫자'], ['dealstory', '이온 스토리'], ['dealinv', '초대장']];
+const isDealStyle = st => PROMO_DEAL_STYLES.some(x => x[0] === st);
 function promoHour(t) { const m = String(t || '').match(/(\d{1,2})(?::(\d{2}))?/); if (!m) return t || ''; const h = +m[1]; const mm = m[2] && m[2] !== '00' ? ` ${+m[2]}분` : ''; return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시${mm}`; }
 function promoData() {
   const c = A.cohort; const ss = slots().filter(x => x.cohort === c);
@@ -925,11 +927,11 @@ function promoDefaults(kind, style, d) {
 function viewPromo() {
   if (PROMO_ION_ONLY.includes(PROMO.kind) && PROMO.style !== 'ion') { PROMO.style = 'ion'; PROMO.size = 'story'; }
   if (PROMO_INV_ONLY.includes(PROMO.kind) && PROMO.style !== 'inv') { PROMO.style = 'inv'; PROMO.size = 'feed'; }
-  if (PROMO_DEAL_ONLY.includes(PROMO.kind) && PROMO.style !== 'deal') { PROMO.style = 'deal'; PROMO.size = 'feed'; }
-  if (!PROMO_DEAL_ONLY.includes(PROMO.kind) && PROMO.style === 'deal') PROMO.style = 'sig';
+  if (PROMO_DEAL_ONLY.includes(PROMO.kind) && !isDealStyle(PROMO.style)) { PROMO.style = PROMO.kind === 'dealend' ? 'dealbig' : 'deal'; PROMO.size = 'feed'; }
+  if (!PROMO_DEAL_ONLY.includes(PROMO.kind) && isDealStyle(PROMO.style)) PROMO.style = 'sig';
   const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style; const ion = st === 'ion';
   const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}|${PROMO.photos.length >= 2 ? 2 : PROMO.layout}`;
-  if (PROMO._for !== key) { if (ion) [PROMO.title, PROMO.sub, PROMO.note, PROMO.cta] = ionDefaults(PROMO.kind, d); else if (st === 'deal') [PROMO.title, PROMO.sub, PROMO.note] = dealDefaults(d); else [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
+  if (PROMO._for !== key) { if (ion) [PROMO.title, PROMO.sub, PROMO.note, PROMO.cta] = ionDefaults(PROMO.kind, d); else if (isDealStyle(st)) [PROMO.title, PROMO.sub, PROMO.note] = dealDefaults(d, PROMO.kind); else [PROMO.title, PROMO.sub, PROMO.note] = promoDefaults(PROMO.kind, st, d); PROMO._for = key; }
   const only = PROMO_ION_ONLY.includes(PROMO.kind) || PROMO_DEAL_ONLY.includes(PROMO.kind); const invOnly = PROMO_INV_ONLY.includes(PROMO.kind); const recruit = ['open', 'status', 'full', 'wait'].includes(PROMO.kind);
   const chip = (act, cur, id, name) => `<button class="chipbtn ${cur === id ? 'on' : ''}" data-act="${act}" data-v="${esc(id)}">${esc(name)}</button>`;
   return `<div class="wrap">
@@ -939,8 +941,9 @@ function viewPromo() {
     <div class="stack" style="gap:12px">
       <div class="field"><span class="lab">무엇을 만들까요?</span><div class="chips" style="flex-wrap:wrap">${PROMO_GROUPS.map(([id, n]) => chip('pgroup', promoGroupOf(PROMO.kind)[0], id, n)).join('')}</div></div>
       <div class="field"><span class="lab">종류</span><div class="chips" style="flex-wrap:wrap">${promoGroupOf(PROMO.kind)[2].map(k => chip('pkind', PROMO.kind, k, PROMO_KINDS.find(x => x[0] === k)[1])).join('')}</div></div>
+      ${PROMO_DEAL_ONLY.includes(PROMO.kind) ? `<div class="field"><span class="lab">디자인</span><div class="chips" style="flex-wrap:wrap">${PROMO_DEAL_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('')}</div></div>` : ''}
       ${only || invOnly ? '' : `<div class="field"><span class="lab">스타일</span><div class="chips" style="flex-wrap:wrap">${PROMO_STYLES.map(([k, n]) => chip('pstyle', PROMO.style, k, n)).join('') + bgs.map(([id, b]) => chip('pstyle', PROMO.style, 'bg:' + id, '🖼 ' + (b.name || '내 디자인'))).join('')}</div></div>`}
-      ${ion ? `<div class="card stack" style="gap:8px;padding:14px"><span class="round" style="font-size:15px">사진 ${PROMO.kind === 'scene' ? '(1~2장)' : PROMO.kind === 'teaser' ? '(1장)' : '(배경으로 흐리게 깔려요 · 선택)'}</span>
+      ${ion || st === 'dealstory' ? `<div class="card stack" style="gap:8px;padding:14px"><span class="round" style="font-size:15px">사진 ${PROMO.kind === 'scene' ? '(1~2장)' : PROMO.kind === 'teaser' ? '(1장)' : '(배경으로 흐리게 깔려요 · 선택)'}</span>
         <span class="small">얼굴은 모자이크한 사진으로 올려주세요. 사진은 이 화면에서만 쓰고 어디에도 저장되지 않아요.</span>
         <input type="file" accept="image/*" multiple class="input" style="padding:10px" onchange="promoPhotos(this)">
         ${PROMO.photos.length ? `<div class="row"><span class="small">${PROMO.photos.length}장 올림</span><button class="mini" data-act="pphoto-clear">사진 지우기</button></div>` : ''}
@@ -949,7 +952,7 @@ function viewPromo() {
       <canvas id="promo-cv" style="width:100%;max-width:420px;align-self:center;border-radius:14px;box-shadow:0 8px 24px rgba(38,69,59,.15);background:#eee"></canvas>
       ${PROMO.kind === 'deal' && !d.deals.length ? `<div class="notice">${esc(d.cohort)}에 진행 중인 할인이 없어요. 설정 › 할인 이벤트에서 먼저 추가해 주세요.</div>` : ''}
       ${PROMO.kind === 'review' && !d.review.quotes.length ? '<div class="notice">홍보에 동의한 후기가 아직 없어요. 만족도·재참여 숫자만 들어가요.</div>' : ''}
-      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion || st === 'inv' || st === 'deal' ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
+      <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion || st === 'inv' || isDealStyle(st) ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
       <div class="field"><label for="ps">작은 제목</label><input id="ps" class="input" data-pf="sub" value="${esc(PROMO.sub)}" maxlength="40"></div>
       <div class="field"><label for="pn">아래 문구</label><input id="pn" class="input" data-pf="note" value="${esc(PROMO.note)}" maxlength="44"></div>
       ${ion && recruit ? `<div class="field"><label for="pc">안내 문구</label><input id="pc" class="input" data-pf="cta" value="${esc(PROMO.cta)}" maxlength="30"></div>` : ''}
@@ -992,6 +995,7 @@ async function drawPromo() {
   if (PROMO.style === 'soft') return drawSoft(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'inv') return drawInv(ctx, W, H, d, PROMO.kind);
   if (PROMO.style === 'deal') return drawDeal(ctx, W, H, d);
+  if (isDealStyle(PROMO.style)) return drawDealAlt(ctx, W, H, d, PROMO.style, PROMO.kind);
   return drawSig(ctx, W, H, d, PROMO.kind, PROMO.style.startsWith('bg:') ? ((A.data.promoBg || {})[PROMO.style.slice(3)]) : null);
 }
 
@@ -1312,8 +1316,11 @@ function drawInv(ctx, W, H, d, kind) {
 }
 
 /* ---- 할인 이벤트 (쿠폰형) — 시그니처 그린·베이지 ---- */
-function dealDefaults(d) {
-  const ds = d.deals; const gs = [...new Set(ds.map(x => x.g || ''))]; const who = gs.length === 1 && gs[0] ? (gs[0] === 'M' ? '형제' : '자매') : '';
+function dealDDay(d) { const us = d.deals.map(x => x.until).filter(Boolean).sort(); if (!us[0]) return null; const n = Math.round((new Date(us[0] + 'T00:00:00') - new Date(TODAY() + 'T00:00:00')) / 864e5); return { until: us[0], n }; }
+function dealDefaults(d, kind) {
+  const ds = d.deals;
+  if (kind === 'dealend') { const dd = dealDDay(d); const city = String(d.place || '').split(/\s+/)[0] || '대전';
+    return [dd ? (dd.n <= 0 ? '오늘이 할인/마지막 날이에요' : `할인 마감까지/D-${dd.n}`) : '할인이 곧/끝나요', dd ? `${ionDealUntilText(dd.until).replace(' 신청', '')} 신청분까지 · ${d.cohort}` : `${d.cohort} · ${promoEnDate(d.date)} · ${city}`, '지금 신청하면 자동으로 적용돼요']; } const gs = [...new Set(ds.map(x => x.g || ''))]; const who = gs.length === 1 && gs[0] ? (gs[0] === 'M' ? '형제' : '자매') : '';
   const us = [...new Set(ds.map(x => x.until || ''))]; const until = us.length === 1 ? us[0] : ''; const city = String(d.place || '').split(/\s+/)[0] || '대전';
   return [who ? `${who}분들께 드리는/특별한 혜택` : `${d.cohort} 참가자께/드리는 할인 혜택`, `${d.cohort} · ${promoEnDate(d.date)} · ${city}`, until ? `${ionDealUntilText(until)}하면 자동으로 적용돼요` : '신청서에서 자동으로 적용돼요'];
 }
@@ -1330,7 +1337,7 @@ function drawDeal(ctx, W, H, d) {
     const endY = 340 + (nl - 1) * 98 + 84 + (PROMO.sub ? 52 : 0) + 18 + n * th0 + (n - 1) * 26 + (PROMO.note ? 108 : 0);
     ctx.translate(0, Math.max(0, (1240 - endY) / 2)); }   // 내용이 적으면 세로 가운데로
   promoMark(ctx, 540 - 70, 118, 140, C.green, C.green, C.gold);
-  T('SPECIAL OFFER', 540, 250, N(28, 1), C.gold, 'center', 10);
+  T(PROMO.kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 250, N(28, 1), C.gold, 'center', 10);
   const ls = String(PROMO.title).split('/').map(x => x.trim()).filter(Boolean);
   ls.forEach((l, i) => T(l, 540, 340 + i * 98, S(fit(l, 860, 80, S)), i === ls.length - 1 && ls.length > 1 ? C.gold : C.green));
   let y = 340 + (ls.length - 1) * 98 + 84; if (PROMO.sub) { T(PROMO.sub, 540, y, N(fit(PROMO.sub, 820, 32, z => N(z))), C.sub); y += 52; }
@@ -1348,6 +1355,68 @@ function drawDeal(ctx, W, H, d) {
     T(`참가비 ${won(Math.max(0, d.fee - x.amount))}원`, rx, y + th / 2 + 38, N(24), C.cream); y += th + gap; });
   if (ds.length) y -= gap;
   if (PROMO.note) { y += 70; ctx.font = N(30, 1); const w = Math.min(860, ctx.measureText(PROMO.note).width + 100); ctx.beginPath(); ctx.roundRect(540 - w / 2, y - 38, w, 76, 38); ctx.strokeStyle = C.green; ctx.lineWidth = 2.5; ctx.stroke(); T(PROMO.note, 540, y, N(fit(PROMO.note, w - 60, 30, z => N(z, 1)), 1), C.green); }
+  ctx.restore();
+}
+/* ---- 할인 이미지 추가 디자인: 큰 숫자 · 이온 스토리 · 초대장 ---- */
+async function drawDealAlt(ctx, W, H, d, st, kind) {
+  const SANS = '"Noto Sans KR", sans-serif', SERIF = '"Gowun Batang", "Noto Serif KR", serif';
+  const N = (z, w = 400) => `${w} ${z}px ${SANS}`, S = z => `700 ${z}px ${SERIF}`;
+  const T = (t, x, y, font, col, al = 'center', sp = 0, max = 0) => { ctx.font = font; if (max) { let z = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)[1]); while (ctx.measureText(t).width + sp * t.length > max && z > 18) { z -= 2; ctx.font = font.replace(/\d+(?:\.\d+)?px/, z + 'px'); } }
+    ctx.fillStyle = col; ctx.textAlign = al; ctx.textBaseline = 'middle'; ctx.letterSpacing = sp + 'px'; ctx.fillText(t, x + (al === 'center' ? sp / 2 : 0), y); ctx.letterSpacing = '0px'; };
+  const ls = String(PROMO.title).split('/').map(x => x.trim()).filter(Boolean); const ds = d.deals.slice(0, 3); const top = ds[0];
+  const dd = kind === 'dealend' ? dealDDay(d) : null; const amt = x => `${won(x.amount)}원`;
+  const tgt = x => ionDealTarget(x, slots());
+  if (st === 'dealbig') {   // 딥그린 바탕 + 큰 금액
+    const G = '#26453B', GOLD = '#D9C8A0', CREAM = '#F6F1E6';
+    ctx.fillStyle = G; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = 'rgba(217,200,160,.45)'; ctx.lineWidth = 2; ctx.strokeRect(44, 44, W - 88, H - 88);
+    T('ion · CHRISTIAN DATE', W / 2, H - 96, N(24), 'rgba(246,241,230,.7)', 'center', 4);
+    const k = H >= 1900 ? 1.12 : H <= 1080 ? 0.78 : 1; ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - 1350 * k) / 2 - (H <= 1080 ? 20 : 0)); ctx.scale(k, k);
+    promoMark(ctx, 470, 110, 140, GOLD, CREAM, GOLD);
+    T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 238, N(28, 700), GOLD, 'center', 10);
+    ls.forEach((l, i) => T(l, 540, 320 + i * 86, S(70), i === ls.length - 1 && ls.length > 1 ? GOLD : CREAM, 'center', 0, 900));
+    let y = 320 + (ls.length - 1) * 86 + 70; if (PROMO.sub) { T(PROMO.sub, 540, y, N(30), 'rgba(246,241,230,.8)', 'center', 0, 860); y += 40; }
+    if (top) { T('-' + won(top.amount), 540, y + 140, N(190, 900), GOLD, 'center', -4, 960); T('원 할인', 540, y + 265, N(44, 700), CREAM);
+      T(`${top.label || '이벤트 할인'} · ${tgt(top)}`, 540, y + 330, N(32, 500), CREAM, 'center', 0, 860); y += 395; }
+    ds.slice(1).forEach((x, i, a) => { const h = 92; ctx.beginPath(); ctx.roundRect(150, y, 780, h, 46); ctx.strokeStyle = 'rgba(217,200,160,.6)'; ctx.lineWidth = 2; ctx.stroke();
+      T(`${x.label || '이벤트 할인'} · ${tgt(x)}`, 200, y + h / 2, N(30, 500), CREAM, 'left', 0, 520); T(`-${amt(x)}`, 880, y + h / 2, N(36, 900), GOLD, 'right'); y += h + 18; });
+    if (!ds.length) { T('설정 › 할인 이벤트에서 할인을 추가해 주세요', 540, y + 60, N(30), CREAM); y += 120; }
+    if (PROMO.note) { y += 40; ctx.font = N(30, 700); const w = Math.min(860, ctx.measureText(PROMO.note).width + 100); ctx.beginPath(); ctx.roundRect(540 - w / 2, y - 38, w, 76, 38); ctx.fillStyle = GOLD; ctx.fill(); T(PROMO.note, 540, y, N(30, 700), G, 'center', 0, w - 60); }
+    ctx.restore(); return;
+  }
+  if (st === 'dealstory') {   // 이온 스토리처럼 흐린 사진 바탕 + 크림 카드
+    const ph = PROMO.photos[0]; const cover = (im, x, y, w, h) => { const sc = Math.max(w / im.width, h / im.height); const sw = w / sc, sh = h / sc; ctx.drawImage(im, (im.width - sw) / 2, (im.height - sh) / 2, sw, sh, x, y, w, h); };
+    if (ph) { const t = document.createElement('canvas'); t.width = 36; t.height = Math.round(36 * H / W); const tc = t.getContext('2d'); const sc = Math.max(t.width / ph.width, t.height / ph.height); tc.drawImage(ph, (t.width - ph.width * sc) / 2, (t.height - ph.height * sc) / 2, ph.width * sc, ph.height * sc); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(t, 0, 0, W, H); ctx.fillStyle = 'rgba(30,60,48,.62)'; ctx.fillRect(0, 0, W, H); }
+    else { const im = await ionBgImage(); if (im) cover(im, 0, 0, W, H); else { ctx.fillStyle = '#2F4F43'; ctx.fillRect(0, 0, W, H); } }
+    const ch = ds.length >= 3 ? 190 : 216; const yEnd = 650 + (Math.min(2, ls.length) - 1) * 116 + 110 + (PROMO.sub ? 70 : 0) + Math.max(1, ds.length) * (ch + 26) + (PROMO.note ? 130 : 0);
+    const k = Math.min(W / 1080, H / (yEnd - 270 + 300)); ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - (yEnd - 270) * k) / 2 - 270 * k); ctx.scale(k, k);
+    const GOLD = '#C9A25A', CREAM = '#F6F3EC', GREEN = '#2C5A47';
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(540, 330, 40, 0, Math.PI * 2); ctx.stroke(); T('ION', 542, 331, N(23, 500), '#fff', 'center', 4); T('ION CHRISTIAN DATE', 540, 411, N(24, 500), '#fff', 'center', 7);
+    T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 530, N(44, 700), GOLD, 'center', 4);
+    ls.slice(0, 2).forEach((l, i) => { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 18; T(l, 540, 650 + i * 116, S(100), '#fff', 'center', 0, 980); ctx.restore(); });
+    let y = 650 + (Math.min(2, ls.length) - 1) * 116 + 110; if (PROMO.sub) { T(PROMO.sub, 540, y, N(36), 'rgba(255,255,255,.88)', 'center', 0, 940); y += 70; }
+    (ds.length ? ds : [null]).forEach(x => { ctx.fillStyle = CREAM; ctx.beginPath(); ctx.roundRect(110, y, 860, ch, 28); ctx.fill();
+      if (!x) { T('진행 중인 할인이 없어요', 540, y + ch / 2, N(36), '#9A9384'); y += ch + 26; return; }
+      T(tgt(x), 166, y + ch / 2 - 46, N(30, 500), '#5E6661', 'left', 0, 520); T(x.label || '이벤트 할인', 166, y + ch / 2 + 10, S(54), GREEN, 'left', 0, 520);
+      if (x.until) T(ionDealUntilText(x.until), 166, y + ch / 2 + 64, N(26), '#8A8F8B', 'left');
+      T(`-${amt(x)}`, 925, y + ch / 2 - 14, N(62, 900), '#B8913F', 'right', 0, 300); T(`참가비 ${won(Math.max(0, d.fee - x.amount))}원`, 925, y + ch / 2 + 48, N(28, 500), '#5E6661', 'right'); y += ch + 26; });
+    if (PROMO.note) { y += 50; T(PROMO.note, 540, y, N(40, 700), '#fff', 'center', 0, 940); ctx.fillStyle = GOLD; ctx.beginPath(); ctx.moveTo(522, y + 44); ctx.lineTo(558, y + 44); ctx.lineTo(540, y + 70); ctx.closePath(); ctx.fill(); }
+    ctx.restore(); return;
+  }
+  // dealinv: 초대장 톤 (베이지·테라코타, 이중 테두리)
+  const C = { bg: '#F4ECE5', line: '#D7AC9E', line2: '#E9D0C6', acc: '#B9665A', ink: '#4A3B36', sub: '#9E7C70', card: '#F9F4F0' };
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.strokeRect(49, 49, W - 98, H - 98); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.strokeRect(60, 60, W - 120, H - 120);
+  T('ion · CHRISTIAN DATE', W / 2, H - 120, N(26), C.sub, 'center', 3);
+  const k = H >= 1900 ? 1.12 : H <= 1080 ? 0.78 : 1; ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - 1350 * k) / 2 - (H <= 1080 ? 20 : 0)); ctx.scale(k, k);
+  T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL GIFT', 540, 210, N(30, 700), C.acc, 'center', 9);
+  [470, 540, 610].forEach(x => { ctx.beginPath(); [[0, -20], [5, -5], [20, 0], [5, 5], [0, 20], [-5, 5], [-20, 0], [-5, -5]].forEach(([a, b], i) => ctx[i ? 'lineTo' : 'moveTo'](x + a, 285 + b)); ctx.closePath(); ctx.fillStyle = '#D0A896'; ctx.fill(); });
+  ls.forEach((l, i) => T(l, 540, 400 + i * 104, S(84), i === ls.length - 1 && ls.length > 1 ? C.acc : C.ink, 'center', 0, 860));
+  let y = 400 + (ls.length - 1) * 104 + 86; if (PROMO.sub) { T(PROMO.sub, 540, y, N(34), C.sub, 'center', 0, 820); y += 50; } y += 20;
+  const ch = ds.length >= 3 ? 150 : 176;
+  (ds.length ? ds : [null]).forEach(x => { ctx.beginPath(); ctx.roundRect(140, y, 800, ch, 24); ctx.fillStyle = C.card; ctx.fill(); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(660, y + 24); ctx.lineTo(660, y + ch - 24); ctx.stroke(); ctx.setLineDash([]);
+    if (!x) { T('진행 중인 할인이 없어요', 540, y + ch / 2, N(32), C.sub); y += ch + 24; return; }
+    T(tgt(x), 186, y + ch / 2 - 38, N(26, 500), C.sub, 'left', 0, 450); T(x.label || '이벤트 할인', 186, y + ch / 2 + 14, S(46), C.ink, 'left', 0, 450);
+    T(`${won(x.amount)}원`, 800, y + ch / 2 - 14, N(50, 900), C.acc, 'center', 0, 240); T(x.until ? ionDealUntilText(x.until) : '할인', 800, y + ch / 2 + 40, N(24), C.sub, 'center', 0, 240); y += ch + 24; });
+  if (PROMO.note) { y += 40; T(PROMO.note, 540, y, N(34), C.ink, 'center', 0, 860); }
   ctx.restore();
 }
 async function promoBlob() { const cv = document.getElementById('promo-cv'); await drawPromo(); return new Promise(res => cv.toBlob(res, 'image/png')); }
