@@ -39,6 +39,42 @@ function ionAgeRange(s) { let a = Number(s && s.ageFrom) || 0, b = Number(s && s
 function ionAgeText(s) { const { a, b } = ionAgeRange(s); const yy = y => String(y).slice(2); return a && b ? `${yy(a)}~${yy(b)}년생` : a ? `${yy(a)}년생부터` : b ? `${yy(b)}년생까지` : ''; }
 function ionAgeOk(s, year) { const { a, b } = ionAgeRange(s); const y = Number(year); if (!y) return true; return (!a || y >= a) && (!b || y <= b); }
 
+/* ---------- 할인 이벤트 (관리자 › 설정 › 할인 이벤트, apply/config/deals 에 저장) ----------
+   deal = { id, label, g: ''|'M'|'F', cohort: ''|'3기', slotId: ''|타임id, amount, on, until: ''|'YYYY-MM-DD'(이 날까지 신청) }
+   한 신청에는 조건이 맞는 할인 중 가장 큰 1개만 적용. 재참여 할인과는 config.dealStack 이 true 일 때만 겹침(아니면 큰 쪽 하나) */
+function ionToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function ionDealOk(x, slot, g, today) {
+  if (!x || x.on === false || !(+x.amount > 0)) return false;
+  if (x.until && (today || ionToday()) > x.until) return false;
+  if (x.g && g && x.g !== g) return false;
+  if (x.g && !g) return false;
+  if (x.slotId && (!slot || slot.id !== x.slotId)) return false;
+  if (x.cohort && (!slot || slot.cohort !== x.cohort)) return false;
+  return true;
+}
+function ionDealList(cfg) { const v = cfg && cfg.deals; return (Array.isArray(v) ? v : Object.values(v || {})).filter(Boolean); }
+function ionBestDeal(cfg, slot, g, today) { return ionDealList(cfg).filter(x => ionDealOk(x, slot, g, today)).sort((a, b) => b.amount - a.amount)[0] || null; }
+// 참가비 계산 → { base, deal(적용액), dealLabel, rep(적용액), fee }
+function ionCombine(base, deal, dealLabel, rep, stack) {
+  base = +base || 0; deal = Math.max(0, +deal || 0); rep = Math.max(0, +rep || 0);
+  if (!stack) { if (rep > deal) deal = 0; else rep = 0; }
+  if (!deal) dealLabel = '';
+  return { base, deal, dealLabel: dealLabel || '', rep, fee: Math.max(0, base - deal - rep) };
+}
+function ionPrice(cfg, slot, g, repeat, today) {
+  cfg = cfg || {}; const best = ionBestDeal(cfg, slot, g, today);
+  const rd = repeat ? (cfg.repeatDiscount != null ? +cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount) : 0;
+  return ionCombine(cfg.fee, best ? +best.amount : 0, best ? (best.label || '이벤트 할인') : '', rd, !!cfg.dealStack);
+}
+// 할인 대상 설명 (예: "3기 15시 타임 · 형제")
+function ionDealTarget(x, slots) {
+  const sl = x.slotId ? (slots || []).find(s => s.id === x.slotId) : null; const parts = [];
+  if (sl) parts.push(`${sl.cohort} ${+String(sl.time).split(':')[0]}시 타임`); else if (x.cohort) parts.push(x.cohort); else parts.push('전 기수');
+  parts.push(x.g === 'M' ? '형제' : x.g === 'F' ? '자매' : '형제·자매');
+  return parts.join(' · ');
+}
+function ionDealUntilText(until) { if (!until) return ''; const d = new Date(until + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})까지 신청`; }
+
 /* ---------- 후기 문항 (운영진이 후기 탭 › 문항 편집에서 바꿀 수 있음, apply/config/reviewForm 에 저장) ----------
    core: 통계에 쓰이는 기본 문항(아이디 고정) · fixed: 숨길 수 없는 문항 · 직접 추가한 문항은 후기의 extra 에 저장 */
 const ION_REVIEW_FORM = { q: [

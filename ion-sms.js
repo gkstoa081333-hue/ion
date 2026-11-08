@@ -16,7 +16,7 @@
     const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
     const fee = r.fee != null ? +r.fee : +cfg.fee || 0;
     return { chat: cfg.openchat || '', from: ex.from || '', when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
-      feeNote: r.discount > 0 ? ` (재참여 ${won(r.discount)}원 할인 적용)` : '', deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1 };
+      feeNote: (() => { const n = [+r.dealDisc > 0 ? `${r.dealLabel || '이벤트 할인'} -${won(r.dealDisc)}원` : '', +r.discount > 0 ? `재참여 할인 -${won(r.discount)}원` : ''].filter(Boolean); return n.length ? ` (${n.join(', ')} 적용)` : ''; })(), deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1 };
   }
 const T = {
   pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청 감사합니다 🙂
