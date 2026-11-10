@@ -312,6 +312,11 @@ function viewMsg(title, body) {
     <div class="stack center"><p class="h1">${title}</p><p class="p" style="word-break:keep-all">${body}</p></div><div class="spacer"></div></div>`;
 }
 
+// 블라인드: 남은 자리 숫자 대신 상태만 보여줌 (임박 기준은 SEAT_SOON 이하)
+const SEAT_SOON = 2;
+function seatState(left) { return left <= 0 ? 'full' : left <= SEAT_SOON ? 'soon' : 'open'; }
+function seatText(left) { return { open: '모집 중', soon: '마감 임박', full: '마감·대기' }[seatState(left)]; }
+
 function groupSlots() {
   const g = {};
   S.cfg.slots.forEach(s => { (g[s.cohort] = g[s.cohort] || { date: s.date, place: s.place, slots: [] }).slots.push(s); });
@@ -324,7 +329,7 @@ function viewIntro() {
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
       ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}${ionAgeText(s) ? ` <b style="color:var(--gold)">· ${ionAgeText(s)}</b>` : ''}</span>
-        <span>형제 ${s.left.M ? `<b style="color:var(--gold)">${s.left.M}자리</b>` : '마감·대기'} · 자매 ${s.left.F ? `<b style="color:var(--gold)">${s.left.F}자리</b>` : '마감·대기'}</span></div>`).join('')}
+        <span>형제 ${s.left.M > 0 ? `<b style="color:var(--gold)">${seatText(s.left.M)}</b>` : seatText(0)} · 자매 ${s.left.F > 0 ? `<b style="color:var(--gold)">${seatText(s.left.F)}</b>` : seatText(0)}</span></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
     <div class="top"><span class="brand">ION</span><span class="pill">참가 신청</span></div>
@@ -392,7 +397,7 @@ function viewStep1() {
     ${grp.slots.map(s => {
       const left = g ? s.left[g] : null; const ageOk = ionAgeOk(s, S.d.birthYear);
       const dl = g ? ionBestDeal(S.cfg, s, g) : null;
-      const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ok">${left}자리 남음</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
+      const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ${seatState(left) === 'soon' ? 'wait' : 'ok'}">${seatText(left)}</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
       return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
         <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
     }).join('')}`).join('');
