@@ -42,6 +42,14 @@ a{color:var(--green)}
 .stack{display:flex;flex-direction:column;gap:12px}
 .row{display:flex;align-items:center;gap:10px}
 .between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.slotrow{padding:10px 0;border-top:1px dashed rgba(255,255,255,.14)}
+.slotrow:first-of-type{border-top:none;padding-top:4px}
+.sl-t{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:15px;white-space:nowrap;letter-spacing:-0.2px}
+.sl-t b{color:var(--gold);font-weight:600;font-size:14px}
+.sl-s{margin-top:4px;font-size:13px;opacity:.85;white-space:nowrap;letter-spacing:-0.2px}
+.sl-s b{font-weight:600;color:var(--gold)}
+.sl-s b.full{color:inherit;opacity:.7}
+.sl-s .dot{margin:0 6px;opacity:.6}
 .top{display:flex;align-items:center;justify-content:space-between;min-height:44px}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;background:transparent;border-radius:12px;margin-left:-10px;color:inherit}
 .pill{padding:6px 14px;border:1px solid var(--gold);border-radius:999px;font-size:12px;color:var(--gold);letter-spacing:.04em}
@@ -328,8 +336,9 @@ function viewIntro() {
   const cards = Object.entries(groups).map(([cohort, g]) => `
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
-      ${g.slots.map(s => `<div class="between small" style="font-size:14px"><span>${esc(s.time)}${ionAgeText(s) ? ` <b style="color:var(--gold)">· ${ionAgeText(s)}</b>` : ''}</span>
-        <span>형제 ${s.left.M > 0 ? `<b style="color:var(--gold)">${seatText(s.left.M)}</b>` : seatText(0)} · 자매 ${s.left.F > 0 ? `<b style="color:var(--gold)">${seatText(s.left.F)}</b>` : seatText(0)}</span></div>`).join('')}
+      ${g.slots.map(s => `<div class="slotrow">
+        <div class="sl-t"><span>${esc(s.time)}</span>${ionAgeText(s) ? `<b>${ionAgeText(s)}</b>` : ''}</div>
+        <div class="sl-s">형제 <b class="${seatState(s.left.M)}">${seatText(s.left.M)}</b><span class="dot">·</span>자매 <b class="${seatState(s.left.F)}">${seatText(s.left.F)}</b></div></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
     <div class="top"><span class="brand">ION</span><span class="pill">참가 신청</span></div>
@@ -342,8 +351,8 @@ function viewIntro() {
     <div class="stack" style="margin-top:26px;gap:10px">${cards}</div>
     ${(() => { const rd = S.cfg.repeatDiscount != null ? +S.cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount;
       const items = [
-        ['💛', `참가비는 ${won(S.cfg.fee)}원이에요.${rd > 0 ? ` 다시 와 주시는 분은 ${won(rd)}원 할인해 드려요.` : ''}`],
-        ...publicDeals().map(x => ['🎁', `<b style="color:var(--gold)">${esc(x.label || '할인 이벤트')}</b> · ${esc(ionDealTarget(x, S.cfg.slots))} ${won(x.amount)}원 할인${x.until ? ` (${ionDealUntilText(x.until)})` : ''}. 신청서에서 자동으로 적용돼요.`]),
+        ['💛', `참가비는 <span style="white-space:nowrap">${won(S.cfg.fee)}원</span>이에요.${rd > 0 ? ` 다시 와 주시는 분은 <span style="white-space:nowrap">${won(rd)}원</span> 할인해 드려요.` : ''}`],
+        ...publicDeals().map(x => ['🎁', `<b style="color:var(--gold)">${esc(x.label || '할인 이벤트')}</b> · ${esc(ionDealTarget(x, S.cfg.slots))} <span style="white-space:nowrap">${won(x.amount)}원</span> 할인${x.until ? ` (${ionDealUntilText(x.until)})` : ''}. 신청서에서 자동으로 적용돼요.`]),
         ['🎂', '타임마다 만나는 연령대가 달라요. 내 출생연도에 맞는 타임으로 신청해 주세요.'],
         ['⛪', '같은 교회 분이나 이전 기수에서 만난 분과 겹치면, 같은 기수의 다른 타임으로 살짝 옮겨 드릴 수 있어요.'],
         ['📩', '신청 후 안내드리는 계좌로 입금해 주시면 참가가 확정돼요.']];
