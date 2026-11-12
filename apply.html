@@ -147,7 +147,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="ion-store.js?v=20261108a"></script>
+<script src="ion-store.js?v=20261113a"></script>
 <script>
 /* =====================================================================
    이온 신청 페이지 — 매칭앱과 같은 Firebase에 저장 (ion-store.js)
@@ -226,7 +226,8 @@ function fmtDeadline(iso) {
 
 /* ---------- 데이터 ---------- */
 async function loadConfig() {
-  const [config, slots, counts] = await Promise.all([IonStore.get('apply/config'), IonStore.get('apply/slots'), IonStore.get('apply/counts')]);
+  const [config, slots, counts, dcounts] = await Promise.all([IonStore.get('apply/config'), IonStore.get('apply/slots'), IonStore.get('apply/counts'), IonStore.get('apply/dealCounts').catch(() => null)]);
+  ION_DEAL_COUNTS = dcounts || {};
   if (!config) return { open: false, slots: [] };
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const notPast = s => { const m = String(s.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return true; let y = today.getFullYear(); let d = new Date(y, +m[1] - 1, +m[2]); if (d < new Date(y, today.getMonth() - 2, 1)) d = new Date(y + 1, +m[1] - 1, +m[2]); return d >= today; };
@@ -241,7 +242,7 @@ async function loadConfig() {
 
 // 지금 공개된 타임에 해당하는 진행 중인 할인 (신청 첫 화면 안내용)
 function publicDeals() { const sl = S.cfg.slots || []; return ionDealList(S.cfg).filter(x => sl.some(s => ionDealOk(x, s, x.g || ''))); }
-function myPrice() { const slot = (S.cfg.slots || []).find(x => x.id === S.d.slotId); return ionPrice(S.cfg, slot, S.d.gender, S.d.repeat === '이전 기수에 참여했어요'); }
+function myPrice() { const slot = (S.cfg.slots || []).find(x => x.id === S.d.slotId); const full = slot && S.d.gender && !(slot.left[S.d.gender] > 0); return ionPrice(S.cfg, slot, S.d.gender, S.d.repeat === '이전 기수에 참여했어요', undefined, full); }
 function myFee() { return myPrice().fee; }
 // 참가비 표시 (할인 내역 포함)
 function priceText(p) { if (p.fee >= p.base) return `${won(p.base)}원`; const why = [p.dealLabel, p.rep ? '재참여 할인' : ''].filter(Boolean).join(' + '); return `<s style="color:var(--muted)">${won(p.base)}원</s> <b>${won(p.fee)}원</b> (${esc(why)})`; }
@@ -273,16 +274,27 @@ async function createApplication(d) {
     if (!payName) payName = base + String(seq % 1000).padStart(3, '0');
   }
   const deadline = got ? Date.now() + (Number(cfg.payHours) || 24) * 3600e3 : 0;
+  // 할인: 선착순 할인은 자리를 잡은 신청만, 그리고 선착순 자리를 먼저 잡은 경우에만 적용 (대기는 선착순 제외)
+  const rep = d.repeat === '이전 기수에 참여했어요';
+  let price = ionPrice(cfg, slot, d.gender, rep, undefined, !got);
+  for (let i = 0; i < 4 && price.dealLimited; i++) {
+    const dx = ionDealList(cfg).find(x => x.id === price.dealId); let ok = false;
+    try { ok = (await IonStore.txn(`apply/dealCounts/${dx.id}/${d.gender}`, cur => ((cur || 0) >= +dx.limit ? undefined : (cur || 0) + 1))).committed; } catch (e) { ok = false; }
+    if (ok) break;
+    ION_DEAL_COUNTS[dx.id] = { ...(ION_DEAL_COUNTS[dx.id] || {}), [d.gender]: +dx.limit };   // 방금 마감됨 → 다음 할인으로
+    price = ionPrice(cfg, slot, d.gender, rep, undefined, !got);
+    if (i === 3 && price.dealLimited) price = ionPrice(cfg, slot, d.gender, rep, undefined, true);
+  }
   // 4) 신청서 저장
   await IonStore.set('apply/apps/' + id, {
     id, uid, at: Date.now(), status, cohort: slot.cohort, slotId: slot.id, date: slot.date, time: slot.time, place: slot.place || '',
     gender: d.gender, name: d.name, birthYear: Number(d.birthYear), phone: fmtPhone(d.phone), region: d.region, job: d.job,
     church: d.church, churchAddr: d.churchAddr, attend: d.attend, source: d.source,
-    ...(() => { const p = ionPrice(cfg, slot, d.gender, d.repeat === '이전 기수에 참여했어요'); return { fee: p.fee, discount: p.rep, dealDisc: p.deal, dealLabel: p.dealLabel }; })(), repeatClaim: d.repeat === '이전 기수에 참여했어요',
+    fee: price.fee, discount: price.rep, dealDisc: price.deal, dealLabel: price.dealLabel, ...(price.dealId ? { dealId: price.dealId } : {}), repeatClaim: d.repeat === '이전 기수에 참여했어요',
     note: d.note, newsAgree: d.mktOk ? '동의합니다' : '받지 않을게요', payName, deadline, phoneKey, log: '', memo: '',
     consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
   });
-  return { id, status, payName, deadline, fee: ionPrice(cfg, slot, d.gender, d.repeat === '이전 기수에 참여했어요').fee, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
+  return { id, status, payName, deadline, fee: price.fee, dealLabel: price.dealLabel, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
 }
 
 /* ---------- 상태 ---------- */
@@ -352,7 +364,7 @@ function viewIntro() {
     ${(() => { const rd = S.cfg.repeatDiscount != null ? +S.cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount;
       const items = [
         ['💛', `참가비는 <span style="white-space:nowrap">${won(S.cfg.fee)}원</span>이에요.${rd > 0 ? ` 다시 와 주시는 분은 <span style="white-space:nowrap">${won(rd)}원</span> 할인해 드려요.` : ''}`],
-        ...publicDeals().map(x => ['🎁', `<b style="color:var(--gold)">${esc(x.label || '할인 이벤트')}</b> · ${esc(ionDealTarget(x, S.cfg.slots))} <span style="white-space:nowrap">${won(x.amount)}원</span> 할인${x.until ? ` (${ionDealUntilText(x.until)})` : ''}. 신청서에서 자동으로 적용돼요.`]),
+        ...publicDeals().map(x => ['🎁', `<b style="color:var(--gold)">${esc(x.label || '할인 이벤트')}</b> · ${esc(ionDealTarget(x, S.cfg.slots))} <span style="white-space:nowrap">${won(x.amount)}원</span> 할인${ionDealCond(x) ? ` (${esc(ionDealCond(x))})` : ''}. 신청서에서 자동으로 적용돼요.${+x.limit > 0 ? ' 대기 신청에는 적용되지 않아요.' : ''}`]),
         ['🎂', '타임마다 만나는 연령대가 달라요. 내 출생연도에 맞는 타임으로 신청해 주세요.'],
         ['⛪', '같은 교회 분이나 이전 기수에서 만난 분과 겹치면, 같은 기수의 다른 타임으로 살짝 옮겨 드릴 수 있어요.'],
         ['📩', '신청 후 안내드리는 계좌로 입금해 주시면 참가가 확정돼요.']];
@@ -408,7 +420,7 @@ function viewStep1() {
       const dl = g ? ionBestDeal(S.cfg, s, g) : null;
       const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ${seatState(left) === 'soon' ? 'wait' : 'ok'}">${seatText(left)}</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
       return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
-        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
+        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${+dl.limit > 0 ? '선착순 ' : ''}${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
     }).join('')}`).join('');
   return `<div class="wrap">${head('기본 정보를 알려주세요', '운영진만 확인하고, 다른 참가자에게는 공개되지 않아요.')}
     <form class="stack" style="gap:20px" data-form="step" autocomplete="on" novalidate>

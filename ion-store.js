@@ -43,8 +43,25 @@ function ionAgeOk(s, year) { const { a, b } = ionAgeRange(s); const y = Number(y
    deal = { id, label, g: ''|'M'|'F', cohort: ''|'3기', slotId: ''|타임id, amount, on, until: ''|'YYYY-MM-DD'(이 날까지 신청) }
    한 신청에는 조건이 맞는 할인 중 가장 큰 1개만 적용. 재참여 할인과는 config.dealStack 이 true 일 때만 겹침(아니면 큰 쪽 하나) */
 function ionToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+/* 선착순(얼리버드): deal.limit = 성별마다 선착순 인원(0이면 제한 없음). 사용 수는 apply/dealCounts/{할인id}/{M|F} (공개 읽기)
+   각 페이지가 불러와서 ION_DEAL_COUNTS 에 넣어둠 */
+var ION_DEAL_COUNTS = {};
+function ionDealLeft(x, g) {
+  const lim = +(x && x.limit) || 0; if (!lim) return Infinity;
+  const c = (ION_DEAL_COUNTS || {})[x.id] || {}; const left = k => Math.max(0, lim - (+c[k] || 0));
+  if (g) return left(g); return Math.max(...(x.g ? [x.g] : ['M', 'F']).map(left));
+}
+const ionIsEarly = x => !!x && (!!x.early || /얼리버드|early/i.test(x.label || ''));
+// 할인 조건 문구: "형제·자매 각 선착순 3명 · 11/20(금)까지 신청" (withLeft: 남은 자리도)
+function ionDealCond(x, withLeft) {
+  const out = []; const lim = +x.limit || 0; const gn = { M: '형제', F: '자매' };
+  if (lim) out.push(withLeft ? (x.g ? [x.g] : ['M', 'F']).map(g => ionDealLeft(x, g) > 0 ? `${gn[g]} ${ionDealLeft(x, g)}자리 남음` : `${gn[g]} 마감`).join(' · ') : `${x.g ? '' : '형제·자매 각 '}선착순 ${lim}명`);
+  if (x.until) out.push(ionDealUntilText(x.until));
+  return out.join(' · ');
+}
 function ionDealOk(x, slot, g, today) {
   if (!x || x.on === false || !(+x.amount > 0)) return false;
+  if (ionDealLeft(x, g) <= 0) return false;
   if (x.until && (today || ionToday()) > x.until) return false;
   if (x.g && g && x.g !== g) return false;
   if (x.g && !g) return false;
@@ -53,7 +70,7 @@ function ionDealOk(x, slot, g, today) {
   return true;
 }
 function ionDealList(cfg) { const v = cfg && cfg.deals; return (Array.isArray(v) ? v : Object.values(v || {})).filter(Boolean); }
-function ionBestDeal(cfg, slot, g, today) { return ionDealList(cfg).filter(x => ionDealOk(x, slot, g, today)).sort((a, b) => b.amount - a.amount)[0] || null; }
+function ionBestDeal(cfg, slot, g, today, noLimited) { return ionDealList(cfg).filter(x => ionDealOk(x, slot, g, today) && !(noLimited && +x.limit > 0)).sort((a, b) => b.amount - a.amount)[0] || null; }
 // 참가비 계산 → { base, deal(적용액), dealLabel, rep(적용액), fee }
 function ionCombine(base, deal, dealLabel, rep, stack) {
   base = +base || 0; deal = Math.max(0, +deal || 0); rep = Math.max(0, +rep || 0);
@@ -61,10 +78,11 @@ function ionCombine(base, deal, dealLabel, rep, stack) {
   if (!deal) dealLabel = '';
   return { base, deal, dealLabel: dealLabel || '', rep, fee: Math.max(0, base - deal - rep) };
 }
-function ionPrice(cfg, slot, g, repeat, today) {
-  cfg = cfg || {}; const best = ionBestDeal(cfg, slot, g, today);
+function ionPrice(cfg, slot, g, repeat, today, noLimited) {   // noLimited: 대기 신청 등 선착순 할인 제외
+  cfg = cfg || {}; const best = ionBestDeal(cfg, slot, g, today, noLimited);
   const rd = repeat ? (cfg.repeatDiscount != null ? +cfg.repeatDiscount : ION_DEFAULTS.config.repeatDiscount) : 0;
-  return ionCombine(cfg.fee, best ? +best.amount : 0, best ? (best.label || '이벤트 할인') : '', rd, !!cfg.dealStack);
+  const p = ionCombine(cfg.fee, best ? +best.amount : 0, best ? (best.label || '이벤트 할인') : '', rd, !!cfg.dealStack);
+  return { ...p, dealId: best && p.deal ? (best.id || '') : '', dealLimited: !!(best && p.deal && +best.limit > 0) };
 }
 // 할인 대상 설명 (예: "3기 15시 타임 · 형제")
 function ionDealTarget(x, slots) {

@@ -161,7 +161,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261108a"></script>
+<script src="ion-store.js?v=20261113a"></script>
 <script src="ion-sms.js?v=20261112a"></script>
 <script>
 /* =====================================================================
@@ -256,7 +256,7 @@ function start() {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews' || A.view === 'rreport') render(); });
       if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sessRaw = v || {}; A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
-      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
+      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; ION_DEAL_COUNTS = A.data.dealCounts || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
       if (A.unsubR) { A.unsubR(); A.unsubR = null; }
@@ -371,6 +371,12 @@ function plan(list, extra = {}) {
     });
     const cur = ((A.data.counts || {})[s.id] || {})[g] || 0;
     if (cur !== held) up[`counts/${s.id}/${g}`] = held;
+  }));
+  // 선착순 할인 사용 수: 취소·환불·대기를 뺀 신청 기준으로 다시 셈 → 취소되면 자리가 다시 열림
+  ionDealList(conf()).filter(x => +x.limit > 0 && x.id).forEach(x => ['M', 'F'].forEach(g => {
+    const n = list.filter(r => r.dealId === x.id && r.gender === g && ION_HOLDING.includes(r.status)).length;
+    const cur = ((A.data.dealCounts || {})[x.id] || {})[g] || 0;
+    if (cur !== n) { up[`dealCounts/${x.id}/${g}`] = n; ION_DEAL_COUNTS = { ...ION_DEAL_COUNTS, [x.id]: { ...(ION_DEAL_COUNTS[x.id] || {}), [g]: n } }; }
   }));
   touched.forEach(id => {
     const r = byId[id]; const prev = (A.data.apps || {})[id] || {};
@@ -868,14 +874,17 @@ function ledgerCSV() {
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
 const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트'], ['dealend', '할인 마감 임박']];
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트'], ['dealend', '할인 마감 임박'], ['early', '얼리버드 오픈'], ['earlyleft', '얼리버드 잔여석']];
 // 종류는 묶음별로 나눠 보여줌 (고른 묶음의 종류만 표시)
-const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['deal', '할인', ['deal', 'dealend']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
+const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['early', '얼리버드', ['early', 'earlyleft']], ['deal', '할인', ['deal', 'dealend']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
 const promoGroupOf = k => PROMO_GROUPS.find(g => g[2].includes(k)) || PROMO_GROUPS[0];
 const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔'], ['inv', '초대장']];
 const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
 const PROMO_INV_ONLY = ['invite', 'schedule', 'details', 'apply'];   // 초대장 스타일 전용 종류 (카드뉴스 01~04)
-const PROMO_DEAL_ONLY = ['deal', 'dealend'];   // 할인 전용 종류 → 할인 스타일만 고름
+const PROMO_DEAL_ONLY = ['deal', 'dealend', 'early', 'earlyleft'];
+const PROMO_EARLY = ['early', 'earlyleft'];   // 얼리버드 종류: 얼리버드 할인만 모아서 그림 · earlyleft 는 남은 자리 숫자까지
+const dealEyebrow = (kind, gift) => kind === 'dealend' ? 'LAST CHANCE' : kind === 'early' ? 'EARLY BIRD' : kind === 'earlyleft' ? 'EARLY BIRD · LAST SEATS' : gift ? 'SPECIAL GIFT' : 'SPECIAL OFFER';
+const dealCondOf = (x, fallback = '') => ionDealCond(x, PROMO.kind === 'earlyleft') || fallback;   // 할인 전용 종류 → 할인 스타일만 고름
 const PROMO_DEAL_STYLES = [['deal', '쿠폰'], ['dealbig', '큰 숫자'], ['dealstory', '이온 스토리'], ['dealinv', '초대장']];
 const isDealStyle = st => PROMO_DEAL_STYLES.some(x => x[0] === st);
 function promoHour(t) { const m = String(t || '').match(/(\d{1,2})(?::(\d{2}))?/); if (!m) return t || ''; const h = +m[1]; const mm = m[2] && m[2] !== '00' ? ` ${+m[2]}분` : ''; return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시${mm}`; }
@@ -896,7 +905,7 @@ function promoData() {
   const ms = Object.values(A.sessRaw || {}).filter(x => x && x.pub && x.pub.cohort === pc && !x.pub.imported).map(matchStats);
   const result = { cohort: pc, date: cohortDate(pc), pairs: ms.reduce((t, x) => t + x.pairs, 0), people: ms.reduce((t, x) => t + x.people, 0) };
   return { cohort: c, date: (ss[0] || {}).date || '', place: (ss[0] || {}).place || '', rows, left, cap, filled: cap - left, review, result, fee: +conf().fee || 40000,
-    deals: ionDealList(conf()).filter(x => ss.some(s => ionDealOk(x, s, x.g || ''))).sort((a, b) => b.amount - a.amount) };
+    deals: ionDealList(conf()).filter(x => ss.some(s => ionDealOk(x, s, x.g || ''))).filter(x => !PROMO_EARLY.includes(PROMO.kind) || ionIsEarly(x)).sort((a, b) => b.amount - a.amount) };
 }
 const WEEK_EN = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 function promoEnDate(txt) { const iso = slotIsoDate(txt); if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return `${d.getMonth() + 1}.${d.getDate()} ${WEEK_EN[d.getDay()]}`; }
@@ -955,7 +964,7 @@ function promoDefaults(kind, style, d) {
 function viewPromo() {
   if (PROMO_ION_ONLY.includes(PROMO.kind) && PROMO.style !== 'ion') { PROMO.style = 'ion'; PROMO.size = 'story'; }
   if (PROMO_INV_ONLY.includes(PROMO.kind) && PROMO.style !== 'inv') { PROMO.style = 'inv'; PROMO.size = 'feed'; }
-  if (PROMO_DEAL_ONLY.includes(PROMO.kind) && !isDealStyle(PROMO.style)) { PROMO.style = PROMO.kind === 'dealend' ? 'dealbig' : 'deal'; PROMO.size = 'feed'; }
+  if (PROMO_DEAL_ONLY.includes(PROMO.kind) && !isDealStyle(PROMO.style)) { PROMO.style = ['dealend', 'earlyleft'].includes(PROMO.kind) ? 'dealbig' : 'deal'; PROMO.size = 'feed'; }
   if (!PROMO_DEAL_ONLY.includes(PROMO.kind) && isDealStyle(PROMO.style)) PROMO.style = 'sig';
   const d = promoData(); const bgs = Object.entries((A.data && A.data.promoBg) || {}); const st = PROMO.style.startsWith('bg:') ? 'sig' : PROMO.style; const ion = st === 'ion';
   const key = `${PROMO.kind}|${PROMO.style}|${d.cohort}|${PROMO.photos.length >= 2 ? 2 : PROMO.layout}`;
@@ -978,7 +987,7 @@ function viewPromo() {
         ${PROMO.kind === 'scene' && PROMO.photos.length === 1 ? `<div class="chips">${chip('playout', PROMO.layout, 'frame', '액자형')}${chip('playout', PROMO.layout, 'full', '꽉 차게')}</div>` : ''}</div>` : ''}
       <div class="chips">${[['feed', '피드 4:5'], ['story', '스토리 9:16'], ['square', '정사각 1:1']].map(([k, l]) => chip('psize', PROMO.size, k, l)).join('')}</div>
       <canvas id="promo-cv" style="width:100%;max-width:420px;align-self:center;border-radius:14px;box-shadow:0 8px 24px rgba(38,69,59,.15);background:#eee"></canvas>
-      ${PROMO.kind === 'deal' && !d.deals.length ? `<div class="notice">${esc(d.cohort)}에 진행 중인 할인이 없어요. 설정 › 할인 이벤트에서 먼저 추가해 주세요.</div>` : ''}
+      ${PROMO.kind === 'deal' && !d.deals.length ? `<div class="notice">${esc(d.cohort)}에 진행 중인 할인이 없어요. 설정 › 할인 이벤트에서 먼저 추가해 주세요.</div>` : ''}${PROMO_EARLY.includes(PROMO.kind) && !d.deals.length ? `<div class="notice">${esc(d.cohort)}에 진행 중인 얼리버드가 없어요. 설정 › 할인 이벤트 › <b>+ 얼리버드</b>로 먼저 추가해 주세요.</div>` : ''}${PROMO.kind === 'earlyleft' && d.deals.some(x => +x.limit > 0) ? '<div class="notice">남은 자리 숫자가 이미지에 들어가요. 올리기 직전에 한 번 더 만들어 주세요.</div>' : ''}
       ${PROMO.kind === 'review' && !d.review.quotes.length ? '<div class="notice">홍보에 동의한 후기가 아직 없어요. 만족도·재참여 숫자만 들어가요.</div>' : ''}
       <div class="field"><label for="pt">큰 제목</label><input id="pt" class="input" data-pf="title" value="${esc(PROMO.title)}" maxlength="32">${ion || st === 'inv' || isDealStyle(st) ? '<span class="small">/ 를 넣으면 줄이 바뀌어요</span>' : ''}</div>
       <div class="field"><label for="ps">작은 제목</label><input id="ps" class="input" data-pf="sub" value="${esc(PROMO.sub)}" maxlength="40"></div>
@@ -1347,6 +1356,10 @@ function drawInv(ctx, W, H, d, kind) {
 function dealDDay(d) { const us = d.deals.map(x => x.until).filter(Boolean).sort(); if (!us[0]) return null; const n = Math.round((new Date(us[0] + 'T00:00:00') - new Date(TODAY() + 'T00:00:00')) / 864e5); return { until: us[0], n }; }
 function dealDefaults(d, kind) {
   const ds = d.deals;
+  if (PROMO_EARLY.includes(kind)) { const city = String(d.place || '').split(/\s+/)[0] || '대전'; const top = ds[0];
+    const lim = ds.some(x => +x.limit > 0); const left = ds.filter(x => +x.limit > 0).map(x => ionDealLeft(x)).reduce((a, b) => Math.min(a, b), Infinity);
+    if (kind === 'earlyleft') return [lim ? (left <= 1 ? '얼리버드/마지막 한 자리' : `얼리버드/${left}자리 남았어요`) : '얼리버드 할인이/곧 끝나요', `${d.cohort} · ${promoEnDate(d.date)} · ${city}`, '자리가 끝나면 정가로 바뀌어요'];
+    return ['먼저 신청하는 분께/얼리버드 혜택', `${d.cohort} · ${promoEnDate(d.date)} · ${city}`, '신청서에서 자동으로 적용돼요']; }
   if (kind === 'dealend') { const dd = dealDDay(d); const city = String(d.place || '').split(/\s+/)[0] || '대전';
     return [dd ? (dd.n <= 0 ? '오늘이 할인/마지막 날이에요' : `할인 마감까지/D-${dd.n}`) : '할인이 곧/끝나요', dd ? `${ionDealUntilText(dd.until).replace(' 신청', '')} 신청분까지 · ${d.cohort}` : `${d.cohort} · ${promoEnDate(d.date)} · ${city}`, '지금 신청하면 자동으로 적용돼요']; } const gs = [...new Set(ds.map(x => x.g || ''))]; const who = gs.length === 1 && gs[0] ? (gs[0] === 'M' ? '형제' : '자매') : '';
   const us = [...new Set(ds.map(x => x.until || ''))]; const until = us.length === 1 ? us[0] : ''; const city = String(d.place || '').split(/\s+/)[0] || '대전';
@@ -1365,7 +1378,7 @@ function drawDeal(ctx, W, H, d) {
     const endY = 340 + (nl - 1) * 98 + 84 + (PROMO.sub ? 52 : 0) + 18 + n * th0 + (n - 1) * 26 + (PROMO.note ? 108 : 0);
     ctx.translate(0, Math.max(0, (1240 - endY) / 2)); }   // 내용이 적으면 세로 가운데로
   promoMark(ctx, 540 - 70, 118, 140, C.green, C.green, C.gold);
-  T(PROMO.kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 250, N(28, 1), C.gold, 'center', 10);
+  T(dealEyebrow(PROMO.kind), 540, 250, N(28, 1), C.gold, 'center', 10);
   const ls = String(PROMO.title).split('/').map(x => x.trim()).filter(Boolean);
   ls.forEach((l, i) => T(l, 540, 340 + i * 98, S(fit(l, 860, 80, S)), i === ls.length - 1 && ls.length > 1 ? C.gold : C.green));
   let y = 340 + (ls.length - 1) * 98 + 84; if (PROMO.sub) { T(PROMO.sub, 540, y, N(fit(PROMO.sub, 820, 32, z => N(z))), C.sub); y += 52; }
@@ -1378,7 +1391,7 @@ function drawDeal(ctx, W, H, d) {
   ds.forEach(x => { const cut = ticket(120, y, 840, th); const lx = 168, lw = cut - lx - 40;
     T(ionDealTarget(x, slots()), lx, y + th / 2 - 42, N(fit(ionDealTarget(x, slots()), lw, 28, z => N(z, 1)), 1), C.gold2, 'left', 1);
     const lab = x.label || '이벤트 할인'; T(lab, lx, y + th / 2 + 8, S(fit(lab, lw, 50, S)), C.cream, 'left');
-    T(x.until ? ionDealUntilText(x.until) : '기간 내 신청 시', lx, y + th / 2 + 58, N(24), '#BFD0C8', 'left');
+    { const cd = dealCondOf(x, '기간 내 신청 시'); T(cd, lx, y + th / 2 + 58, N(fit(cd, lw, 24, z => N(z))), PROMO.kind === 'earlyleft' && +x.limit > 0 ? C.gold2 : '#BFD0C8', 'left'); }
     const rx = (cut + 960) / 2; const amt = `${won(x.amount)}원`; T(amt, rx, y + th / 2 - 18, N(fit(amt, 960 - cut - 50, 56, z => N(z, 2)), 2), C.gold2);
     T(`참가비 ${won(Math.max(0, d.fee - x.amount))}원`, rx, y + th / 2 + 38, N(24), C.cream); y += th + gap; });
   if (ds.length) y -= gap;
@@ -1400,11 +1413,12 @@ async function drawDealAlt(ctx, W, H, d, st, kind) {
     T('ion · CHRISTIAN DATE', W / 2, H - 96, N(24), 'rgba(246,241,230,.7)', 'center', 4);
     const k = H >= 1900 ? 1.12 : H <= 1080 ? 0.78 : 1; ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - 1350 * k) / 2 - (H <= 1080 ? 20 : 0)); ctx.scale(k, k);
     promoMark(ctx, 470, 110, 140, GOLD, CREAM, GOLD);
-    T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 238, N(28, 700), GOLD, 'center', 10);
+    T(dealEyebrow(kind), 540, 238, N(28, 700), GOLD, 'center', 10);
     ls.forEach((l, i) => T(l, 540, 320 + i * 86, S(70), i === ls.length - 1 && ls.length > 1 ? GOLD : CREAM, 'center', 0, 900));
     let y = 320 + (ls.length - 1) * 86 + 70; if (PROMO.sub) { T(PROMO.sub, 540, y, N(30), 'rgba(246,241,230,.8)', 'center', 0, 860); y += 40; }
     if (top) { T('-' + won(top.amount), 540, y + 140, N(190, 900), GOLD, 'center', -4, 960); T('원 할인', 540, y + 265, N(44, 700), CREAM);
-      T(`${top.label || '이벤트 할인'} · ${tgt(top)}`, 540, y + 330, N(32, 500), CREAM, 'center', 0, 860); y += 395; }
+      T(`${top.label || '이벤트 할인'} · ${tgt(top)}`, 540, y + 330, N(32, 500), CREAM, 'center', 0, 860); y += 395;
+      if (PROMO_EARLY.includes(kind) && dealCondOf(top)) { const cd = dealCondOf(top); ctx.font = N(30, 700); const w = Math.min(860, ctx.measureText(cd).width + 80); ctx.beginPath(); ctx.roundRect(540 - w / 2, y - 22, w, 64, 32); ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.stroke(); T(cd, 540, y + 10, N(30, 700), GOLD, 'center', 0, w - 50); y += 80; } }
     ds.slice(1).forEach((x, i, a) => { const h = 92; ctx.beginPath(); ctx.roundRect(150, y, 780, h, 46); ctx.strokeStyle = 'rgba(217,200,160,.6)'; ctx.lineWidth = 2; ctx.stroke();
       T(`${x.label || '이벤트 할인'} · ${tgt(x)}`, 200, y + h / 2, N(30, 500), CREAM, 'left', 0, 520); T(`-${amt(x)}`, 880, y + h / 2, N(36, 900), GOLD, 'right'); y += h + 18; });
     if (!ds.length) { T('설정 › 할인 이벤트에서 할인을 추가해 주세요', 540, y + 60, N(30), CREAM); y += 120; }
@@ -1419,13 +1433,13 @@ async function drawDealAlt(ctx, W, H, d, st, kind) {
     const k = Math.min(W / 1080, H / (yEnd - 270 + 300)); ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - (yEnd - 270) * k) / 2 - 270 * k); ctx.scale(k, k);
     const GOLD = '#C9A25A', CREAM = '#F6F3EC', GREEN = '#2C5A47';
     ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(540, 330, 40, 0, Math.PI * 2); ctx.stroke(); T('ION', 542, 331, N(23, 500), '#fff', 'center', 4); T('ION CHRISTIAN DATE', 540, 411, N(24, 500), '#fff', 'center', 7);
-    T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL OFFER', 540, 530, N(44, 700), GOLD, 'center', 4);
+    T(dealEyebrow(kind), 540, 530, N(44, 700), GOLD, 'center', 4);
     ls.slice(0, 2).forEach((l, i) => { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 18; T(l, 540, 650 + i * 116, S(100), '#fff', 'center', 0, 980); ctx.restore(); });
     let y = 650 + (Math.min(2, ls.length) - 1) * 116 + 110; if (PROMO.sub) { T(PROMO.sub, 540, y, N(36), 'rgba(255,255,255,.88)', 'center', 0, 940); y += 70; }
     (ds.length ? ds : [null]).forEach(x => { ctx.fillStyle = CREAM; ctx.beginPath(); ctx.roundRect(110, y, 860, ch, 28); ctx.fill();
       if (!x) { T('진행 중인 할인이 없어요', 540, y + ch / 2, N(36), '#9A9384'); y += ch + 26; return; }
       T(tgt(x), 166, y + ch / 2 - 46, N(30, 500), '#5E6661', 'left', 0, 520); T(x.label || '이벤트 할인', 166, y + ch / 2 + 10, S(54), GREEN, 'left', 0, 520);
-      if (x.until) T(ionDealUntilText(x.until), 166, y + ch / 2 + 64, N(26), '#8A8F8B', 'left');
+      if (dealCondOf(x)) T(dealCondOf(x), 166, y + ch / 2 + 64, N(26, kind === 'earlyleft' ? 700 : 400), kind === 'earlyleft' ? '#B8913F' : '#8A8F8B', 'left', 0, 520);
       T(`-${amt(x)}`, 925, y + ch / 2 - 14, N(62, 900), '#B8913F', 'right', 0, 300); T(`참가비 ${won(Math.max(0, d.fee - x.amount))}원`, 925, y + ch / 2 + 48, N(28, 500), '#5E6661', 'right'); y += ch + 26; });
     if (PROMO.note) { y += 50; T(PROMO.note, 540, y, N(40, 700), '#fff', 'center', 0, 940); ctx.fillStyle = GOLD; ctx.beginPath(); ctx.moveTo(522, y + 44); ctx.lineTo(558, y + 44); ctx.lineTo(540, y + 70); ctx.closePath(); ctx.fill(); }
     ctx.restore(); return;
@@ -1435,15 +1449,17 @@ async function drawDealAlt(ctx, W, H, d, st, kind) {
   ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.strokeRect(49, 49, W - 98, H - 98); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.strokeRect(60, 60, W - 120, H - 120);
   T('ion · CHRISTIAN DATE', W / 2, H - 120, N(26), C.sub, 'center', 3);
   const k = H >= 1900 ? 1.12 : H <= 1080 ? 0.78 : 1; ctx.save(); ctx.translate((W - 1080 * k) / 2, (H - 1350 * k) / 2 - (H <= 1080 ? 20 : 0)); ctx.scale(k, k);
-  T(kind === 'dealend' ? 'LAST CHANCE' : 'SPECIAL GIFT', 540, 210, N(30, 700), C.acc, 'center', 9);
+  T(dealEyebrow(kind, true), 540, 210, N(30, 700), C.acc, 'center', 9);
   [470, 540, 610].forEach(x => { ctx.beginPath(); [[0, -20], [5, -5], [20, 0], [5, 5], [0, 20], [-5, 5], [-20, 0], [-5, -5]].forEach(([a, b], i) => ctx[i ? 'lineTo' : 'moveTo'](x + a, 285 + b)); ctx.closePath(); ctx.fillStyle = '#D0A896'; ctx.fill(); });
   ls.forEach((l, i) => T(l, 540, 400 + i * 104, S(84), i === ls.length - 1 && ls.length > 1 ? C.acc : C.ink, 'center', 0, 860));
   let y = 400 + (ls.length - 1) * 104 + 86; if (PROMO.sub) { T(PROMO.sub, 540, y, N(34), C.sub, 'center', 0, 820); y += 50; } y += 20;
   const ch = ds.length >= 3 ? 150 : 176;
   (ds.length ? ds : [null]).forEach(x => { ctx.beginPath(); ctx.roundRect(140, y, 800, ch, 24); ctx.fillStyle = C.card; ctx.fill(); ctx.strokeStyle = C.line2; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(660, y + 24); ctx.lineTo(660, y + ch - 24); ctx.stroke(); ctx.setLineDash([]);
     if (!x) { T('진행 중인 할인이 없어요', 540, y + ch / 2, N(32), C.sub); y += ch + 24; return; }
-    T(tgt(x), 186, y + ch / 2 - 38, N(26, 500), C.sub, 'left', 0, 450); T(x.label || '이벤트 할인', 186, y + ch / 2 + 14, S(46), C.ink, 'left', 0, 450);
-    T(`${won(x.amount)}원`, 800, y + ch / 2 - 14, N(50, 900), C.acc, 'center', 0, 240); T(x.until ? ionDealUntilText(x.until) : '할인', 800, y + ch / 2 + 40, N(24), C.sub, 'center', 0, 240); y += ch + 24; });
+    const cd = dealCondOf(x); const dy = cd ? -12 : 0;
+    T(tgt(x), 186, y + ch / 2 - 38 + dy, N(26, 500), C.sub, 'left', 0, 450); T(x.label || '이벤트 할인', 186, y + ch / 2 + 14 + dy, S(46), C.ink, 'left', 0, 450);
+    if (cd) T(cd, 186, y + ch / 2 + 54, N(22, PROMO.kind === 'earlyleft' ? 700 : 400), PROMO.kind === 'earlyleft' ? C.acc : C.sub, 'left', 0, 450);
+    T(`${won(x.amount)}원`, 800, y + ch / 2 - 14, N(50, 900), C.acc, 'center', 0, 240); T(`참가비 ${won(Math.max(0, d.fee - x.amount))}원`, 800, y + ch / 2 + 40, N(24), C.sub, 'center', 0, 250); y += ch + 24; });
   if (PROMO.note) { y += 40; T(PROMO.note, 540, y, N(34), C.ink, 'center', 0, 860); }
   ctx.restore();
 }
@@ -1856,6 +1872,10 @@ function viewSettings() {
     <div class="spacer" style="min-height:20px"></div></div>`;
 }
 /* ---------- 할인 이벤트 (성별 · 기수 · 타임별) ---------- */
+function dealUse(x) {   // "형제 2/3 · 자매 1/3" (선착순 사용 현황)
+  const lim = +x.limit || 0; if (!lim || !x.id) return ''; const c = ((A.data && A.data.dealCounts) || {})[x.id] || {};
+  return (x.g ? [x.g] : ['M', 'F']).map(g => `${G[g]} ${+c[g] || 0}/${lim}`).join(' · ');
+}
 function dealsCard(d) {
   const list = d.config.deals || []; const base = +d.config.fee || 0; const today = TODAY();
   const cohorts = [...new Set(d.slots.filter(x => draftState(x.cohort) !== 'ended').map(x => x.cohort).filter(Boolean))];
@@ -1863,7 +1883,8 @@ function dealsCard(d) {
     if (!x._open) return `<div class="card stack" style="gap:6px;padding:12px 14px;${off || exp ? 'opacity:.6' : ''}">
       <div class="between"><span class="round" style="font-size:15px">🎁 ${esc(x.label || '이름 없는 할인')} <b style="color:var(--gold-t)">-${won(+x.amount || 0)}원</b></span>
         <span class="row" style="gap:6px">${exp ? '<span class="chip mute">기간 끝남</span>' : off ? '<span class="chip mute">꺼짐</span>' : '<span class="chip ok">진행 중</span>'}<button class="mini" data-act="dl-edit" data-v="${i}">편집</button></span></div>
-      <span class="small">${esc(ionDealTarget(x, d.slots))}${x.until ? ' · ' + esc(ionDealUntilText(x.until)) : ''}</span></div>`;
+      <span class="small">${esc(ionDealTarget(x, d.slots))}${ionDealCond(x) ? ' · ' + esc(ionDealCond(x)) : ''}</span>
+      ${dealUse(x) ? `<span class="small">선착순 사용: <b>${esc(dealUse(x))}</b>${ionDealLeft(x) <= 0 ? ' · <b style="color:var(--danger)">마감</b>' : ''}</span>` : ''}</div>`;
     return `<div class="card stack" style="gap:10px;padding:14px;${off || exp ? 'opacity:.6' : ''}">
       <div class="between"><span class="round" style="font-size:15px">🎁 ${esc(x.label || '이름 없는 할인')}</span>
         <span class="row" style="gap:6px">${exp ? '<span class="chip mute">기간 끝남</span>' : off ? '<span class="chip mute">꺼짐</span>' : '<span class="chip ok">진행 중</span>'}<button class="mini" data-act="dl-on" data-v="${i}">${off ? '켜기' : '끄기'}</button></span></div>
@@ -1872,12 +1893,14 @@ function dealsCard(d) {
       <div class="field"><span class="lab">성별</span><div class="chips">${[['', '모두'], ['M', '형제만'], ['F', '자매만']].map(([v, l]) => `<button class="chipbtn ${(x.g || '') === v ? 'on' : ''}" data-act="dl-g" data-i="${i}" data-v="${v}">${l}</button>`).join('')}</div></div>
       <div class="sgrid"><div class="field"><label for="dl${i}cohort">기수</label><select id="dl${i}cohort" class="input" data-dl="${i}" data-df="cohort"><option value="">모든 기수</option>${[...new Set([...cohorts, x.cohort].filter(Boolean))].map(c => `<option ${x.cohort === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="field"><label for="dl${i}slot">타임</label><select id="dl${i}slot" class="input" data-dl="${i}" data-df="slotId"><option value="">모든 타임</option>${sl.map(s => `<option value="${esc(s.id)}" ${x.slotId === s.id ? 'selected' : ''}>${esc(x.cohort ? '' : s.cohort + ' ')}${esc(s.time)}${ionAgeText(s) ? ' · ' + ionAgeText(s) : ''}</option>`).join('')}</select></div></div>
-      <div class="field"><label for="dl${i}until">신청 마감일 (이 날까지 신청한 분만 · 비우면 계속)</label><input id="dl${i}until" class="input" type="date" data-dl="${i}" data-df="until" value="${esc(x.until || '')}"></div>
+      <div class="sgrid"><div class="field"><label for="dl${i}until">신청 마감일 (이 날까지 신청한 분만 · 비우면 계속)</label><input id="dl${i}until" class="input" type="date" data-dl="${i}" data-df="until" value="${esc(x.until || '')}"></div>
+        <div class="field"><label for="dl${i}limit">선착순 인원 (${x.g ? G[x.g] : '형제·자매 각각'} · 0이면 제한 없음)</label><input id="dl${i}limit" class="input" type="number" inputmode="numeric" min="0" step="1" data-dl="${i}" data-df="limit" value="${esc(x.limit || 0)}"></div></div>
+      ${+x.limit > 0 ? `<span class="small">마감일과 선착순 중 먼저 닿는 쪽에서 끝나요. 입금대기·확정된 신청만 세고, 대기 신청에는 적용되지 않아요. 취소되면 자리가 다시 열려요.${dealUse(x) ? ` 지금 사용: <b>${esc(dealUse(x))}</b>` : ''}</span>` : ''}
       <span class="small">${esc(ionDealTarget(x, d.slots))} · ${won(base)}원 → <b>${won(Math.max(0, base - (+x.amount || 0)))}원</b></span>
       <div class="row" style="gap:6px;justify-content:flex-end"><button class="mini del" data-act="dl-del" data-v="${i}">삭제</button><button class="mini" data-act="dl-edit" data-v="${i}">접기</button></div>
     </div>`; };
   return `<div class="card stack" style="gap:12px">
-    <div class="between"><span class="round" style="font-size:17px">할인 이벤트</span><button class="mini go" data-act="dl-add">+ 할인 추가</button></div>
+    <div class="between"><span class="round" style="font-size:17px">할인 이벤트</span><span class="row" style="gap:6px"><button class="mini gold" data-act="dl-early">+ 얼리버드</button><button class="mini go" data-act="dl-add">+ 할인 추가</button></span></div>
     <span class="small">성별·기수·타임을 골라 할인을 걸어요. 신청서에서 조건이 맞으면 자동으로 적용되고, 여러 개가 맞으면 가장 큰 할인 하나만 들어가요.</span>
     ${list.length ? list.map(card).join('') : '<span class="small" style="color:var(--muted)">진행 중인 할인이 없어요. 예) 자매가 부족한 타임에 자매만 5,000원 할인</span>'}
     <div class="field"><span class="lab">재참여 할인과 겹치기</span><div class="chips">${[[false, '큰 할인 하나만'], [true, '둘 다 적용']].map(([v, l]) => `<button class="chipbtn ${!!d.config.dealStack === v ? 'on' : ''}" data-act="dl-stack" data-v="${v}">${l}</button>`).join('')}</div></div>
@@ -1901,7 +1924,8 @@ async function saveSettings() {
   d.slots.sort(ionSlotCmp);   // 저장할 때 날짜·시간순으로 정리
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), dealStack: !!c.dealStack, deals: (c.deals || []).map((x, i) => ({ id: x.id || 'd' + Date.now().toString(36) + i, label: String(x.label || '').trim().slice(0, 16) || '이벤트 할인', g: x.g || '', cohort: x.cohort || '', slotId: x.slotId && d.slots.some(s => s.id === x.slotId) ? x.slotId : '', amount: Math.round(+x.amount), on: x.on !== false, until: x.until || '' })), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), dealStack: !!c.dealStack, deals: (c.deals || []).map((x, i) => ({ id: x.id || 'd' + Date.now().toString(36) + i, label: String(x.label || '').trim().slice(0, 16) || '이벤트 할인', g: x.g || '', cohort: x.cohort || '', slotId: x.slotId && d.slots.some(s => s.id === x.slotId) ? x.slotId : '', amount: Math.round(+x.amount), on: x.on !== false, until: x.until || '', limit: Math.max(0, Math.round(+x.limit || 0)), ...(x.early ? { early: true } : {}) })), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };
+  up.dealLimits = Object.fromEntries(up.config.deals.filter(x => x.limit > 0).map(x => [x.id, x.limit]));   // 신청 페이지가 선착순 자리를 잡을 때 규칙이 확인하는 값
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   // 타임의 날짜·시간·장소를 바꾸면 이미 들어온 신청서에도 함께 반영 (문자·명단·CSV가 최신 정보로)
   apps().forEach(r => { const ns = outSlots[r.slotId]; if (!ns) return; ['date', 'time', 'place'].forEach(k => { if ((r[k] || '') !== (ns[k] || '')) up[`apps/${r.id}/${k}`] = ns[k] || ''; }); });
@@ -2179,6 +2203,9 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'back') goView('apply');
   else if (act === 'open') { A.draft.config.open = v === 'true'; render(); }
+  else if (act === 'dl-early') { const c0 = cohortIndex().live[0]; const cd = c0 ? (cohortDate(c0.name) || '') : ''; let until = '';
+    if (cd) { const u = new Date(cd + 'T00:00:00'); u.setDate(u.getDate() - 7); const iso = `${u.getFullYear()}-${String(u.getMonth() + 1).padStart(2, '0')}-${String(u.getDate()).padStart(2, '0')}`; if (iso >= TODAY()) until = iso; }
+    A.draft.config.deals.push({ label: '얼리버드', g: '', cohort: c0 ? c0.name : '', slotId: '', amount: 5000, on: true, until, limit: 3, early: true, _open: true }); render(); }
   else if (act === 'dl-add') { const c0 = cohortIndex().live[0]; A.draft.config.deals.push({ label: '', g: '', cohort: c0 ? c0.name : '', slotId: '', amount: 5000, on: true, until: '', _open: true }); render(); }
   else if (act === 'dl-edit') { const x = A.draft.config.deals[+v]; x._open = !x._open; render(); }
   else if (act === 'setmore') { A.setMore = !A.setMore; render(); }
