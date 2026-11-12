@@ -15,7 +15,7 @@
     sl = sl || {}; ex = ex || {}; cfg = cfg || {};
     const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
     const fee = r.fee != null ? +r.fee : +cfg.fee || 0;
-    return { chat: cfg.openchat || '', from: ex.from || '', when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
+    return { chat: cfg.openchat || '', from: ex.from || '', cross: !!ex.cross, when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
       feeNote: (() => { const n = [+r.dealDisc > 0 ? `${r.dealLabel || '이벤트 할인'} -${won(r.dealDisc)}원` : '', +r.discount > 0 ? `재참여 할인 -${won(r.discount)}원` : ''].filter(Boolean); return n.length ? ` (${n.join(', ')} 적용)` : ''; })(), deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1 };
   }
 const T = {
@@ -53,8 +53,8 @@ const T = {
   wait: { label: '대기 안내', for: ['waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 타임이 마감되어 대기 ${x.waitNo}번으로 등록되었어요.
 
 자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
-  move: { label: '타임 변경 안내', for: ['pending', 'confirmed', 'waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${r.cohort} 신청 감사합니다 🙂
-더 편안한 만남을 위해 참가 타임을 ${x.from ? x.from + ' → ' : ''}${r.date} ${r.time} 으로 조정해 드렸어요.
+  move: { label: '타임 변경 안내', for: ['pending', 'confirmed', 'waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.cross ? '' : r.cohort + ' '}신청 감사합니다 🙂
+더 편안한 만남을 위해 참가 ${x.cross ? '기수·타임' : '타임'}을 ${x.from ? x.from + ' → ' : ''}${x.cross ? r.cohort + ' ' : ''}${r.date} ${r.time} 으로 조정해 드렸어요.${x.cross && r.place ? '\n장소: ' + r.place : ''}
 ${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리가 나면 바로 연락드릴게요.\n' : ''}일정이 어려우시면 편하게 말씀해 주세요. 감사합니다.` },
   free: { label: '직접 쓰기', for: ['pending', 'confirmed', 'waiting', 'cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 안녕하세요 🙂
 
@@ -69,5 +69,5 @@ ${x.chat || ''}` },
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
   ['pay', 'promote', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261104a' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261112a' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

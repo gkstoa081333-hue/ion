@@ -162,7 +162,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261108a"></script>
-<script src="ion-sms.js?v=20261108a"></script>
+<script src="ion-sms.js?v=20261112a"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -504,37 +504,65 @@ function openImport() {
   };
 }
 
+// 옮길 수 있는 타임: 같은 기수의 다른 타임 + 종료되지 않은 다른 기수의 타임
+function moveCands(r) {
+  return slots().filter(x => x.id !== r.slotId && (x.cohort === r.cohort || !cohortEnded(x.cohort)))
+    .sort((a, b) => (a.cohort === r.cohort ? 0 : 1) - (b.cohort === r.cohort ? 0 : 1) || cohortDate(a.cohort).localeCompare(cohortDate(b.cohort)) || String(a.time).localeCompare(String(b.time)));
+}
 function openMove(id) {
   const r = (A.data.apps || {})[id]; if (!r) return;
   const held = (sid, g) => apps().filter(x => x.slotId === sid && x.gender === g && ION_HOLDING.includes(x.status) && x.id !== id).length;
-  const cands = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId);
+  const cands = moveCands(r);
+  const groups = []; cands.forEach(x => { let g = groups.find(y => y.c === x.cohort); if (!g) groups.push(g = { c: x.cohort, list: [] }); g.list.push(x); });
   const m = document.getElementById('modal');
-  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="타임 변경">
-    <div class="stack" style="gap:4px"><span class="round" style="font-size:19px">${esc(r.name)}님 타임 변경</span><span class="small">지금: ${esc(r.cohort)} ${esc(r.date)} ${esc(r.time)} · ${ION_STATUS[r.status]}</span></div>
-    ${cands.map(x => { const left = (x.cap?.[r.gender] || 0) - held(x.id, r.gender); const cf = conflictsOf(r, x.id); const ageBad = !ionAgeOk(x, r.birthYear);
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="타임·기수 변경">
+    <div class="stack" style="gap:4px"><span class="round" style="font-size:19px">${esc(r.name)}님 타임·기수 변경</span><span class="small">지금: ${esc(r.cohort)} ${esc(r.date)} ${esc(r.time)} · ${ION_STATUS[r.status]}</span></div>
+    ${groups.map(g => `<div class="cgroup" style="margin-top:6px">${g.c === r.cohort ? `같은 기수 · ${esc(g.c)}` : `다른 기수로 · ${esc(g.c)} <span class="chip mute">${cohortState(g.c).label}</span>`}</div>
+      ${g.list.map(x => { const left = (x.cap?.[r.gender] || 0) - held(x.id, r.gender); const cf = conflictsOf(r, x.id); const ageBad = !ionAgeOk(x, r.birthYear);
       return `<button class="card stack" style="gap:6px;text-align:left;cursor:pointer;border:1.5px solid var(--line-2)" data-move="${x.id}">
-        <div class="between"><span class="round" style="font-size:17px">${esc(x.date)} ${esc(x.time)}</span><span class="chip ${left > 0 ? 'ok' : 'wait'}">${left > 0 ? `${G[r.gender]} ${left}자리` : '정원 마감 → 대기'}</span></div>
+        <div class="between"><span class="round" style="font-size:17px">${g.c === r.cohort ? '' : esc(x.cohort) + ' · '}${esc(x.date)} ${esc(x.time)}</span><span class="chip ${left > 0 ? 'ok' : 'wait'}">${left > 0 ? `${G[r.gender]} ${left}자리` : '정원 마감 → 대기'}</span></div>
+        ${x.place && x.place !== r.place ? `<span class="small">장소: ${esc(x.place)}</span>` : ''}
         ${ionAgeText(x) ? `<span class="small">${ionAgeText(x)}${ageBad ? ' · <b style="color:var(--danger)">대상 연령 밖</b>' : ''}</span>` : ''}
         ${cf.length ? `<span class="small" style="color:#7A5300">⚠ 여기서도 겹침: ${cf.map(c => esc(c.text)).join(', ')}</span>` : '<span class="small" style="color:var(--green)">겹치는 사람 없음</span>'}
-      </button>`; }).join('') || '<div class="card empty">같은 기수에 옮길 다른 타임이 없어요</div>'}
+      </button>`; }).join('')}`).join('') || '<div class="card empty">옮길 수 있는 다른 타임이 없어요</div>'}
     <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
   m.querySelectorAll('[data-move]').forEach(b => b.onclick = async () => { m.innerHTML = ''; await moveApp(id, b.dataset.move); });
 }
 async function moveApp(id, to) {
   const list = apps().map(x => ({ ...x })); const r = list.find(x => x.id === id); const t = slots().find(x => x.id === to); if (!r || !t) return;
-  const from = `${r.time}`;
+  const cross = t.cohort !== r.cohort; const oldCohort = r.cohort;
+  const from = cross ? `${r.cohort} ${r.date} ${r.time}` : `${r.time}`;
+  const toLabel = cross ? `${t.cohort} ${t.date} ${t.time}` : t.time;
   const held = list.filter(x => x.slotId === to && x.gender === r.gender && ION_HOLDING.includes(x.status) && x.id !== id).length;
   const full = held >= (t.cap?.[r.gender] || 0);
-  if (full && ION_HOLDING.includes(r.status) && !(await confirmBox(`${t.time} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 그 타임 대기 순번으로 들어가요. ${r.status === 'confirmed' ? '이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '대기로 옮기기', true))) return;
-  r.slotId = to; r.date = t.date; r.time = t.time; r.place = t.place || '';
+  // 다른 기수로: 그 기수에 같은 연락처 신청이 이미 있으면 막기 (신청 페이지 중복 방지와 같은 기준)
+  let newKey = r.phoneKey || '';
+  if (cross) {
+    const ph = digits(r.phone);
+    const dup = apps().find(x => x.id !== id && x.cohort === t.cohort && digits(x.phone) === ph && !['cancelled', 'refunded'].includes(x.status));
+    if (dup) return toast(`${t.cohort}에 같은 연락처 신청(${dup.id})이 이미 있어요`);
+    if (ph) newKey = (await ionSha(t.cohort + '|' + ph)).slice(0, 32);
+    const on = ((A.data.phones || {})[t.cohort] || {})[newKey];
+    if (on && on !== id && (A.data.apps || {})[on] && !['cancelled', 'refunded'].includes((A.data.apps || {})[on].status)) return toast(`${t.cohort}에 같은 연락처 신청(${on})이 이미 있어요`);
+    if (!full && !(await confirmBox(`${r.name}님을 ${t.cohort}로 옮길까요?`, `${r.cohort} ${r.date} ${r.time} → ${t.cohort} ${t.date} ${t.time}${t.place && t.place !== r.place ? ` (장소: ${t.place})` : ''}. 상태(${ION_STATUS[r.status]})와 참가비는 그대로 유지돼요.`, '기수 옮기기'))) return;
+  }
+  if (full && ION_HOLDING.includes(r.status) && !(await confirmBox(`${toLabel} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 그 타임 대기 순번으로 들어가요. ${r.status === 'confirmed' ? '이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '대기로 옮기기', true))) return;
+  r.slotId = to; r.cohort = t.cohort; r.date = t.date; r.time = t.time; r.place = t.place || '';
   if (full && ION_HOLDING.includes(r.status)) { r.status = 'waiting'; r.at = Date.now(); }
-  r.log = addLog(r, `타임 변경(${from}→${t.time})`);
-  const { up, promoted } = plan(list, { [`apps/${id}/slotId`]: to, [`apps/${id}/date`]: t.date, [`apps/${id}/time`]: t.time, [`apps/${id}/place`]: t.place || '', [`apps/${id}/status`]: r.status, [`apps/${id}/log`]: r.log, ...(r.status === 'waiting' ? { [`apps/${id}/at`]: r.at } : {}) });
+  r.log = addLog(r, cross ? `기수 변경(${from}→${toLabel})` : `타임 변경(${from}→${t.time})`);
+  const extra = { [`apps/${id}/slotId`]: to, [`apps/${id}/date`]: t.date, [`apps/${id}/time`]: t.time, [`apps/${id}/place`]: t.place || '', [`apps/${id}/status`]: r.status, [`apps/${id}/log`]: r.log, ...(r.status === 'waiting' ? { [`apps/${id}/at`]: r.at } : {}) };
+  if (cross) {
+    extra[`apps/${id}/cohort`] = t.cohort;
+    if (r.phoneKey && (((A.data.phones || {})[oldCohort] || {})[r.phoneKey] === id)) extra[`phones/${oldCohort}/${r.phoneKey}`] = null;
+    if (newKey) { extra[`apps/${id}/phoneKey`] = newKey; extra[`phones/${t.cohort}/${newKey}`] = id; r.phoneKey = newKey; }
+  }
+  const { up, promoted } = plan(list, extra);
+  if (cross && newKey) up[`phones/${t.cohort}/${newKey}`] = id;   // plan()이 옛 기수 기준으로 덮어쓰지 않게 마지막에 확정
   try {
     await IonStore.update('apply', up);
-    toast(`${r.name}님을 ${t.time} 타임으로 옮겼어요${promoted.length ? ` · 빈자리에 대기 ${promoted.length}명 배정` : ''}`);
-    A._moveFrom = from; setTimeout(() => openMsg(id, 'move'), 250);
+    toast(`${r.name}님을 ${toLabel}${cross ? '' : ' 타임'}으로 옮겼어요${promoted.length ? ` · 빈자리에 대기 ${promoted.length}명 배정` : ''}`);
+    A._moveFrom = from; A._moveCross = cross; setTimeout(() => openMsg(id, 'move'), 250);
   } catch (e) { toast('옮기지 못했어요: ' + e.message); }
 }
 
@@ -1503,7 +1531,7 @@ function card(r, showCohort) {
   if (st === 'pending') actions.push(`<button class="mini gold" data-act="confirm" data-v="${r.id}">${ICON.ok}입금확인</button>`);
   if (st === 'waiting') actions.push(`<button class="mini go" data-act="promote" data-v="${r.id}">자리 배정</button>`);
   const cf = conflictsOf(r);
-  if (ACTIVE.includes(st) && slots().some(x => x.cohort === r.cohort && x.id !== r.slotId)) actions.push(`<button class="mini ${cf.length ? 'gold' : ''}" data-act="move" data-v="${r.id}">타임 변경</button>`);
+  if (ACTIVE.includes(st) && moveCands(r).length) actions.push(`<button class="mini ${cf.length ? 'gold' : ''}" data-act="move" data-v="${r.id}">타임·기수 변경</button>`);
   actions.push(`<button class="mini" data-act="msg" data-v="${r.id}">${ICON.msg}문자·카톡</button>`);
   if (['cancelled', 'refunded'].includes(st)) actions.push(`<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   actions.push(`<button class="mini" data-act="toggle" data-v="${r.id}" aria-expanded="${!!open}">${open ? '접기' : '상세'}</button>`);
@@ -1933,7 +1961,7 @@ async function syncSessions(removed) {
 /* ---------- 문자·카톡 모달 ---------- */
 function ctx(r) {
   const sl = slots().find(x => x.id === r.slotId) || {};   // 설정에서 바꾼 최신 날짜·시간·장소를 우선
-  return ION_SMS.ctx({ ...r, fee: feeOf(r) }, { ...conf(), openchat: conf().openchat || ION_DEFAULTS.config.openchat }, sl, { waitNo: waitNo(r), from: A._moveFrom || '' });
+  return ION_SMS.ctx({ ...r, fee: feeOf(r) }, { ...conf(), openchat: conf().openchat || ION_DEFAULTS.config.openchat }, sl, { waitNo: waitNo(r), from: A._moveFrom || '', cross: !!A._moveCross });
 }
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
@@ -2015,7 +2043,7 @@ function openPerson(id) {
     <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
   m.querySelector('#pp-back').onclick = () => openTable();
-  m.querySelector('#pp-msg').onclick = () => { A._moveFrom = ''; openMsg(id); };
+  m.querySelector('#pp-msg').onclick = () => { A._moveFrom = ''; A._moveCross = false; openMsg(id); };
 }
 async function logSend(id, what) {
   const r = (A.data.apps || {})[id]; if (!r) return;
@@ -2196,7 +2224,7 @@ document.addEventListener('click', async e => {
   else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }
   else if (act === 'tab') { A.tab = v; render(); }
   else if (act === 'toggle') { A.open[v] = !A.open[v]; render(); }
-  else if (act === 'msg') { A._moveFrom = ''; openMsg(v); }
+  else if (act === 'msg') { A._moveFrom = ''; A._moveCross = false; openMsg(v); }
   else if (act === 'move') openMove(v);
   else if (act === 'disc-on' || act === 'disc-off') { const r = row(v); const on = act === 'disc-on'; const base = (+r.fee || 0) + (+r.discount || 0) + (+r.dealDisc || 0) || +conf().fee || 0;
     const p = ionCombine(base, +r.dealDisc || +r.dealAmt || 0, r.dealLabel || '', on ? discOf() : 0, !!conf().dealStack); const disc = p.rep; const fee = p.fee; const paidAlready = r.status === 'confirmed';
