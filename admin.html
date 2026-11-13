@@ -573,7 +573,7 @@ async function moveApp(id, to) {
 }
 
 /* ---------- 보관 기간 관리 (처리방침: 신청 상세 행사 후 6개월, 참가 이력 마지막 참여 후 3년) ---------- */
-const DETAIL_FIELDS = ['region', 'job', 'churchAddr', 'denom', 'faithYears', 'attend', 'source', 'note'];
+const DETAIL_FIELDS = ['region', 'job', 'churchAddr', 'pastor', 'denom', 'faithYears', 'attend', 'serve', 'faithNote', 'source', 'note'];
 function evDate(r) {
   const m = String(r.date || '').match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/); if (!m) return null;
   const b = new Date(r.at || Date.now()); let d = new Date(b.getFullYear(), +m[1] - 1, +m[2]);
@@ -1566,8 +1566,8 @@ function card(r, showCohort) {
 function detail(r) {
   const st = r.status;
   const ai = attendIndex()[digits(r.phone)];
-  const kv = [['참여 이력', ai ? [ai.ok.length ? `출석: ${ai.ok.join(', ')}` : '', ai.no.length ? `불참: ${ai.no.join(', ')}` : ''].filter(Boolean).join(' / ') : ''], ['출생연도', r.birthYear], ['거주지역', r.region], ['직업', r.job], ['출석교회', r.church], ['교회 위치', r.churchAddr], ['교단', r.denom],
-    ['신앙생활', r.faithYears], ['출석', r.attend], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
+  const kv = [['참여 이력', ai ? [ai.ok.length ? `출석: ${ai.ok.join(', ')}` : '', ai.no.length ? `불참: ${ai.no.join(', ')}` : ''].filter(Boolean).join(' / ') : ''], ['출생연도', r.birthYear], ['거주지역', r.region], ['직업', r.job], ['출석교회', r.church], ['담임목사', r.pastor], ['교회 위치', r.churchAddr], ['교단', r.denom],
+    ['신앙생활', r.faithYears], ['출석', r.attend], ['교회 섬김', r.serve], ['나에게 신앙이란', r.faithNote], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
   if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
@@ -2041,7 +2041,7 @@ function openBulk(ids, tplKey, i = 0) {
 }
 
 /* ---------- 명단 표로 보기 (엑셀 없이) ---------- */
-const TCOLS = [['name', '이름'], ['status', '상태'], ['gender', '성별'], ['birthYear', '출생'], ['phone', '연락처'], ['time', '타임'], ['region', '지역'], ['job', '직업'], ['church', '교회'], ['churchAddr', '교회 위치'], ['denom', '교단'], ['faithYears', '신앙'], ['attend', '출석'], ['source', '알게 된 경로'], ['payName', '입금자명'], ['at', '신청일'], ['note', '요청사항'], ['memo', '메모']];
+const TCOLS = [['name', '이름'], ['status', '상태'], ['gender', '성별'], ['birthYear', '출생'], ['phone', '연락처'], ['time', '타임'], ['region', '지역'], ['job', '직업'], ['church', '교회'], ['pastor', '담임목사'], ['churchAddr', '교회 위치'], ['denom', '교단'], ['faithYears', '신앙'], ['attend', '출석'], ['serve', '섬김'], ['faithNote', '신앙 한마디'], ['source', '알게 된 경로'], ['payName', '입금자명'], ['at', '신청일'], ['note', '요청사항'], ['memo', '메모']];
 function cellOf(r, k) { return k === 'status' ? ION_STATUS[r.status] : k === 'gender' ? G[r.gender] : k === 'at' ? dt(r.at) : k === 'birthYear' ? String(r.birthYear || '').slice(2) + '년' : (r[k] ?? ''); }
 function openTable(sortKey) {
   const ids = A.curList || []; A.tSort = sortKey || A.tSort || '';
@@ -2081,8 +2081,8 @@ function rosterText(slotId) {
 }
 function downloadCSV() {
   const cols = [['신청번호', 'id'], ['상태', r => ION_STATUS[r.status]], ['기수', 'cohort'], ['날짜', 'date'], ['타임', 'time'], ['성별', r => G[r.gender]], ['이름', 'name'],
-    ['출생연도', 'birthYear'], ['연락처', 'phone'], ['거주지역', 'region'], ['직업', 'job'], ['출석교회', 'church'], ['교회위치', 'churchAddr'], ['교단', 'denom'],
-    ['신앙생활기간', 'faithYears'], ['출석여부', 'attend'], ['유입경로', 'source'], ['요청사항', 'note'], ['소식수신', 'newsAgree'], ['입금자명', 'payName'],
+    ['출생연도', 'birthYear'], ['연락처', 'phone'], ['거주지역', 'region'], ['직업', 'job'], ['출석교회', 'church'], ['담임목사', 'pastor'], ['교회위치', 'churchAddr'], ['교단', 'denom'],
+    ['신앙생활기간', 'faithYears'], ['출석여부', 'attend'], ['교회섬김', 'serve'], ['나에게신앙이란', 'faithNote'], ['유입경로', 'source'], ['요청사항', 'note'], ['소식수신', 'newsAgree'], ['입금자명', 'payName'],
     ['신청일시', r => dt(r.at, true)], ['입금기한', r => dt(r.deadline)], ['확정일시', r => dt(r.confirmedAt)], ['발송기록', 'log'], ['메모', 'memo']];
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = rowsOf(A.cohort).sort((a, b) => a.at - b.at);

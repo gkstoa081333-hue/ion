@@ -157,23 +157,26 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 /* ---------- 선택지 (네이버폼과 동일하게 맞춰 쓰세요) ---------- */
 const OPT = {
   region: ['대전 동구', '대전 중구', '대전 서구', '대전 유성구', '대전 대덕구', '세종', '청주', '충남', '기타'],
-  denom: ['장로교', '감리교', '침례교', '성결교', '순복음', '기타'],
+  denom: ['장로교(통합)', '장로교(합동)', '장로교(고신)', '장로교(기타)', '감리교', '침례교', '성결교', '순복음', '기타'],
   faithYears: ['모태신앙', '10년 이상', '5~10년', '1~5년', '1년 미만'],
   attend: ['매주 출석', '격주·가끔 출석', '현재 쉬는 중'],
   source: ['인스타그램', '지인 소개', '교회 광고', '기타']
 };
 /* 동의 문구 — 문구를 바꾸면 CONSENT_VER 날짜도 함께 바꿔 주세요 (신청서에 어떤 판의 문구에 동의했는지 저장됨) */
-const CONSENT_VER = '2026-11-02-2';
+const CONSENT_VER = '2026-11-13-1';
 const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 알게 된 경로, 입금자명 (선택: 직업, 요청사항)
 · 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 취소·환불 처리, 참여 후기 요청, 재참가 확인 및 이전에 만난 분과 같은 타임 배정 방지
 · 보유 기간: 이름·성별·출생 연도·연락처·참여 기수는 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월. 기간이 지나면 지체 없이 파기하며, 다른 법령에 보존 의무가 있는 정보는 그 기간 동안 보관합니다.
 · 신청 정보는 Google Firebase(싱가포르 서버)에 저장됩니다. 자세한 내용은 개인정보 처리방침에서 확인할 수 있어요.
 · 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
-const FAITH = `· 수집 항목: 출석교회명, 교회 출석 여부 (선택: 교회 위치)
-· 이용 목적: 크리스천 소개팅 참가 자격 확인, 같은 교회 성도가 이성으로 같은 타임에 배정되지 않도록 하기
+const FAITH = `· 수집 항목: 출석교회명, 담임목사 성함, 교단, 신앙생활 기간, 교회 출석 여부 (선택: 교회 위치, 교회 섬김, 나에게 신앙이란)
+· 이용 목적: 크리스천 소개팅 참가 자격 확인(이단·사이비 확인 포함), 같은 교회 성도가 이성으로 같은 타임에 배정되지 않도록 하기
 · 보유 기간: 출석교회명은 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월
 · 신앙 정보는 민감정보로 일반 개인정보와 별도로 동의를 받으며, 다른 참가자에게 공개하지 않습니다.
 · 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
+const SINGLE = `· 이온은 법적으로 미혼인 크리스천 청년을 위한 모임이에요.
+· 주요 교단에서 이단으로 규정한 단체(신천지, 하나님의교회, JMS 등) 소속이시면 참가할 수 없어요.
+· 사실과 다르게 확인된 경우 참가가 취소되며, 이미 낸 참가비는 환불 규정과 관계없이 돌려드리지 않을 수 있어요.`;
 const SHARE = `· 제공받는 자: 나와 매칭이 성사된 상대 참가자
 · 제공 목적: 서로 연락하기 위함
 · 제공 항목: 이름, 연락처 (운영진이 카카오톡으로 전달)
@@ -289,19 +292,19 @@ async function createApplication(d) {
   await IonStore.set('apply/apps/' + id, {
     id, uid, at: Date.now(), status, cohort: slot.cohort, slotId: slot.id, date: slot.date, time: slot.time, place: slot.place || '',
     gender: d.gender, name: d.name, birthYear: Number(d.birthYear), phone: fmtPhone(d.phone), region: d.region, job: d.job,
-    church: d.church, churchAddr: d.churchAddr, attend: d.attend, source: d.source,
+    church: d.church, churchAddr: d.churchAddr, pastor: d.pastor, denom: d.denom, faithYears: d.faithYears, attend: d.attend, serve: d.serve, faithNote: d.faithNote, source: d.source,
     fee: price.fee, discount: price.rep, dealDisc: price.deal, dealLabel: price.dealLabel, ...(price.dealId ? { dealId: price.dealId } : {}), repeatClaim: d.repeat === '이전 기수에 참여했어요',
     note: d.note, newsAgree: d.mktOk ? '동의합니다' : '받지 않을게요', payName, deadline, phoneKey, log: '', memo: '',
-    consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
+    consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, single: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
   });
   return { id, status, payName, deadline, fee: price.fee, dealLabel: price.dealLabel, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
 }
 
 /* ---------- 상태 ---------- */
 const S = { phase: 'loading', step: 0, cfg: null, busy: false, err: '', open: {}, result: null,
-  d: { gender: '', slotId: '', name: '', birthYear: '', phone: '', region: '', regionEtc: '', job: '', church: '', churchAddr: '',
+  d: { gender: '', slotId: '', name: '', birthYear: '', phone: '', region: '', regionEtc: '', job: '', church: '', churchAddr: '', pastor: '', serve: '', faithNote: '',
     denom: '', denomEtc: '', faithYears: '', attend: '', source: '', sourceEtc: '', note: '', newsAgree: '',
-    refundOk: false, privacyOk: false, faithOk: false, shareOk: false, mktOk: false, website: '', repeat: '' } };
+    refundOk: false, privacyOk: false, faithOk: false, singleOk: false, shareOk: false, mktOk: false, website: '', repeat: '' } };
 
 async function load() {
   try {
@@ -443,8 +446,14 @@ function viewStep2() {
   return `<div class="wrap">${head('신앙 정보를 알려주세요', '크리스천 소개팅 참가 확인과 타임 배정에만 사용해요.')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       ${inp('church', '출석교회명', 'type="text" maxlength="40" placeholder="예) ○○교회"')}
+      ${inp('pastor', '담임목사 성함', 'type="text" maxlength="20" placeholder="예) 홍길동 목사"')}
       ${inp('churchAddr', '교회 위치', 'type="text" maxlength="60" placeholder="예) 대전 서구 (동네까지만 적어도 돼요)"', false)}
+      ${etc('denom', OPT.denom, '교단')}
+      <div class="field"><span class="lab">신앙생활 기간<span class="req">*</span></span>${opts('faithYears', OPT.faithYears)}</div>
       <div class="field"><span class="lab">현재 교회 출석 여부<span class="req">*</span></span>${opts('attend', OPT.attend)}</div>
+      ${inp('serve', '교회 섬김 (선택)', 'type="text" maxlength="40" placeholder="예) 찬양팀, 주일학교 교사, 없음"', false)}
+      <div class="field"><label for="f-faithNote">나에게 신앙이란? (선택)</label>
+        <textarea id="f-faithNote" class="input" data-k="faithNote" maxlength="200" placeholder="한두 줄로 편하게 적어주세요">${esc(S.d.faithNote)}</textarea></div>
       ${etc('source', OPT.source, '이온을 알게 된 경로')}
     </form>${foot('다음')}</div>`;
 }
@@ -457,7 +466,7 @@ function agreeRow(key, label, terms, required = true) {
 }
 function viewStep3() {
   const s = S.cfg.slots.find(x => x.id === S.d.slotId) || {};
-  const all = S.d.refundOk && S.d.privacyOk && S.d.faithOk && S.d.shareOk;
+  const all = S.d.refundOk && S.d.privacyOk && S.d.faithOk && S.d.singleOk && S.d.shareOk;
   return `<div class="wrap">${head('마지막으로 확인해 주세요')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       <div class="card" style="padding:6px 18px">
@@ -473,6 +482,7 @@ function viewStep3() {
         ${agreeRow('refundOk', '입금 계좌 안내 및 환불 규정 확인', S.cfg.refund)}
         ${agreeRow('privacyOk', '개인정보 수집 및 이용 동의', PRIVACY)}
         ${agreeRow('faithOk', '신앙 정보(민감정보) 수집 동의', FAITH)}
+        ${agreeRow('singleOk', '법적으로 미혼이며, 이단·사이비 단체 소속이 아님을 확인합니다', SINGLE)}
         ${agreeRow('shareOk', '매칭 성사 시 상대방에게 연락처 제공 동의', SHARE)}
       </div>
       <div class="agree">
@@ -588,11 +598,14 @@ function check(step) {
   }
   if (step === 1) {
     if (!d.church.trim()) return '출석교회명을 입력해 주세요.';
+    if (!d.pastor.trim()) return '담임목사 성함을 입력해 주세요.';
+    if (!val('denom')) return '교단을 선택해 주세요.';
+    if (!d.faithYears) return '신앙생활 기간을 선택해 주세요.';
     if (!d.attend) return '교회 출석 여부를 선택해 주세요.';
     if (!val('source')) return '알게 된 경로를 선택해 주세요.';
   }
   if (step === 2) {
-    if (!(d.refundOk && d.privacyOk && d.faithOk && d.shareOk)) return '필수 동의 항목을 모두 체크해 주세요.';
+    if (!(d.refundOk && d.privacyOk && d.faithOk && d.singleOk && d.shareOk)) return '필수 동의 항목을 모두 체크해 주세요.';
   }
   return '';
 }
@@ -600,8 +613,8 @@ function check(step) {
 async function submit() {
   S.busy = true; S.err = ''; render();
   const d = S.d;
-  const data = { ...d, consentAt: Date.now(), name: d.name.trim(), phone: digits(d.phone), region: val('region'), source: val('source'),
-    job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), note: d.note.trim() };
+  const data = { ...d, consentAt: Date.now(), name: d.name.trim(), phone: digits(d.phone), region: val('region'), source: val('source'), denom: val('denom'),
+    job: d.job.trim(), church: d.church.trim(), churchAddr: d.churchAddr.trim(), pastor: d.pastor.trim(), serve: d.serve.trim(), faithNote: d.faithNote.trim(), note: d.note.trim() };
   try {
     if (data.website) throw new Error('신청을 처리할 수 없어요.');
     const r = await createApplication(data);
@@ -632,7 +645,7 @@ document.addEventListener('click', e => {
   else if (act === 'slot') { S.d.slotId = v; render(); }
   else if (act === 'opt') { S.d[b.dataset.k] = v; render(); }
   else if (act === 'terms') { S.open[v] = !S.open[v]; render(); }
-  else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'shareOk'].forEach(k => { S.d[k] = on; }); render(); }
+  else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'singleOk', 'shareOk'].forEach(k => { S.d[k] = on; }); render(); }
   else if (act === 'copy') copyText(v);
   else if (act === 'cancelreq') { S.phase = 'cancel'; render(); window.scrollTo(0, 0); }
   else if (act === 'cancelback') { S.phase = 'done'; render(); window.scrollTo(0, 0); }
