@@ -163,13 +163,13 @@ const OPT = {
   source: ['인스타그램', '지인 소개', '교회 광고', '기타']
 };
 /* 동의 문구 — 문구를 바꾸면 CONSENT_VER 날짜도 함께 바꿔 주세요 (신청서에 어떤 판의 문구에 동의했는지 저장됨) */
-const CONSENT_VER = '2026-11-13-1';
+const CONSENT_VER = '2026-11-13-2';
 const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 알게 된 경로, 입금자명 (선택: 직업, 요청사항)
 · 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 취소·환불 처리, 참여 후기 요청, 재참가 확인 및 이전에 만난 분과 같은 타임 배정 방지
 · 보유 기간: 이름·성별·출생 연도·연락처·참여 기수는 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월. 기간이 지나면 지체 없이 파기하며, 다른 법령에 보존 의무가 있는 정보는 그 기간 동안 보관합니다.
 · 신청 정보는 Google Firebase(싱가포르 서버)에 저장됩니다. 자세한 내용은 개인정보 처리방침에서 확인할 수 있어요.
 · 동의를 거부할 수 있으나, 거부 시 참가 신청이 어렵습니다.`;
-const FAITH = `· 수집 항목: 출석교회명, 담임목사 성함, 교단, 신앙생활 기간, 교회 출석 여부 (선택: 교회 위치, 교회 섬김, 나에게 신앙이란)
+const FAITH = `· 수집 항목: 출석교회명, 교단, 신앙생활 기간, 교회 출석 여부 (선택: 담임목사 성함, 교회 위치, 교회 섬김, 나에게 신앙이란)
 · 이용 목적: 크리스천 소개팅 참가 자격 확인(이단·사이비 확인 포함), 같은 교회 성도가 이성으로 같은 타임에 배정되지 않도록 하기
 · 보유 기간: 출석교회명은 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월
 · 신앙 정보는 민감정보로 일반 개인정보와 별도로 동의를 받으며, 다른 참가자에게 공개하지 않습니다.
@@ -375,11 +375,29 @@ function viewIntro() {
         <span class="round" style="font-size:14px;padding:8px 0 4px;color:var(--gold)">신청 전에 함께 봐 주세요</span>
         ${items.map(([ic, t], i) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;${i ? 'border-top:1px dashed rgba(176,138,62,.35);' : ''}"><span aria-hidden="true" style="flex:none">${ic}</span><span style="word-break:keep-all">${t}</span></div>`).join('')}
       </div>`; })()}
+    ${faqBlock()}
     ${lastCard()}
     <div class="spacer" style="min-height:26px"></div>
     <button class="btn gold" data-act="start">신청 시작하기</button>
     <p class="small center" style="margin-top:12px">약 3분 걸려요 · 문의 <a href="${esc((S.cfg.openchat || ION_DEFAULTS.config.openchat))}" target="_blank" rel="noopener" style="color:var(--gold)">카카오톡 오픈채팅</a></p>
     ${legalFoot(true)}
+  </div>`;
+}
+
+const FAQ = [
+  ['혼자 신청해도 괜찮을까요?', '대부분 혼자 오세요. 진행자가 아이스브레이킹부터 1:1 대화까지 이끌어 드려서 처음이어도 편하게 참여하실 수 있어요.'],
+  ['신앙은 어떻게 확인하나요?', '신청서의 출석교회·교단·신앙생활 기간을 운영진이 직접 확인한 뒤 참가를 확정해요. 주요 교단에서 이단으로 규정한 단체(신천지, 하나님의교회, JMS 등) 소속이시면 참가하실 수 없어요.'],
+  ['아는 사람을 만나면 어떡하죠?', '같은 교회 성도와 이전 기수에서 만난 분은 같은 타임에 배정되지 않게 조정해요.'],
+  ['매칭 결과는 언제 알 수 있나요?', '모임이 끝나면 1·2순위를 선택해요. 서로 지목한 분이 있으면 운영진 확인 후 문자나 카카오톡으로 연락처를 전달해 드려요.'],
+  ['취소하면 환불되나요?', null]
+];
+function faqBlock() {
+  const refund = S.cfg.refund || '7일 전까지 전액, 6~3일 전은 50% 환불되고, 2일 전부터 당일까지는 대관비·음료 사전 지출로 환불이 어려워요.';
+  return `<div class="notice" style="margin-top:14px;flex-direction:column;gap:0;padding:6px 14px">
+    <span class="round" style="font-size:14px;padding:8px 0 4px;color:var(--gold)">자주 묻는 질문</span>
+    ${FAQ.map(([q, a], i) => `<details style="padding:9px 0;${i ? 'border-top:1px dashed rgba(176,138,62,.35);' : ''}">
+      <summary style="cursor:pointer;word-break:keep-all">Q. ${esc(q)}</summary>
+      <div style="margin-top:6px;word-break:keep-all;white-space:pre-line;opacity:.9">${esc(a == null ? refund : a)}</div></details>`).join('')}
   </div>`;
 }
 
@@ -446,7 +464,7 @@ function viewStep2() {
   return `<div class="wrap">${head('신앙 정보를 알려주세요', '크리스천 소개팅 참가 확인과 타임 배정에만 사용해요.')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       ${inp('church', '출석교회명', 'type="text" maxlength="40" placeholder="예) ○○교회"')}
-      ${inp('pastor', '담임목사 성함', 'type="text" maxlength="20" placeholder="예) 홍길동 목사"')}
+      ${inp('pastor', '담임목사 성함 (선택)', 'type="text" maxlength="20" placeholder="예) 홍길동 목사"', false)}
       ${inp('churchAddr', '교회 위치', 'type="text" maxlength="60" placeholder="예) 대전 서구 (동네까지만 적어도 돼요)"', false)}
       ${etc('denom', OPT.denom, '교단')}
       <div class="field"><span class="lab">신앙생활 기간<span class="req">*</span></span>${opts('faithYears', OPT.faithYears)}</div>
@@ -598,7 +616,6 @@ function check(step) {
   }
   if (step === 1) {
     if (!d.church.trim()) return '출석교회명을 입력해 주세요.';
-    if (!d.pastor.trim()) return '담임목사 성함을 입력해 주세요.';
     if (!val('denom')) return '교단을 선택해 주세요.';
     if (!d.faithYears) return '신앙생활 기간을 선택해 주세요.';
     if (!d.attend) return '교회 출석 여부를 선택해 주세요.';
