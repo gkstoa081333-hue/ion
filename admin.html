@@ -636,7 +636,8 @@ function viewLogin() {
   return `<div class="wrap narrow dark">
     <div class="top"><span class="brand">ION</span><span class="pill">신청관리</span></div>
     <div class="stack" style="margin-top:40px;gap:12px"><span class="eyebrow">ION ADMIN</span><h1 class="h1">운영진 로그인</h1>
-      <p class="p">${DEMO ? '데모 모드에서는 아무 값으로나 들어갈 수 있어요.' : '매칭앱 관리자와 같은 계정으로 로그인해 주세요. 한 번 로그인하면 이 기기에서는 로그아웃 전까지 자동으로 로그인돼요.'}</p></div>
+      <p class="p">${DEMO ? '데모 모드에서는 아무 값으로나 들어갈 수 있어요.' : '매칭앱 관리자와 같은 계정으로 로그인해 주세요. 한 번 로그인하면 이 기기에서는 로그아웃 전까지 자동으로 로그인돼요.'}</p>
+    <p class="p" style="font-size:13px;opacity:.75">이온 운영진 전용 화면입니다. 이온 운영 계정으로만 로그인하며, 구글·카카오·네이버 등 다른 서비스의 계정이나 비밀번호는 요구하지 않습니다.</p></div>
     <form class="stack" style="margin-top:28px;gap:16px" data-form="login">
       <div class="field"><label for="em">이메일</label><input id="em" class="input" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(A.email || '')}" ${DEMO ? '' : 'required'}></div>
       <div class="field"><label for="pw">비밀번호</label><input id="pw" class="input" type="password" autocomplete="current-password" ${DEMO ? '' : 'required'}></div>
