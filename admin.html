@@ -2102,17 +2102,18 @@ function repromoTargets(cohort, resend) {
   new Set([...Object.keys(appPh), ...Object.keys(sess)]).forEach(d => {
     const rs = appPh[d] || [], ss = (sess[d] || []).sort((a, b) => b.when - a.when);
     const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed' && cohortEnded(r.cohort)).sort((a, b) => (b.at || 0) - (a.at || 0));
-    let kind;
-    if (rs.length) {   // ① 신청서로 들어온 분: 동의 필요
-      if (!past.length) return;
-      const last = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0]; const at = +((last.consents || {}).marketing) || 0;
-      if (!at) kind = 'noConsent'; else if (Date.now() - at > RP_YEAR2) kind = 'old'; else kind = 'consent';
-    } else {           // ② 명단으로만 들어온 분: 행사 후 6개월 이내
-      if (!ss.length) return;
-      if (!ss[0].when || Date.now() - ss[0].when > RP_MONTH6) kind = 'old'; else kind = 'deal';
-    }
+    if (!past.length && !ss.length) return;   // 지난 기수 참가 기록이 있는 분만
+    // 이번 기수에 이미 신청한 분 (지난 기수를 명단으로만 참가했어도 연락처로 찾음)
     if (rs.some(r => r.cohort === cohort && ['pending', 'confirmed', 'waiting'].includes(r.status))) return out.applied++;
     if (opt[d]) return out.optout++;
+    const lastApp = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];
+    const at = lastApp ? +((lastApp.consents || {}).marketing) || 0 : 0;
+    const declined = !!(lastApp && lastApp.consents && !at);   // 신청서에서 광고 수신에 체크하지 않음
+    const lastWhen = Math.max(ss[0] ? ss[0].when : 0, past[0] ? new Date(cohortDate(past[0].cohort) + 'T20:00:00').getTime() || 0 : 0);
+    let kind;
+    if (at) kind = Date.now() - at > RP_YEAR2 ? 'old' : 'consent';
+    else if (declined) kind = 'noConsent';
+    else kind = lastWhen && Date.now() - lastWhen <= RP_MONTH6 ? 'deal' : 'old';   // 동의 묻기 전 참가자: 행사 후 6개월 이내 (거래 관계 예외)
     if (kind === 'noConsent') return out.noConsent++;
     if (kind === 'old') return out.old++;
     if (sent[d] && !resend) return out.sent++;
@@ -2148,6 +2149,17 @@ ${cohort} 모집을 시작했어요!
 ${info}`;
 }
 const kstHour = () => new Date(Date.now() + 9 * 3600e3).getUTCHours();
+const ENGINE_QUEUE_VER = '2026-11-17a';   // 이 버전 이상의 자동 문자 엔진이 일괄 발송(apply/smsQueue)을 처리함
+function bulkState(cohort) {
+  const a = (A.data && A.data.autoSms) || {}, eng = (A.data && A.data.smsEngine) || {};
+  const q = Object.values((A.data && A.data.smsQueue) || {}).filter(x => x && x.ck === ckey(cohort));
+  const st = { q: q.filter(x => !x.doneAt).length, fail: q.filter(x => x.gaveUp).length, test: a.mode === 'test', ok: false, why: '' };
+  if (!eng.lastRun || Date.now() - eng.lastRun > 5 * 60e3) st.why = '자동 문자 엔진이 연결돼 있지 않아요 (설정 › 📱 자동 문자 확인).';
+  else if (String(eng.version || '') < ENGINE_QUEUE_VER) st.why = '일괄 발송을 쓰려면 구글 Apps Script의 자동 문자 엔진 코드를 새 버전으로 한 번 바꿔야 해요 (automation 폴더 안내).';
+  else if ((a.mode || 'off') === 'off') st.why = '자동 문자가 꺼져 있어요. 설정 › 📱 자동 문자에서 켜주세요.';
+  else st.ok = true;
+  return st;
+}
 function openRepromo(step) {
   const cur = cohortGroups().cur; const m = document.getElementById('modal');
   if (!cur.length) return toast('모집 중인 기수가 없어요. 설정에서 다음 기수 타임을 먼저 만들어 주세요.');
@@ -2171,7 +2183,10 @@ function openRepromo(step) {
       <div class="field"><span class="lab">문구 고르기</span><div class="chips"><button class="chipbtn ${ek === 'M' ? 'on' : ''}" data-rpe="M">매칭된 분 (${nM})</button><button class="chipbtn ${ek === 'N' ? 'on' : ''}" data-rpe="N">매칭 안 된 분 (${nN})</button></div></div>
       <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp[tk])}</textarea>
       <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.${ek === 'N' ? ' 투표 기록이 없는 분도 이 문구로 보내요.' : ''}</span>
-      <button class="btn" id="rp-go" ${T.list.length && !night ? '' : 'disabled'}>${ICON.msg}${T.list.length}명 한 명씩 보내기 시작</button>
+      ${(() => { const b = bulkState(cohort);
+        return `<button class="btn gold" id="rp-bulk" ${T.list.length && !night && b.ok ? '' : 'disabled'}>📤 ${T.list.length}명 한 번에 보내기 (솔라피)</button>
+        <span class="small">${b.ok ? (b.test ? '자동 문자가 <b>시험 모드</b>라 실제로는 안 가고 기록만 남아요.' : '1~2분 안에 솔라피로 한꺼번에 나가요. 받는 분끼리 번호는 안 보여요.') : esc(b.why)}${b.q ? `<br>보내는 중 ${b.q}명` : ''}${b.fail ? ` · <b style="color:var(--danger)">실패 ${b.fail}명</b> (다시 받는 분 명단에 들어와요)` : ''}</span>`; })()}
+      <button class="btn soft" id="rp-go" ${T.list.length && !night ? '' : 'disabled'}>${ICON.msg}한 명씩 문자 앱으로 보내기</button>
       <button class="mini" id="rp-reset" style="align-self:center">이 문구 기본값으로 되돌리기</button></div></div>`;
     const ta = m.querySelector('#rp-tpl'); ta.addEventListener('input', () => { A.rp[tk] = ta.value; });
     m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
@@ -2185,12 +2200,21 @@ function openRepromo(step) {
       try { await IonStore.update('apply', { [`promo/${ckey(cohort)}`]: null }); toast('보냄 기록을 지웠어요'); } catch (e) { toast('지우지 못했어요'); }
       openRepromo();
     });
-    m.querySelector('#rp-go').onclick = () => {
-      for (const [k, lab] of [['tplM', '매칭된 분'], ['tplN', '매칭 안 된 분']]) {
-        if (!/^\s*\(광고\)/.test(A.rp[k])) return toast(`${lab} 문구 맨 앞에 '(광고)'를 넣어주세요`);
-        if (!/수신\s*거부/.test(A.rp[k])) return toast(`${lab} 문구에 수신거부 방법을 넣어주세요`);
-      }
-      A.rp.list = T.list; A.rp.n = T.list.length; openRepromo(0);
+    const tplOk = () => { for (const [k, lab] of [['tplM', '매칭된 분'], ['tplN', '매칭 안 된 분']]) {
+        if (!/^\s*\(광고\)/.test(A.rp[k])) { toast(`${lab} 문구 맨 앞에 '(광고)'를 넣어주세요`); return false; }
+        if (!/수신\s*거부/.test(A.rp[k])) { toast(`${lab} 문구에 수신거부 방법을 넣어주세요`); return false; } } return true; };
+    m.querySelector('#rp-go').onclick = () => { if (!tplOk()) return; A.rp.list = T.list; A.rp.n = T.list.length; openRepromo(0); };
+    m.querySelector('#rp-bulk').onclick = async () => {
+      if (!tplOk()) return; const b = bulkState(cohort); if (!b.ok) return toast(b.why);
+      const nM2 = T.list.filter(x => x.matched).length;
+      if (!(await confirmBox(`${T.list.length}명에게 한 번에 보낼까요?`, `매칭된 분 ${nM2}명 · 매칭 안 된 분 ${T.list.length - nM2}명에게 각자 이름이 들어간 문구로 솔라피에서 보내요.${b.test ? '\n\n지금은 시험 모드라 실제로는 안 가요.' : '\n\n보낸 뒤에는 되돌릴 수 없어요.'}`, b.test ? '시험으로 보내기' : '보내기'))) return openRepromo();
+      const now = Date.now(); const up = {};
+      T.list.forEach((t, i) => { const text = A.rp[t.matched ? 'tplM' : 'tplN'].split('{이름}').join(t.name).split('{지난기수}').join(t.last);
+        const k = `rp${now.toString(36)}${i}`;
+        up[`smsQueue/${k}`] = { to: t.d, name: t.name, text, kind: 'repromo', label: `${cohort} 재참여 홍보`, ck: ckey(cohort), appId: t.id || '', at: now + i };
+        up[`promo/${ckey(cohort)}/${t.d}`] = now; });
+      try { await IonStore.update('apply', up); toast(`${T.list.length}명 발송 대기열에 넣었어요 · 1~2분 안에 나가요`); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
+      openRepromo();
     };
     return;
   }

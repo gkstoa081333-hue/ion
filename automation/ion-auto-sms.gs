@@ -9,10 +9,12 @@
    ===================================================================== */
 const DB_URL = 'https://eon-signal-default-rtdb.asia-southeast1.firebasedatabase.app';
 const SITE = 'https://gkstoa081333-hue.github.io/ion/';
-const VERSION = '2026-11-04b';
+const VERSION = '2026-11-17a';
 const RETRY_MIN = 10, RETRY_MAX = 5;  // 실패하면 10분 뒤 다시, 최대 5번
 const MAX_PER_RUN = 20;               // 한 번에 최대 발송 수 (사고 방지)
 const QUIET_FROM = 22, QUIET_TO = 8;  // 밤 10시~아침 8시는 보류했다가 8시에 발송
+const QUEUE_PER_RUN = 60;             // 관리자 일괄 발송(apply/smsQueue) 한 번에 처리하는 수
+const AD_QUIET_FROM = 21;             // 광고 문자는 밤 9시~아침 8시 발송 금지
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
@@ -75,12 +77,51 @@ function tick() {
         out.fail++;
       }
     });
+    const q = runQueue(mode, now); out.queue = q;
     beat({ mode, jobs: jobs.length, ...out });
     return out;
   } catch (e) {
     try { beat({ err: String(e.message || e).slice(0, 300) }); } catch (x) {}
     throw e;
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- 관리자 일괄 발송: apply/smsQueue/{id} = { to, name, text, kind, label, ck(기수 키), appId, at } ----------
+   보내면 doneAt 기록 · 실패하면 10분 뒤 다시 (최대 5번) · 끝내 실패하면 gaveUp + 홍보 '보냄' 표시 해제
+   시험 모드면 보내지 않고 기록만 (홍보 '보냄' 표시도 해제해서 나중에 실제로 보낼 수 있게) */
+function runQueue(mode, now) {
+  const q = db('apply/smsQueue') || {}; let n = 0;
+  const h = kstHour(now);
+  Object.entries(q).forEach(([k, x]) => {   // 1주 지난 처리 완료 항목 정리
+    if (x && x.doneAt && now - x.doneAt > 7 * 864e5) db(`apply/smsQueue/${k}`, 'delete');
+  });
+  const todo = Object.entries(q).filter(([, x]) => x && x.to && x.text && !x.doneAt).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+  for (const [k, x] of todo) {
+    if (n >= QUEUE_PER_RUN) break;
+    const ad = /^\s*\(광고\)/.test(x.text);
+    if (ad ? (h >= AD_QUIET_FROM || h < QUIET_TO) : (h >= QUIET_FROM || h < QUIET_TO)) break;   // 야간: 아침 8시에 이어서
+    const f = x.fail || { n: 0, at: 0 };
+    if (f.n && now - f.at < RETRY_MIN * 60e3) continue;
+    n++;
+    const base = { at: now, id: x.appId || '', name: x.name || '', kind: x.kind || 'bulk', label: x.label || '일괄 발송' };
+    if (mode === 'test') {
+      db(`apply/smsQueue/${k}`, 'patch', { doneAt: now, test: true });
+      if (x.ck) db(`apply/promo/${x.ck}/${x.to}`, 'delete');
+      log(Object.assign(base, { mode: 'test', ok: true, text: x.text })); continue;
+    }
+    db(`apply/smsQueue/${k}/doneAt`, 'put', now);   // 먼저 표시해서 두 번 발송 방지
+    try {
+      solapi(x.to, x.text);
+      if (x.ck) db(`apply/promo/${x.ck}/${x.to}`, 'put', now);
+      log(Object.assign(base, { mode: 'live', ok: true, text: x.text }));
+    } catch (e) {
+      const err = String(e.message || e).slice(0, 300); const fn = f.n + 1;
+      if (fn >= RETRY_MAX) { db(`apply/smsQueue/${k}`, 'patch', { gaveUp: true, fail: { n: fn, at: now, err } }); if (x.ck) db(`apply/promo/${x.ck}/${x.to}`, 'delete'); }
+      else { db(`apply/smsQueue/${k}/doneAt`, 'delete'); db(`apply/smsQueue/${k}/fail`, 'put', { n: fn, at: now, err }); }
+      log(Object.assign(base, { mode: 'live', ok: false, err }));
+    }
+  }
+  return n;
 }
 
 /* ---------- 도우미 ---------- */
