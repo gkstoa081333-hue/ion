@@ -212,6 +212,7 @@ const ICON = {
   check: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D9C8A0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   heart: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B08A3E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+  msg: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-5.6A8 8 0 1 1 21 12z"/></svg>',
   bell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#26453B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>'
 };
 
@@ -239,6 +240,29 @@ async function copyText(text) {
     let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
     ta.remove(); return ok;
   }
+}
+/* ---------- 문자 보내기 창: 문자 앱 바로 열기 · 카톡용 복사 (여러 명이면 한 명씩 이어서) ---------- */
+// items: [{ who, phone, text, done?: async () => {} }]
+function openSend(items, title, i = 0) {
+  const m = document.getElementById('modal');
+  if (i >= items.length) { m.innerHTML = ''; if (items.length > 1) toast(`${items.length}명 모두 처리했어요`); return; }
+  const it = items[i]; const multi = items.length > 1;
+  const smsHref = t => `sms:${digits(it.phone)}${IOS_DEV ? '&' : '?'}body=${encodeURIComponent(t)}`;
+  m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="between"><span class="round" style="font-size:18px">${esc(title)}${multi ? ` · ${i + 1} / ${items.length}` : ''}</span><button class="mini" data-x="close">${multi ? '그만하기' : '닫기'}</button></div>
+    <div class="between"><span class="round" style="font-size:17px">${esc(it.who)}</span><span class="small">${esc(fmtPhone(it.phone))}</span></div>
+    <textarea class="input" id="sd-text" aria-label="보낼 문구" style="min-height:220px">${esc(it.text)}</textarea>
+    <a class="btn" id="sd-sms" href="${esc(smsHref(it.text))}">${ICON.msg}문자 앱으로 보내기${multi ? ' · 다음' : ''}</a>
+    <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="sd-copy">${ICON.copy}카톡용 복사${multi ? ' · 다음' : ''}</button>${multi ? '<button class="btn line" style="flex:1;min-height:48px" id="sd-skip">건너뛰기</button>' : ''}</div></div></div>`;
+  const ta = m.querySelector('#sd-text');
+  ta.addEventListener('input', () => { m.querySelector('#sd-sms').href = smsHref(ta.value); });
+  const next = () => openSend(items, title, i + 1);
+  const mark = async () => { try { if (it.done) await it.done(); } catch (e) { console.error(e); } };
+  m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
+  m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
+  m.querySelector('#sd-sms').addEventListener('click', () => { mark(); setTimeout(multi ? next : () => { m.innerHTML = ''; }, 600); });
+  m.querySelector('#sd-copy').onclick = async () => { if (await copyText(ta.value)) { await mark(); toast(`${it.who}님 문구 복사 · 카톡에 붙여넣어 주세요`); if (multi) next(); else m.innerHTML = ''; } else toast('복사하지 못했어요'); };
+  if (multi) m.querySelector('#sd-skip').onclick = next;
 }
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -968,19 +992,20 @@ function followSection(s, R) {
   const f = s.follow || {}; const due = followDue(s.pub); const ready = due && Date.now() >= due;
   const ids = Object.keys(R.matched).sort(sortIds); const done = ids.filter(id => f[id]).length;
   const md = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
-  const btn = id => { const b = `<button class="mini ${f[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy-follow" data-id="${id}">${ICON.copy}${label(id)} ${esc((s.roster[id] || {}).name || '')} 안부${f[id] ? ' · 보냄' : ''}</button>`;
+  const btn = id => { const b = `<button class="mini ${f[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy-follow" data-id="${id}">${ICON.msg}${label(id)} ${esc((s.roster[id] || {}).name || '')} 안부${f[id] ? ' · 보냄' : ''}</button>`;
     return f[id] ? `<span style="display:flex;gap:6px;min-width:0">${b}<button class="mini" style="flex:0 0 auto;padding:0 12px" data-act="unfollow" data-id="${id}" aria-label="${label(id)} 안부 미발송으로 되돌리기">↺</button></span>` : b; };
   return `<span class="section-t">후속 안부 · 매칭 ${FOLLOW_DAYS}일 뒤</span>
     <div class="card stack" style="gap:10px;${ready && done < ids.length ? 'border:2px solid var(--gold-d)' : ''}">
       <div class="between"><span class="round" style="font-size:16px">${!due ? '투표를 마감하면 날짜가 정해져요' : ready ? (done < ids.length ? '지금 보내면 좋아요' : '모두 보냈어요') : `${md(due)}부터 보내면 좋아요`}</span><span class="small">${done}/${ids.length}명</span></div>
       ${ready ? `<span class="small">"연락 잘 이어가고 계신가요?" 안부와 후기 링크가 담긴 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
+      ${done < ids.length ? `<button class="btn" data-act="send-follow-all">${ICON.msg}안 보낸 ${ids.length - done}명 한 명씩 문자 보내기</button>` : ''}
       <div class="stack" style="gap:8px">${ids.map(btn).join('')}</div>` : ''}</div>`;
 }
 function tabResult(s) {
   const roster = s.roster || {}; const pub = s.pub; const sent = s.sent || {};
   const R = computeMatches(roster, s.votes);
   const person = id => ({ id, ...(roster[id] || {}) });
-  const copyBtn = (id, kind, txt) => { const btn = `<button class="mini ${sent[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy" data-id="${id}" data-kind="${kind}">${ICON.copy}${txt || label(id) + ' 문구'}${sent[id] ? ' · 보냄' : ''}</button>`;
+  const copyBtn = (id, kind, txt) => { const btn = `<button class="mini ${sent[id] ? 'done' : ''}" style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-act="copy" data-id="${id}" data-kind="${kind}">${ICON.msg}${txt || label(id) + ' 문구'}${sent[id] ? ' · 보냄' : ''}</button>`;
     return sent[id] ? `<span style="display:flex;gap:6px;min-width:0">${btn}<button class="mini" style="flex:0 0 auto;padding:0 12px" data-act="unsent" data-id="${id}" aria-label="${label(id)} 미발송으로 되돌리기" title="미발송으로 되돌리기">↺</button></span>` : btn; };
   const pairCard = (pair, rank) => {
     const [a, b] = pair; const both = sent[a] && sent[b];
@@ -998,7 +1023,7 @@ function tabResult(s) {
       <span class="small">1순위 ${R.first.length}건 · 2순위 ${R.second.length}건 · 무효 ${R.voided.length}건</span></div></div>
     ${(() => { const total = Object.keys(roster).length; const rc = reviewCount(pub); const pct = total ? Math.min(100, Math.round(rc / total * 100)) : 0;
       return pub.status === 'closed' ? `<div class="card between" style="padding:12px 16px"><span><span class="round" style="font-size:16px">후기 ${rc} / ${total}명</span> <span class="small">${pct}% · 익명</span></span>
-        <button class="mini" data-act="copy-review-ask">${ICON.copy}후기 부탁 문구</button></div>` : ''; })()}
+        <span style="display:flex;gap:6px"><button class="mini" data-act="send-review-ask">${ICON.msg}후기 부탁 문자</button><button class="mini" data-act="copy-review-ask" aria-label="후기 부탁 문구 복사 (단체방용)">${ICON.copy}</button></span></div>` : ''; })()}
     <button class="btn gold" data-act="vote-table">매칭 결과 표로 보기 (누가 누구를 골랐는지)</button>
     ${n ? `<span class="section-t">성사된 매칭</span>` : ''}
     ${R.first.map(p => pairCard(p, 1)).join('')}${R.second.map(p => pairCard(p, 2)).join('')}
@@ -1009,7 +1034,7 @@ function tabResult(s) {
     <span class="section-t">불성사 안내 대상 ${R.misses.length}명</span>
     <div class="list">${R.misses.map(id => `<div class="li"><span class="no">${label(id)}</span><span class="meta">${esc(person(id).name)}</span>${copyBtn(id, 'miss', '안내 문구')}</div>`).join('') || '<div class="empty">모두 매칭됐어요</div>'}</div>
     <button class="btn line" data-act="csv">결과 엑셀(CSV)로 내보내기</button>
-    <p class="small center">문구를 복사하면 자동으로 '보냄'으로 표시돼요. 잘못 눌렀으면 옆의 '↺'를 눌러 미발송으로 되돌릴 수 있어요.</p>
+    <p class="small center">문자 앱으로 보내거나 카톡용으로 복사하면 자동으로 '보냄'으로 표시돼요. 잘못 눌렀으면 옆의 '↺'를 눌러 미발송으로 되돌릴 수 있어요.</p>
     ${Object.keys(sent).length ? `<button class="btn soft sm" style="width:100%" data-act="unsent-all">'보냄' 표시 모두 지우기 (${Object.keys(sent).length}명)</button>` : ''}`;
 }
 
@@ -1215,15 +1240,23 @@ document.addEventListener('click', async e => {
         const sid = A.sid; goHome(); await DB.remove(`sessions/${sid}`); return toast('삭제했어요');
       }
       case 'vote-table': openVoteTable(); return;
-      case 'copy-review-ask': { const pub = A.cur.pub; const t = `[이온 크리스천 소개팅] 오늘 함께해 주셔서 감사합니다 🙂
-${pub.cohort} ${pub.slot} 타임 후기를 아직 남기지 않으셨다면 2분만 부탁드려요.
+      case 'copy-review-ask': case 'send-review-ask': { const pub = A.cur.pub;
+        const t = name => `[이온 크리스천 소개팅] ${name ? name + '님, ' : ''}${pub.cohort} ${pub.slot} 타임에 함께해 주셔서 감사합니다 🙂
+아직 후기를 남기지 않으셨다면 2분만 부탁드려요.
 이름 없이 익명으로 받고, 다음 기수를 더 좋게 만드는 데 쓰여요 🙏
 ${reviewURL(pub)}
 (이미 남겨주신 분은 이 메시지를 넘겨주세요. 감사합니다!)`;
-        return (await copyText(t)) ? toast('후기 부탁 문구를 복사했어요') : toast('복사하지 못했어요'); }
+        if (b.dataset.act === 'copy-review-ask') return (await copyText(t())) ? toast('후기 부탁 문구를 복사했어요 (단체방용)') : toast('복사하지 못했어요');
+        const ppl = rosterList(A.cur).filter(p => digits(p.phone).length >= 9);
+        if (!ppl.length) return toast('연락처가 있는 참가자가 없어요');
+        return openSend(ppl.map(p => ({ who: `${label(p.id)} ${p.name}`, phone: p.phone, text: t(p.name) })), '후기 부탁 문자'); }
       case 'copy-follow': { const s = A.cur; const id = b.dataset.id; const m = computeMatches(s.roster, s.votes).matched[id]; if (!m) return;
         const text = msgFollow({ id, ...s.roster[id] }, { id: m.partner, ...s.roster[m.partner] }, s.pub);
-        if (await copyText(text)) { await DB.set(`sessions/${A.sid}/follow/${id}`, true); toast(`${label(id)} 안부 문구를 복사했어요`); } else toast('복사하지 못했어요'); return; }
+        const sid = A.sid; return openSend([{ who: `${label(id)} ${s.roster[id].name}`, phone: s.roster[id].phone, text, done: () => DB.set(`sessions/${sid}/follow/${id}`, true) }], '후속 안부'); }
+      case 'send-follow-all': { const s = A.cur; const sid = A.sid; const R = computeMatches(s.roster, s.votes); const f = s.follow || {};
+        const ids = Object.keys(R.matched).sort(sortIds).filter(id => !f[id]); if (!ids.length) return toast('모두 보냈어요');
+        return openSend(ids.map(id => ({ who: `${label(id)} ${s.roster[id].name}`, phone: s.roster[id].phone,
+          text: msgFollow({ id, ...s.roster[id] }, { id: R.matched[id].partner, ...s.roster[R.matched[id].partner] }, s.pub), done: () => DB.set(`sessions/${sid}/follow/${id}`, true) })), '후속 안부'); }
       case 'unfollow': await DB.remove(`sessions/${A.sid}/follow/${b.dataset.id}`); toast('미발송으로 되돌렸어요'); return;
       case 'unsent': await DB.remove(`sessions/${A.sid}/sent/${b.dataset.id}`); toast(`${label(b.dataset.id)} 미발송으로 되돌렸어요`); return;
       case 'unsent-all': if (!(await confirmBox("'보냄' 표시를 모두 지울까요?", '문구는 그대로이고, 발송 표시만 미발송으로 돌아가요.', '모두 지우기'))) return; await DB.remove(`sessions/${A.sid}/sent`); toast('모두 미발송으로 되돌렸어요'); return;
@@ -1232,9 +1265,7 @@ ${reviewURL(pub)}
         let text;
         if (b.dataset.kind === 'match') { const m = computeMatches(s.roster, s.votes).matched[id]; text = msgMatch(me, { id: m.partner, ...s.roster[m.partner] }, m.rank, s.pub); }
         else text = msgMiss(me, s.pub);
-        if (await copyText(text)) { await DB.set(`sessions/${A.sid}/sent/${id}`, true); toast(`${label(id)} 문구를 복사했어요`); }
-        else toast('복사하지 못했어요');
-        return;
+        const sid = A.sid; return openSend([{ who: `${label(id)} ${me.name}`, phone: me.phone, text, done: () => DB.set(`sessions/${sid}/sent/${id}`, true) }], b.dataset.kind === 'match' ? '매칭 안내' : '불성사 안내');
       }
       case 'csv': return exportCSV();
       case 'copy-link': return (await copyText(participantURL(A.sid))) ? toast('링크를 복사했어요') : toast('복사하지 못했어요');
