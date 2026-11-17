@@ -2170,6 +2170,7 @@ function openRepromo(step) {
   if (step == null) {
     if (!A.sessRaw) { toast('매칭 명단을 불러오는 중이에요. 잠시 뒤 다시 눌러주세요'); return; }
     const T = repromoTargets(cohort, A.rp.resend); const nSent = Object.keys(((A.data && A.data.promo) || {})[ckey(cohort)] || {}).length; const nM = T.list.filter(x => x.matched).length, nN = T.list.length - nM, nDeal = T.list.filter(x => x.kind === 'deal').length;
+    const who = A.rp.who || 'all'; const SL = T.list.filter(x => who === 'all' || (who === 'M') === !!x.matched); const whoLab = { all: '', M: '매칭된 분 ', N: '매칭 안 된 분 ' }[who];
     const ex = [[T.noConsent, '수신 동의 없음'], [T.old, '동의 2년·행사 6개월 지남'], [T.applied, `이미 ${cohort} 신청`], [T.optout, '수신거부'], [T.sent, '이미 보냄']].filter(x => x[0]).map(x => `${x[1]} ${x[0]}명`).join(' · ');
     const ek = A.rp.edit; const tk = ek === 'M' ? 'tplM' : 'tplN';
     m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
@@ -2185,9 +2186,10 @@ function openRepromo(step) {
       <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp[tk])}</textarea>
       <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.${ek === 'N' ? ' 투표 기록이 없는 분도 이 문구로 보내요.' : ''}</span>
       ${(() => { const b = bulkState(cohort);
-        return `<button class="btn gold" id="rp-bulk" ${T.list.length && !night && b.ok ? '' : 'disabled'}>📤 ${T.list.length}명 한 번에 보내기 (솔라피)</button>
+        return `<div class="field"><span class="lab">보낼 대상</span><div class="chips">${[['all', `전체 ${T.list.length}`], ['M', `매칭된 분만 ${nM}`], ['N', `매칭 안 된 분만 ${nN}`]].map(([v, l]) => `<button class="chipbtn ${who === v ? 'on' : ''}" data-rpw="${v}">${l}</button>`).join('')}</div></div>
+        <button class="btn gold" id="rp-bulk" ${SL.length && !night && b.ok ? '' : 'disabled'}>📤 ${whoLab}${SL.length}명 한 번에 보내기 (솔라피)</button>
         <span class="small">${b.ok ? (b.test ? '자동 문자가 <b>시험 모드</b>라 실제로는 안 가고 기록만 남아요.' : '1~2분 안에 솔라피로 한꺼번에 나가요. 받는 분끼리 번호는 안 보여요.') : esc(b.why)}${b.q ? `<br>보내는 중 ${b.q}명` : ''}${b.fail ? ` · <b style="color:var(--danger)">실패 ${b.fail}명</b> (다시 받는 분 명단에 들어와요)` : ''}</span>`; })()}
-      <button class="btn soft" id="rp-go" ${T.list.length && !night ? '' : 'disabled'}>${ICON.msg}한 명씩 문자 앱으로 보내기</button>
+      <button class="btn soft" id="rp-go" ${SL.length && !night ? '' : 'disabled'}>${ICON.msg}${whoLab}${SL.length}명 한 명씩 문자 앱으로 보내기</button>
       <button class="mini" id="rp-reset" style="align-self:center">이 문구 기본값으로 되돌리기</button></div></div>`;
     const ta = m.querySelector('#rp-tpl'); ta.addEventListener('input', () => { A.rp[tk] = ta.value; });
     m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
@@ -2204,17 +2206,18 @@ function openRepromo(step) {
     const tplOk = () => { for (const [k, lab] of [['tplM', '매칭된 분'], ['tplN', '매칭 안 된 분']]) {
         if (!/^\s*\(광고\)/.test(A.rp[k])) { toast(`${lab} 문구 맨 앞에 '(광고)'를 넣어주세요`); return false; }
         if (!/수신\s*거부/.test(A.rp[k])) { toast(`${lab} 문구에 수신거부 방법을 넣어주세요`); return false; } } return true; };
-    m.querySelector('#rp-go').onclick = () => { if (!tplOk()) return; A.rp.list = T.list; A.rp.n = T.list.length; openRepromo(0); };
+    m.querySelector('#rp-go').onclick = () => { if (!tplOk()) return; A.rp.list = SL; A.rp.n = SL.length; openRepromo(0); };
+    m.querySelectorAll('[data-rpw]').forEach(b => b.onclick = () => { A.rp.who = b.dataset.rpw; if (b.dataset.rpw !== 'all') A.rp.edit = b.dataset.rpw; openRepromo(); });
     m.querySelector('#rp-bulk').onclick = async () => {
       if (!tplOk()) return; const b = bulkState(cohort); if (!b.ok) return toast(b.why);
-      const nM2 = T.list.filter(x => x.matched).length;
-      if (!(await confirmBox(`${T.list.length}명에게 한 번에 보낼까요?`, `매칭된 분 ${nM2}명 · 매칭 안 된 분 ${T.list.length - nM2}명에게 각자 이름이 들어간 문구로 솔라피에서 보내요.${b.test ? '\n\n지금은 시험 모드라 실제로는 안 가요.' : '\n\n보낸 뒤에는 되돌릴 수 없어요.'}`, b.test ? '시험으로 보내기' : '보내기'))) return openRepromo();
+      const nM2 = SL.filter(x => x.matched).length;
+      if (!(await confirmBox(`${whoLab}${SL.length}명에게 한 번에 보낼까요?`, `매칭된 분 ${nM2}명 · 매칭 안 된 분 ${SL.length - nM2}명에게 각자 이름이 들어간 문구로 솔라피에서 보내요.${b.test ? '\n\n지금은 시험 모드라 실제로는 안 가요.' : '\n\n보낸 뒤에는 되돌릴 수 없어요.'}`, b.test ? '시험으로 보내기' : '보내기'))) return openRepromo();
       const now = Date.now(); const up = {};
-      T.list.forEach((t, i) => { const text = A.rp[t.matched ? 'tplM' : 'tplN'].split('{이름}').join(t.name).split('{지난기수}').join(t.last);
+      SL.forEach((t, i) => { const text = A.rp[t.matched ? 'tplM' : 'tplN'].split('{이름}').join(t.name).split('{지난기수}').join(t.last);
         const k = `rp${now.toString(36)}${i}`;
         up[`smsQueue/${k}`] = { to: t.d, name: t.name, text, kind: 'repromo', label: `${cohort} 재참여 홍보`, ck: ckey(cohort), appId: t.id || '', at: now + i };
         up[`promo/${ckey(cohort)}/${t.d}`] = now; });
-      try { await IonStore.update('apply', up); toast(`${T.list.length}명 발송 대기열에 넣었어요 · 1~2분 안에 나가요`); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
+      try { await IonStore.update('apply', up); toast(`${SL.length}명 발송 대기열에 넣었어요 · 1~2분 안에 나가요`); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
       openRepromo();
     };
     return;
