@@ -2071,92 +2071,132 @@ function openPerson(id) {
   m.querySelector('#pp-back').onclick = () => openTable();
   m.querySelector('#pp-msg').onclick = () => { A._moveFrom = ''; A._moveCross = false; openMsg(id); };
 }
-/* ---------- 재참여 홍보 문자: 지난 기수 확정자 중 광고 수신 동의한 분께 한 명씩 ----------
-   · 동의 기록(consents.marketing)이 있는 최신 신청 기준, 2년 지난 동의는 제외
-   · 이번 기수에 이미 신청한 분 · 수신거부(apply/optout) · 이번 기수 홍보를 이미 보낸 분(apply/promo/{기수}) 제외 */
-const RP_YEAR2 = 730 * 864e5;
-function repromoTargets(cohort) {
-  const by = {}; apps().forEach(r => { const d = digits(r.phone); if (d) (by[d] = by[d] || []).push(r); });
-  const opt = (A.data && A.data.optout) || {}; const sent = ((A.data && A.data.promo) || {})[ckey(cohort)] || {};
-  const out = { list: [], noConsent: 0, applied: 0, optout: 0, sent: 0, old: 0 };
-  Object.entries(by).forEach(([d, rs]) => {
-    const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed' && cohortEnded(r.cohort)); if (!past.length) return;   // 이미 끝난 기수 참가자만
-    if (rs.some(r => r.cohort === cohort && ['pending', 'confirmed', 'waiting'].includes(r.status))) return out.applied++;
-    if (opt[d]) return out.optout++;
-    const last = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];   // 가장 최근 신청의 동의 여부가 현재 동의
-    const at = +((last.consents || {}).marketing) || 0;
-    if (!at) return out.noConsent++;
-    if (Date.now() - at > RP_YEAR2) return out.old++;
-    if (sent[d]) return out.sent++;
-    const lp = past.sort((a, b) => (b.at || 0) - (a.at || 0))[0];
-    out.list.push({ d, name: lp.name, phone: lp.phone, gender: lp.gender, last: [...new Set(past.map(r => r.cohort))].join('·'), id: lp.id });
-  });
-  out.list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+/* ---------- 재참여 홍보 문자: 지난 기수 참가자에게 다음 모집 알리기 (한 명씩) ----------
+   대상 ① 신청서로 참가 확정 + 광고 수신 동의(2년 이내)
+        ② 신청서 없이 매칭 명단으로만 들어간 분 중 행사 후 6개월 이내 (거래 관계 예외 — 동의 기록 없음)
+   제외: 수신거부(apply/optout) · 이번 기수 이미 신청 · 이번 기수 홍보 이미 보냄(apply/promo/{기수})
+   매칭된 분 / 매칭 안 된 분(결과 기록 없는 분 포함) 문구를 따로 씀 */
+const RP_YEAR2 = 730 * 864e5, RP_MONTH6 = 183 * 864e5;
+function sessMatched(x) {   // 매칭앱 computeMatches와 같은 규칙 → { 번호id: true }
+  const ro = x.roster || {}, v = x.votes || {}; const f = id => (v[id] || {}).first, s = id => (v[id] || {}).second; const out = {};
+  Object.keys(ro).forEach(a => { const b = f(a); if (b && ro[b] && f(b) === a) { out[a] = out[b] = 1; } });
+  const one = new Set(Object.keys(out));
+  Object.keys(ro).forEach(a => { const b = s(a); if (b && ro[b] && s(b) === a && !one.has(a) && !one.has(b)) { out[a] = out[b] = 1; } });
   return out;
 }
-function repromoDefault(cohort) {
+function repromoTargets(cohort) {
+  const appPh = {}; apps().forEach(r => { const d = digits(r.phone); if (d) (appPh[d] = appPh[d] || []).push(r); });
+  // 매칭 명단에서 사람별 참가 기록 (지난 기수만)
+  const sess = {};
+  Object.values(A.sessRaw || {}).forEach(x => {
+    if (!x || !x.pub || !x.roster || x.pub.cohort === cohort || !cohortEnded(x.pub.cohort)) return;
+    const when = +x.pub.closedAt || (x.pub.date ? new Date((/^\d{4}-\d{2}-\d{2}/.test(x.pub.date) ? x.pub.date.slice(0, 10) : slotIsoDate(x.pub.date)) + 'T20:00:00').getTime() : 0) || 0;
+    const hit = Object.keys(x.votes || {}).length ? sessMatched(x) : null;   // 투표 기록 없으면 결과 모름
+    Object.entries(x.roster).forEach(([pid, p]) => { const d = digits(p && p.phone); if (!d) return;
+      (sess[d] = sess[d] || []).push({ when, cohort: x.pub.cohort, name: p.name, gender: pid[0], matched: hit ? !!hit[pid] : null }); });
+  });
+  const opt = (A.data && A.data.optout) || {}; const sent = ((A.data && A.data.promo) || {})[ckey(cohort)] || {};
+  const out = { list: [], noConsent: 0, applied: 0, optout: 0, sent: 0, old: 0 };
+  new Set([...Object.keys(appPh), ...Object.keys(sess)]).forEach(d => {
+    const rs = appPh[d] || [], ss = (sess[d] || []).sort((a, b) => b.when - a.when);
+    const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed' && cohortEnded(r.cohort)).sort((a, b) => (b.at || 0) - (a.at || 0));
+    let kind;
+    if (rs.length) {   // ① 신청서로 들어온 분: 동의 필요
+      if (!past.length) return;
+      const last = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0]; const at = +((last.consents || {}).marketing) || 0;
+      if (!at) kind = 'noConsent'; else if (Date.now() - at > RP_YEAR2) kind = 'old'; else kind = 'consent';
+    } else {           // ② 명단으로만 들어온 분: 행사 후 6개월 이내
+      if (!ss.length) return;
+      if (!ss[0].when || Date.now() - ss[0].when > RP_MONTH6) kind = 'old'; else kind = 'deal';
+    }
+    if (rs.some(r => r.cohort === cohort && ['pending', 'confirmed', 'waiting'].includes(r.status))) return out.applied++;
+    if (opt[d]) return out.optout++;
+    if (kind === 'noConsent') return out.noConsent++;
+    if (kind === 'old') return out.old++;
+    if (sent[d]) return out.sent++;
+    const lp = past[0]; const lastS = ss[0];
+    const cohorts = [...new Set([...past.map(r => r.cohort), ...ss.map(x => x.cohort)])];
+    out.list.push({ d, kind, name: (lp || lastS).name, phone: lp ? lp.phone : fmtPh(d), gender: lp ? lp.gender : lastS.gender, id: lp ? lp.id : '',
+      last: (lastS ? lastS.cohort : lp.cohort), all: cohorts.join('·'), matched: lastS ? lastS.matched === true : false });
+  });
+  out.list.sort((a, b) => (b.matched - a.matched) || a.name.localeCompare(b.name, 'ko'));
+  return out;
+}
+const fmtPh = d => d.length === 11 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d;
+function repromoDefault(cohort, matched) {
   const sl = slots().filter(x => x.cohort === cohort && x.public !== false);
   const when = sl.length ? [...new Set(sl.map(x => x.date))].map(dd => `${dd} ${sl.filter(x => x.date === dd).map(x => String(x.time || '').split('~')[0]).join('·')}`).join(', ') : '(일정)';
   const place = [...new Set(sl.map(x => x.place).filter(Boolean))].join(', ');
   const disc = discOf(); const chat = conf().openchat || ION_DEFAULTS.config.openchat || '';
   const link = location.href.replace(/admin\.html.*$/, 'apply.html').replace(/[?#].*$/, '');
-  return `(광고) [이온 크리스천 소개팅] {이름}님, 안녕하세요 🙂
+  const info = `일정: ${when}${place ? `\n장소: ${place}` : ''}\n신청: ${link}\n\n수신거부: 카카오톡 오픈채팅으로 '거부'라고 남겨주세요.\n${chat}`;
+  return matched ? `(광고) [이온 크리스천 소개팅] {이름}님, 안녕하세요 🙂
+지난 {지난기수}에서 좋은 인연을 만나셔서 저희도 참 기뻤어요.
+두 분의 만남이 따뜻하게 이어지고 있기를 기도해요.
+
+${cohort} 모집을 시작해서 소식 전해드려요.
+주변에 좋은 만남을 기다리는 크리스천 지인이 있다면 이 링크를 전해주세요 🙏${disc > 0 ? `\n혹시 다시 참여하시게 되면 재참여 할인 ${won(disc)}원을 드려요.` : ''}
+
+${info}` : `(광고) [이온 크리스천 소개팅] {이름}님, 안녕하세요 🙂
 지난 {지난기수}에 함께해 주셔서 감사했어요.
 
-${cohort} 모집을 시작했어요!${disc > 0 ? `\n다시 오시는 분께는 재참여 할인 ${won(disc)}원을 드려요.` : ''}
+${cohort} 모집을 시작했어요!
+새로운 분들과 다시 한번 편하게 대화 나눠보세요.${disc > 0 ? `\n다시 오시는 분께는 재참여 할인 ${won(disc)}원을 드려요.` : ''}
 
-일정: ${when}${place ? `\n장소: ${place}` : ''}
-신청: ${link}
-
-수신거부: 카카오톡 오픈채팅으로 '거부'라고 남겨주세요.
-${chat}`;
+${info}`;
 }
 const kstHour = () => new Date(Date.now() + 9 * 3600e3).getUTCHours();
 function openRepromo(step) {
   const cur = cohortGroups().cur; const m = document.getElementById('modal');
   if (!cur.length) return toast('모집 중인 기수가 없어요. 설정에서 다음 기수 타임을 먼저 만들어 주세요.');
   const cohort = A.rp && cur.includes(A.rp.cohort) ? A.rp.cohort : cur.includes(A.cohort) ? A.cohort : cur[0];
-  if (!A.rp || A.rp.cohort !== cohort) A.rp = { cohort, tpl: repromoDefault(cohort) };
-  const T = repromoTargets(cohort);
+  if (!A.rp || A.rp.cohort !== cohort) A.rp = { cohort, tplM: repromoDefault(cohort, true), tplN: repromoDefault(cohort, false), edit: 'N' };
   const night = kstHour() >= 21 || kstHour() < 8;
   if (step == null) {
-    const ex = [[T.noConsent, '수신 동의 없음'], [T.old, '동의 2년 지남'], [T.applied, `이미 ${cohort} 신청`], [T.optout, '수신거부'], [T.sent, '이미 보냄']].filter(x => x[0]).map(x => `${x[1]} ${x[0]}명`).join(' · ');
+    const T = repromoTargets(cohort); const nM = T.list.filter(x => x.matched).length, nN = T.list.length - nM, nDeal = T.list.filter(x => x.kind === 'deal').length;
+    const ex = [[T.noConsent, '수신 동의 없음'], [T.old, '동의 2년·행사 6개월 지남'], [T.applied, `이미 ${cohort} 신청`], [T.optout, '수신거부'], [T.sent, '이미 보냄']].filter(x => x[0]).map(x => `${x[1]} ${x[0]}명`).join(' · ');
+    const ek = A.rp.edit; const tk = ek === 'M' ? 'tplM' : 'tplN';
     m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
       <div class="between"><span class="round" style="font-size:19px">재참여 홍보 문자</span><button class="mini" data-x="close">닫기</button></div>
       <div class="field"><span class="lab">어느 기수 모집을 알릴까요?</span><div class="chips">${cur.map(c => `<button class="chipbtn ${c === cohort ? 'on' : ''}" data-rpc="${esc(c)}">${esc(c)} 모집</button>`).join('')}</div></div>
       <div class="card" style="padding:12px 14px"><span class="round" style="font-size:17px">받는 분: 지난 기수 참가자 ${T.list.length}명</span>
-        <div class="small" style="margin-top:4px">${esc(cohort)} 모집 소식을, 이미 끝난 기수(${esc(cohortGroups().past.slice().reverse().join('·') || '-')})에 참가했던 분 중 광고 수신에 동의한 분께 보내요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
+        <div class="small" style="margin-top:4px">매칭된 분 ${nM}명 · 매칭 안 된 분 ${nN}명<br>신청서로 참가해 광고 수신에 동의한 분${nDeal ? `, 그리고 명단으로만 들어온 분 중 행사 후 6개월 안 된 분 ${nDeal}명(거래 관계 예외)` : ''}이에요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
       ${night ? `<div class="notice">${ICON.msg}<span>지금은 밤 9시~아침 8시예요. 광고 문자는 이 시간에 보내면 안 돼요. 아침 8시 이후에 보내주세요.</span></div>` : ''}
-      <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.</span>
-      <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp.tpl)}</textarea>
-      <button class="btn" id="rp-go" ${T.list.length && !night ? '' : 'disabled'}>${ICON.msg}한 명씩 보내기 시작</button>
-      <button class="mini" id="rp-reset" style="align-self:center">기본 문구로 되돌리기</button></div></div>`;
-    const ta = m.querySelector('#rp-tpl'); ta.addEventListener('input', () => { A.rp.tpl = ta.value; });
+      <div class="field"><span class="lab">문구 고르기</span><div class="chips"><button class="chipbtn ${ek === 'M' ? 'on' : ''}" data-rpe="M">매칭된 분 (${nM})</button><button class="chipbtn ${ek === 'N' ? 'on' : ''}" data-rpe="N">매칭 안 된 분 (${nN})</button></div></div>
+      <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp[tk])}</textarea>
+      <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.${ek === 'N' ? ' 투표 기록이 없는 분도 이 문구로 보내요.' : ''}</span>
+      <button class="btn" id="rp-go" ${T.list.length && !night ? '' : 'disabled'}>${ICON.msg}${T.list.length}명 한 명씩 보내기 시작</button>
+      <button class="mini" id="rp-reset" style="align-self:center">이 문구 기본값으로 되돌리기</button></div></div>`;
+    const ta = m.querySelector('#rp-tpl'); ta.addEventListener('input', () => { A.rp[tk] = ta.value; });
     m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
     m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
-    m.querySelector('#rp-reset').onclick = () => { A.rp.tpl = repromoDefault(cohort); openRepromo(); };
-    m.querySelectorAll('[data-rpc]').forEach(b => b.onclick = () => { A.rp = { cohort: b.dataset.rpc, tpl: repromoDefault(b.dataset.rpc) }; openRepromo(); });
+    m.querySelector('#rp-reset').onclick = () => { A.rp[tk] = repromoDefault(cohort, ek === 'M'); openRepromo(); };
+    m.querySelectorAll('[data-rpc]').forEach(b => b.onclick = () => { A.rp = null; A.rp = { cohort: b.dataset.rpc, tplM: repromoDefault(b.dataset.rpc, true), tplN: repromoDefault(b.dataset.rpc, false), edit: 'N' }; openRepromo(); });
+    m.querySelectorAll('[data-rpe]').forEach(b => b.onclick = () => { A.rp.edit = b.dataset.rpe; openRepromo(); });
     m.querySelector('#rp-go').onclick = () => {
-      if (!/^\s*\(광고\)/.test(A.rp.tpl)) return toast("문구 맨 앞에 '(광고)'를 넣어주세요");
-      if (!/수신\s*거부/.test(A.rp.tpl)) return toast('수신거부 방법을 문구에 넣어주세요');
+      for (const [k, lab] of [['tplM', '매칭된 분'], ['tplN', '매칭 안 된 분']]) {
+        if (!/^\s*\(광고\)/.test(A.rp[k])) return toast(`${lab} 문구 맨 앞에 '(광고)'를 넣어주세요`);
+        if (!/수신\s*거부/.test(A.rp[k])) return toast(`${lab} 문구에 수신거부 방법을 넣어주세요`);
+      }
       A.rp.list = T.list; A.rp.n = T.list.length; openRepromo(0);
     };
     return;
   }
   const list = A.rp.list || []; const t = list[step];
   if (!t) { m.innerHTML = ''; toast(`${A.rp.n || 0}명 모두 처리했어요`); return; }
-  const text = A.rp.tpl.split('{이름}').join(t.name).split('{지난기수}').join(t.last);
+  const text = A.rp[t.matched ? 'tplM' : 'tplN'].split('{이름}').join(t.name).split('{지난기수}').join(t.last);
   const smsHref = x => `sms:${t.d}${IOS ? '&' : '?'}body=${encodeURIComponent(x)}`;
   m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
     <div class="between"><span class="round" style="font-size:18px">${esc(cohort)} 모집 홍보 · ${step + 1} / ${list.length}</span><button class="mini" data-x="close">그만하기</button></div>
-    <div class="between"><span class="round" style="font-size:17px">${esc(t.name)} <span class="small">${G[t.gender] || ''} · ${esc(t.last)}</span></span><span class="small">${esc(t.phone)}</span></div>
+    <div class="between"><span class="round" style="font-size:17px">${esc(t.name)} <span class="small">${G[t.gender] || ''} · ${esc(t.all)}</span></span><span class="small">${esc(t.phone)}</span></div>
+    <div class="chips"><span class="chip ${t.matched ? 'ok' : 'mute'}">${t.matched ? '매칭된 분' : '매칭 안 된 분'}</span>${t.kind === 'deal' ? '<span class="chip mute">명단 참가 · 6개월 이내</span>' : '<span class="chip mute">수신 동의</span>'}</div>
     <textarea class="input" id="rp-text" aria-label="보낼 문구" style="min-height:220px">${esc(text)}</textarea>
     <a class="btn" id="rp-sms" href="${esc(smsHref(text))}">${ICON.msg}문자 앱으로 보내고 다음</a>
     <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="rp-copy">${ICON.copy}카톡용 복사 · 다음</button><button class="btn line" style="flex:1;min-height:48px" id="rp-skip">건너뛰기</button></div>
     <button class="mini del" id="rp-opt" style="align-self:center">이 분 수신거부로 표시 (다음부터 제외)</button></div></div>`;
   const ta = m.querySelector('#rp-text');
   ta.addEventListener('input', () => { m.querySelector('#rp-sms').href = smsHref(ta.value); });
-  const mark = async how => { try { await IonStore.update('apply', { [`promo/${ckey(cohort)}/${t.d}`]: Date.now() }); } catch (e) { toast('발송 기록 저장 실패'); } logSend(t.id, `${cohort} 재참여 홍보 ${how}`); };
+  const mark = async how => { try { await IonStore.update('apply', { [`promo/${ckey(cohort)}/${t.d}`]: Date.now() }); } catch (e) { toast('발송 기록 저장 실패'); } if (t.id) logSend(t.id, `${cohort} 재참여 홍보 ${how}`); };
   const next = () => openRepromo(step + 1);
   m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
   m.querySelector('#rp-sms').addEventListener('click', () => { mark('문자'); setTimeout(next, 600); });
