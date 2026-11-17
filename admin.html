@@ -2089,8 +2089,10 @@ function repromoTargets(cohort) {
   // 매칭 명단에서 사람별 참가 기록 (지난 기수만)
   const sess = {};
   Object.values(A.sessRaw || {}).forEach(x => {
-    if (!x || !x.pub || !x.roster || x.pub.cohort === cohort || !cohortEnded(x.pub.cohort)) return;
-    const when = +x.pub.closedAt || (x.pub.date ? new Date((/^\d{4}-\d{2}-\d{2}/.test(x.pub.date) ? x.pub.date.slice(0, 10) : slotIsoDate(x.pub.date)) + 'T20:00:00').getTime() : 0) || 0;
+    if (!x || !x.pub || !x.roster || x.pub.cohort === cohort) return;
+    if (x.pub.status !== 'closed' && !x.pub.imported && !cohortEnded(x.pub.cohort)) return;   // 마감됐거나 끝난 기수만
+    // 행사일 우선 (명단 넣기는 closedAt이 '넣은 날'이라서), 날짜가 없으면 마감·넣은 날
+    const when = (x.pub.date ? new Date((/^\d{4}-\d{2}-\d{2}/.test(x.pub.date) ? x.pub.date.slice(0, 10) : slotIsoDate(x.pub.date)) + 'T20:00:00').getTime() : 0) || +x.pub.closedAt || 0;
     const hit = Object.keys(x.votes || {}).length ? sessMatched(x) : null;   // 투표 기록 없으면 결과 모름
     Object.entries(x.roster).forEach(([pid, p]) => { const d = digits(p && p.phone); if (!d) return;
       (sess[d] = sess[d] || []).push({ when, cohort: x.pub.cohort, name: p.name, gender: pid[0], matched: hit ? !!hit[pid] : null }); });
@@ -2160,7 +2162,7 @@ function openRepromo(step) {
       <div class="between"><span class="round" style="font-size:19px">재참여 홍보 문자</span><button class="mini" data-x="close">닫기</button></div>
       <div class="field"><span class="lab">어느 기수 모집을 알릴까요?</span><div class="chips">${cur.map(c => `<button class="chipbtn ${c === cohort ? 'on' : ''}" data-rpc="${esc(c)}">${esc(c)} 모집</button>`).join('')}</div></div>
       <div class="card" style="padding:12px 14px"><span class="round" style="font-size:17px">받는 분: 지난 기수 참가자 ${T.list.length}명</span>
-        <div class="small" style="margin-top:4px">매칭된 분 ${nM}명 · 매칭 안 된 분 ${nN}명<br>신청서로 참가해 광고 수신에 동의한 분${nDeal ? `, 그리고 명단으로만 들어온 분 중 행사 후 6개월 안 된 분 ${nDeal}명(거래 관계 예외)` : ''}이에요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
+        <div class="small" style="margin-top:4px">${(() => { const c = {}; T.list.forEach(x => { c[x.last] = (c[x.last] || 0) + 1; }); return Object.keys(c).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })).map(k => `${esc(k)} ${c[k]}명`).join(' · '); })()}<br>매칭된 분 ${nM}명 · 매칭 안 된 분 ${nN}명<br>신청서로 참가해 광고 수신에 동의한 분${nDeal ? `, 그리고 명단으로만 들어온 분 중 행사 후 6개월 안 된 분 ${nDeal}명(거래 관계 예외)` : ''}이에요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
       ${night ? `<div class="notice">${ICON.msg}<span>지금은 밤 9시~아침 8시예요. 광고 문자는 이 시간에 보내면 안 돼요. 아침 8시 이후에 보내주세요.</span></div>` : ''}
       <div class="field"><span class="lab">문구 고르기</span><div class="chips"><button class="chipbtn ${ek === 'M' ? 'on' : ''}" data-rpe="M">매칭된 분 (${nM})</button><button class="chipbtn ${ek === 'N' ? 'on' : ''}" data-rpe="N">매칭 안 된 분 (${nN})</button></div></div>
       <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp[tk])}</textarea>
