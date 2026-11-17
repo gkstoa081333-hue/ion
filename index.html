@@ -335,13 +335,7 @@ function followDue(pub) { const base = pub.closedAt || (pub.date ? new Date(pub.
 function msgFollow(me, partner, pub) {
   return `안녕하세요 ${me.name}님, 이온 크리스천 소개팅입니다 🙂
 ${pub.cohort} ${pub.slot} 타임 이후 벌써 2주가 지났네요.
-${partner.name}님과는 연락 잘 이어가고 계신가요?
-
-좋은 소식이 있다면 저희도 함께 기뻐하고 싶어요.
-혹시 아쉬운 점이 있었다면 편하게 말씀해 주세요. 다음 만남을 더 잘 준비하는 데 큰 힘이 돼요.
-
-아직 참여 후기를 남기지 않으셨다면 2분만 부탁드려요 🙏
-${reviewURL(pub)}
+${partner.name}님과는 잘 만나고 계신가요?
 
 두 분의 만남 위에 하나님의 은혜가 늘 함께하길 기도합니다.
 (답장은 편하실 때 주셔도 괜찮아요)`;
@@ -997,7 +991,7 @@ function followSection(s, R) {
   return `<span class="section-t">후속 안부 · 매칭 ${FOLLOW_DAYS}일 뒤</span>
     <div class="card stack" style="gap:10px;${ready && done < ids.length ? 'border:2px solid var(--gold-d)' : ''}">
       <div class="between"><span class="round" style="font-size:16px">${!due ? '투표를 마감하면 날짜가 정해져요' : ready ? (done < ids.length ? '지금 보내면 좋아요' : '모두 보냈어요') : `${md(due)}부터 보내면 좋아요`}</span><span class="small">${done}/${ids.length}명</span></div>
-      ${ready ? `<span class="small">"연락 잘 이어가고 계신가요?" 안부와 후기 링크가 담긴 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
+      ${ready ? `<span class="small">"잘 만나고 계신가요?" 안부만 묻는 짧은 문구예요. 성사된 두 분 모두에게 보내주세요.</span>
       ${done < ids.length ? `<button class="btn" data-act="send-follow-all">${ICON.msg}안 보낸 ${ids.length - done}명 한 명씩 문자 보내기</button>` : ''}
       <div class="stack" style="gap:8px">${ids.map(btn).join('')}</div>` : ''}</div>`;
 }
