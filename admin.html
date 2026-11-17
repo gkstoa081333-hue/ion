@@ -681,7 +681,7 @@ function viewMain() {
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:-4px 0 12px">
       <button class="mini go" style="justify-content:center" data-act="dash">📈 운영 대시보드</button>
       <button class="mini" style="justify-content:center" data-act="promo">📣 홍보 이미지 만들기</button>
-      <button class="mini" style="justify-content:center;grid-column:1/-1" data-act="repromo">💌 ${esc(A.cohort)} 재참여 홍보 문자 (지난 기수 참가자)</button></div>
+      <button class="mini" style="justify-content:center;grid-column:1/-1" data-act="repromo">💌 재참여 홍보 문자 · 지난 기수 참가자에게 다음 모집 알리기</button></div>
     ${viewStatus()}
     <div class="row" style="margin-top:14px;flex-wrap:nowrap"><input class="input" style="flex-grow:1" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 전화번호로 찾기" aria-label="검색" inputmode="search">
       <button class="chipbtn ${A.qAll ? 'on' : ''}" data-act="qall" aria-pressed="${A.qAll}">전체 기수</button></div>
@@ -2080,7 +2080,7 @@ function repromoTargets(cohort) {
   const opt = (A.data && A.data.optout) || {}; const sent = ((A.data && A.data.promo) || {})[ckey(cohort)] || {};
   const out = { list: [], noConsent: 0, applied: 0, optout: 0, sent: 0, old: 0 };
   Object.entries(by).forEach(([d, rs]) => {
-    const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed'); if (!past.length) return;
+    const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed' && cohortEnded(r.cohort)); if (!past.length) return;   // 이미 끝난 기수 참가자만
     if (rs.some(r => r.cohort === cohort && ['pending', 'confirmed', 'waiting'].includes(r.status))) return out.applied++;
     if (opt[d]) return out.optout++;
     const last = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];   // 가장 최근 신청의 동의 여부가 현재 동의
@@ -2113,15 +2113,19 @@ ${chat}`;
 }
 const kstHour = () => new Date(Date.now() + 9 * 3600e3).getUTCHours();
 function openRepromo(step) {
-  const cohort = A.cohort; const T = repromoTargets(cohort); const m = document.getElementById('modal');
+  const cur = cohortGroups().cur; const m = document.getElementById('modal');
+  if (!cur.length) return toast('모집 중인 기수가 없어요. 설정에서 다음 기수 타임을 먼저 만들어 주세요.');
+  const cohort = A.rp && cur.includes(A.rp.cohort) ? A.rp.cohort : cur.includes(A.cohort) ? A.cohort : cur[0];
   if (!A.rp || A.rp.cohort !== cohort) A.rp = { cohort, tpl: repromoDefault(cohort) };
+  const T = repromoTargets(cohort);
   const night = kstHour() >= 21 || kstHour() < 8;
   if (step == null) {
     const ex = [[T.noConsent, '수신 동의 없음'], [T.old, '동의 2년 지남'], [T.applied, `이미 ${cohort} 신청`], [T.optout, '수신거부'], [T.sent, '이미 보냄']].filter(x => x[0]).map(x => `${x[1]} ${x[0]}명`).join(' · ');
     m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
-      <div class="between"><span class="round" style="font-size:19px">${esc(cohort)} 재참여 홍보 문자</span><button class="mini" data-x="close">닫기</button></div>
-      <div class="card" style="padding:12px 14px"><span class="round" style="font-size:17px">보낼 분 ${T.list.length}명</span>
-        <div class="small" style="margin-top:4px">지난 기수 참가 확정자 중 광고성 정보 수신에 동의한 분만 골랐어요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
+      <div class="between"><span class="round" style="font-size:19px">재참여 홍보 문자</span><button class="mini" data-x="close">닫기</button></div>
+      <div class="field"><span class="lab">어느 기수 모집을 알릴까요?</span><div class="chips">${cur.map(c => `<button class="chipbtn ${c === cohort ? 'on' : ''}" data-rpc="${esc(c)}">${esc(c)} 모집</button>`).join('')}</div></div>
+      <div class="card" style="padding:12px 14px"><span class="round" style="font-size:17px">받는 분: 지난 기수 참가자 ${T.list.length}명</span>
+        <div class="small" style="margin-top:4px">${esc(cohort)} 모집 소식을, 이미 끝난 기수(${esc(cohortGroups().past.slice().reverse().join('·') || '-')})에 참가했던 분 중 광고 수신에 동의한 분께 보내요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
       ${night ? `<div class="notice">${ICON.msg}<span>지금은 밤 9시~아침 8시예요. 광고 문자는 이 시간에 보내면 안 돼요. 아침 8시 이후에 보내주세요.</span></div>` : ''}
       <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.</span>
       <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp.tpl)}</textarea>
@@ -2131,6 +2135,7 @@ function openRepromo(step) {
     m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
     m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
     m.querySelector('#rp-reset').onclick = () => { A.rp.tpl = repromoDefault(cohort); openRepromo(); };
+    m.querySelectorAll('[data-rpc]').forEach(b => b.onclick = () => { A.rp = { cohort: b.dataset.rpc, tpl: repromoDefault(b.dataset.rpc) }; openRepromo(); });
     m.querySelector('#rp-go').onclick = () => {
       if (!/^\s*\(광고\)/.test(A.rp.tpl)) return toast("문구 맨 앞에 '(광고)'를 넣어주세요");
       if (!/수신\s*거부/.test(A.rp.tpl)) return toast('수신거부 방법을 문구에 넣어주세요');
@@ -2143,7 +2148,7 @@ function openRepromo(step) {
   const text = A.rp.tpl.split('{이름}').join(t.name).split('{지난기수}').join(t.last);
   const smsHref = x => `sms:${t.d}${IOS ? '&' : '?'}body=${encodeURIComponent(x)}`;
   m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
-    <div class="between"><span class="round" style="font-size:18px">재참여 홍보 · ${step + 1} / ${list.length}</span><button class="mini" data-x="close">그만하기</button></div>
+    <div class="between"><span class="round" style="font-size:18px">${esc(cohort)} 모집 홍보 · ${step + 1} / ${list.length}</span><button class="mini" data-x="close">그만하기</button></div>
     <div class="between"><span class="round" style="font-size:17px">${esc(t.name)} <span class="small">${G[t.gender] || ''} · ${esc(t.last)}</span></span><span class="small">${esc(t.phone)}</span></div>
     <textarea class="input" id="rp-text" aria-label="보낼 문구" style="min-height:220px">${esc(text)}</textarea>
     <a class="btn" id="rp-sms" href="${esc(smsHref(text))}">${ICON.msg}문자 앱으로 보내고 다음</a>
