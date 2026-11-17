@@ -2084,7 +2084,7 @@ function sessMatched(x) {   // 매칭앱 computeMatches와 같은 규칙 → { �
   Object.keys(ro).forEach(a => { const b = s(a); if (b && ro[b] && s(b) === a && !one.has(a) && !one.has(b)) { out[a] = out[b] = 1; } });
   return out;
 }
-function repromoTargets(cohort) {
+function repromoTargets(cohort, resend) {
   const appPh = {}; apps().forEach(r => { const d = digits(r.phone); if (d) (appPh[d] = appPh[d] || []).push(r); });
   // 매칭 명단에서 사람별 참가 기록 (지난 기수만)
   const sess = {};
@@ -2115,10 +2115,10 @@ function repromoTargets(cohort) {
     if (opt[d]) return out.optout++;
     if (kind === 'noConsent') return out.noConsent++;
     if (kind === 'old') return out.old++;
-    if (sent[d]) return out.sent++;
+    if (sent[d] && !resend) return out.sent++;
     const lp = past[0]; const lastS = ss[0];
     const cohorts = [...new Set([...past.map(r => r.cohort), ...ss.map(x => x.cohort)])];
-    out.list.push({ d, kind, name: (lp || lastS).name, phone: lp ? lp.phone : fmtPh(d), gender: lp ? lp.gender : lastS.gender, id: lp ? lp.id : '',
+    out.list.push({ d, kind, was: !!sent[d], name: (lp || lastS).name, phone: lp ? lp.phone : fmtPh(d), gender: lp ? lp.gender : lastS.gender, id: lp ? lp.id : '',
       last: (lastS ? lastS.cohort : lp.cohort), all: cohorts.join('·'), matched: lastS ? lastS.matched === true : false });
   });
   out.list.sort((a, b) => (b.matched - a.matched) || a.name.localeCompare(b.name, 'ko'));
@@ -2155,15 +2155,19 @@ function openRepromo(step) {
   if (!A.rp || A.rp.cohort !== cohort) A.rp = { cohort, tplM: repromoDefault(cohort, true), tplN: repromoDefault(cohort, false), edit: 'N' };
   const night = kstHour() >= 21 || kstHour() < 8;
   if (step == null) {
-    const T = repromoTargets(cohort); const nM = T.list.filter(x => x.matched).length, nN = T.list.length - nM, nDeal = T.list.filter(x => x.kind === 'deal').length;
+    if (!A.sessRaw) { toast('매칭 명단을 불러오는 중이에요. 잠시 뒤 다시 눌러주세요'); return; }
+    const T = repromoTargets(cohort, A.rp.resend); const nSent = Object.keys(((A.data && A.data.promo) || {})[ckey(cohort)] || {}).length; const nM = T.list.filter(x => x.matched).length, nN = T.list.length - nM, nDeal = T.list.filter(x => x.kind === 'deal').length;
     const ex = [[T.noConsent, '수신 동의 없음'], [T.old, '동의 2년·행사 6개월 지남'], [T.applied, `이미 ${cohort} 신청`], [T.optout, '수신거부'], [T.sent, '이미 보냄']].filter(x => x[0]).map(x => `${x[1]} ${x[0]}명`).join(' · ');
     const ek = A.rp.edit; const tk = ek === 'M' ? 'tplM' : 'tplN';
     m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="재참여 홍보 문자">
       <div class="between"><span class="round" style="font-size:19px">재참여 홍보 문자</span><button class="mini" data-x="close">닫기</button></div>
       <div class="field"><span class="lab">어느 기수 모집을 알릴까요?</span><div class="chips">${cur.map(c => `<button class="chipbtn ${c === cohort ? 'on' : ''}" data-rpc="${esc(c)}">${esc(c)} 모집</button>`).join('')}</div></div>
       <div class="card" style="padding:12px 14px"><span class="round" style="font-size:17px">받는 분: 지난 기수 참가자 ${T.list.length}명</span>
-        <div class="small" style="margin-top:4px">${(() => { const c = {}; T.list.forEach(x => { c[x.last] = (c[x.last] || 0) + 1; }); return Object.keys(c).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })).map(k => `${esc(k)} ${c[k]}명`).join(' · '); })()}<br>매칭된 분 ${nM}명 · 매칭 안 된 분 ${nN}명<br>신청서로 참가해 광고 수신에 동의한 분${nDeal ? `, 그리고 명단으로만 들어온 분 중 행사 후 6개월 안 된 분 ${nDeal}명(거래 관계 예외)` : ''}이에요.${ex ? `<br>제외: ${ex}` : ''}</div></div>
-      ${night ? `<div class="notice">${ICON.msg}<span>지금은 밤 9시~아침 8시예요. 광고 문자는 이 시간에 보내면 안 돼요. 아침 8시 이후에 보내주세요.</span></div>` : ''}
+        <div class="small" style="margin-top:4px">${(() => { const c = {}; T.list.forEach(x => { c[x.last] = (c[x.last] || 0) + 1; }); return Object.keys(c).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })).map(k => `${esc(k)} ${c[k]}명`).join(' · '); })()}<br>매칭된 분 ${nM}명 · 매칭 안 된 분 ${nN}명<br>신청서로 참가해 광고 수신에 동의한 분${nDeal ? `, 그리고 명단으로만 들어온 분 중 행사 후 6개월 안 된 분 ${nDeal}명(거래 관계 예외)` : ''}이에요.${ex ? `<br>제외: ${ex}` : ''}</div>
+        ${T.list.length ? `<details style="margin-top:8px"><summary class="small" style="cursor:pointer">받는 분 명단 보기</summary><div class="small" style="margin-top:6px;line-height:1.8">${T.list.map(x => `${esc(x.name)}(${esc(x.last)}${x.matched ? '·매칭' : ''}${x.was ? '·보냄' : ''})`).join(', ')}</div></details>` : ''}</div>
+      ${nSent ? `<div class="between" style="gap:8px"><span class="small">${esc(cohort)} 홍보를 이미 보낸 분 ${nSent}명은 ${A.rp.resend ? '지금 포함돼 있어요' : '빠져 있어요'}. 문자 앱에서 취소했어도 '보내고 다음'을 누르면 보냄으로 기록돼요.</span>
+        <span class="row" style="gap:6px;flex-wrap:nowrap"><button class="mini" data-rps="1">${A.rp.resend ? '보낸 분 빼기' : '보낸 분도 넣기'}</button><button class="mini del" data-rps="clear">기록 지우기</button></span></div>` : ''}
+      ${night ? `<div class="notice">${ICON.msg}<span>지금은 밤 9시~아침 8시라 '보내기 시작'이 잠겨 있어요. 광고 문자는 이 시간에 보낼 수 없어요. 명단은 위에서 미리 볼 수 있고, 아침 8시 이후에 보내주세요.</span></div>` : ''}
       <div class="field"><span class="lab">문구 고르기</span><div class="chips"><button class="chipbtn ${ek === 'M' ? 'on' : ''}" data-rpe="M">매칭된 분 (${nM})</button><button class="chipbtn ${ek === 'N' ? 'on' : ''}" data-rpe="N">매칭 안 된 분 (${nN})</button></div></div>
       <textarea class="input" id="rp-tpl" aria-label="홍보 문구" style="min-height:260px">${esc(A.rp[tk])}</textarea>
       <span class="small">{이름}, {지난기수}는 보낼 때 자동으로 바뀌어요. 맨 앞 '(광고)'와 수신거부 안내는 지우지 마세요.${ek === 'N' ? ' 투표 기록이 없는 분도 이 문구로 보내요.' : ''}</span>
@@ -2175,6 +2179,12 @@ function openRepromo(step) {
     m.querySelector('#rp-reset').onclick = () => { A.rp[tk] = repromoDefault(cohort, ek === 'M'); openRepromo(); };
     m.querySelectorAll('[data-rpc]').forEach(b => b.onclick = () => { A.rp = null; A.rp = { cohort: b.dataset.rpc, tplM: repromoDefault(b.dataset.rpc, true), tplN: repromoDefault(b.dataset.rpc, false), edit: 'N' }; openRepromo(); });
     m.querySelectorAll('[data-rpe]').forEach(b => b.onclick = () => { A.rp.edit = b.dataset.rpe; openRepromo(); });
+    m.querySelectorAll('[data-rps]').forEach(b => b.onclick = async () => {
+      if (b.dataset.rps === '1') { A.rp.resend = !A.rp.resend; return openRepromo(); }
+      if (!(await confirmBox(`${cohort} 홍보 '보냄' 기록을 지울까요?`, `${nSent}명이 다시 받는 분 명단에 들어와요. 이미 문자를 받은 분께 또 갈 수 있으니 주의해 주세요.`, '기록 지우기', true))) return openRepromo();
+      try { await IonStore.update('apply', { [`promo/${ckey(cohort)}`]: null }); toast('보냄 기록을 지웠어요'); } catch (e) { toast('지우지 못했어요'); }
+      openRepromo();
+    });
     m.querySelector('#rp-go').onclick = () => {
       for (const [k, lab] of [['tplM', '매칭된 분'], ['tplN', '매칭 안 된 분']]) {
         if (!/^\s*\(광고\)/.test(A.rp[k])) return toast(`${lab} 문구 맨 앞에 '(광고)'를 넣어주세요`);
