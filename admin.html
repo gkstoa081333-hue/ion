@@ -435,6 +435,7 @@ async function changeStatus(id, to, memo) {
 /* ---------- 타임 변경 ---------- */
 /* ---------- 자동 문자 (구글 Apps Script 엔진 + 솔라피 · automation/ 폴더 참고) ---------- */
 const ASMS_KINDS = [['pay', '입금 안내 (신청 직후)'], ['wait', '대기 안내'], ['promote', '자리 확보 (대기→배정)'], ['confirm', '참가 확정 (입금확인 후)'], ['d1', 'D-1 안내 (전날 저녁 6시)']];
+const ENGINE_QUEUE_VER = '2026-11-17a';   // 이 버전 이상의 자동 문자 엔진이 일괄 발송(apply/smsQueue)을 처리함
 function autoOn(kind) { const a = (A.data && A.data.autoSms) || {}; return a.mode === 'live' && (a.kinds || {})[kind] !== false; }
 function autoSmsCard() {
   const a = A.data.autoSms || {}, eng = A.data.smsEngine || {}, mode = a.mode || 'off';
@@ -443,6 +444,7 @@ function autoSmsCard() {
   const chip = (v, l) => `<button class="chipbtn ${mode === v ? 'on' : ''}" data-act="asms-mode" data-v="${v}">${l}</button>`;
   return `<div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">📱 자동 문자 ${mode === 'live' ? '· 실제 발송 중' : mode === 'test' ? '· 시험 모드' : ''}</span>
     <span class="small">${alive ? `<b style="color:var(--green)">● 엔진 연결됨</b> · ${dt(eng.lastRun)} 확인${eng.err ? ` · <b style="color:var(--danger)">오류: ${esc(eng.err)}</b>` : ''}` : '<b style="color:var(--danger)">● 엔진 연결 안 됨</b> · 구글 Apps Script 설치가 필요해요 (automation 폴더 안내)'}</span>
+    ${eng.lastRun ? `<span class="small">엔진 버전 ${esc(eng.version || '알 수 없음')} · ${String(eng.version || '') >= ENGINE_QUEUE_VER ? '<b style="color:var(--green)">일괄 발송 가능</b>' : '<b style="color:var(--danger)">일괄 발송하려면 엔진 코드 업데이트 필요</b> (Apps Script Code.gs를 automation/ion-auto-sms.gs로 교체)'}${eng.lastRun ? ` · 마지막 실행 ${dt(eng.lastRun)}` : ''}${eng.queue != null ? ` · 일괄 ${eng.queue}건 처리` : ''}</span>` : ''}
     <div class="chips">${chip('off', '끄기')}${chip('test', '시험 (기록만)')}${chip('live', '실제 발송')}</div>
     <div class="stack" style="gap:4px">${ASMS_KINDS.map(([k, l]) => `<label class="row small" style="gap:8px"><input type="checkbox" data-act="asms-kind" data-v="${k}" ${(a.kinds || {})[k] !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--green)">${l}</label>`).join('')}</div>
     <span class="small">밤 10시~아침 8시에 생긴 문자는 아침 8시에 보내요. 발신번호: 솔라피에 등록한 이온 번호</span>
@@ -2149,7 +2151,6 @@ ${cohort} 모집을 시작했어요!
 ${info}`;
 }
 const kstHour = () => new Date(Date.now() + 9 * 3600e3).getUTCHours();
-const ENGINE_QUEUE_VER = '2026-11-17a';   // 이 버전 이상의 자동 문자 엔진이 일괄 발송(apply/smsQueue)을 처리함
 function bulkState(cohort) {
   const a = (A.data && A.data.autoSms) || {}, eng = (A.data && A.data.smsEngine) || {};
   const q = Object.values((A.data && A.data.smsQueue) || {}).filter(x => x && x.ck === ckey(cohort));
