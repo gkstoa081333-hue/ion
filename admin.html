@@ -125,9 +125,34 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .atbl td{padding:8px;border-bottom:1px solid var(--line-3);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .atbl tr[data-row]{cursor:pointer}.atbl tr[data-row]:hover td{background:var(--sand)}
 .atbl td.nm{font-family:var(--round);position:sticky;left:0;background:var(--paper)}
-.nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
+.nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
 .nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
 .nav .on{background:var(--green);color:var(--cream)}
+/* 게임 */
+.gdeck{position:relative;width:100%;aspect-ratio:5/3.3;max-height:440px;perspective:1400px}
+.gdeck::before{content:"";position:absolute;inset:0;border-radius:22px;background:var(--green-2);opacity:.35;transform:translate(8px,8px) rotate(1.5deg)}
+.gcard{position:absolute;inset:0;z-index:1;border:0;padding:0;background:none;cursor:pointer;color:inherit;font:inherit}
+.ginner{position:absolute;inset:0;display:block;transform-style:preserve-3d;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.ginner.flip{transform:rotateY(180deg)}
+.ginner.anim{animation:gflip .7s cubic-bezier(.2,.8,.2,1)}
+@keyframes gflip{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
+.gface{position:absolute;inset:0;border-radius:22px;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:clamp(18px,5vw,40px);text-align:center;box-shadow:0 16px 34px -18px rgba(26,48,41,.6)}
+.gback{background:var(--green);color:var(--cream);background-image:repeating-linear-gradient(45deg,rgba(246,241,231,.06) 0 2px,transparent 2px 14px)}
+.gmark{font-family:var(--round);font-size:clamp(40px,10vw,68px);display:flex;align-items:center;gap:4px}
+.gmark svg{width:.3em;height:.38em}
+.gfront{transform:rotateY(180deg);background:var(--paper);border:2px solid var(--green)}
+.gno{position:absolute;top:14px;left:18px;font-size:12px;color:var(--muted)}
+.gtag{font-family:var(--round);font-size:13px;padding:4px 12px;border-radius:999px;background:var(--green);color:var(--cream)}
+.gtag.g-love{background:var(--gold-d);color:#fff}.gtag.g-daily{background:var(--sand);color:var(--green)}
+.gq{margin:0;font-family:var(--round);font-size:clamp(21px,4.6vw,34px);line-height:1.35;color:var(--green);text-wrap:balance;word-break:keep-all}
+.ghint{font-size:13px;color:var(--muted)}
+.glist{margin:4px 0 8px;padding-left:20px;font-size:14px;line-height:1.7;max-height:200px;overflow:auto}
+.grow{display:flex;align-items:center;gap:8px}.grow .input{flex:1;min-width:0}
+.gbig{position:fixed;inset:0;z-index:30;background:var(--green-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+.gbig .gdeck{max-width:min(900px,calc((100vh - 160px) * 1.5));max-height:none}
+.gbig .gq{font-size:clamp(26px,5vw,52px)}
+@media(prefers-reduced-motion:reduce){.ginner{transition:none}.ginner.anim{animation:none}}
+
 
 .cpick{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:8px 16px;border-radius:16px;border:1.5px solid var(--line-2);background:var(--paper);text-align:left;color:var(--green)}
 .cpick .nm{font-family:var(--round);font-size:18px}.cpick .ar{margin-left:auto;color:var(--muted);font-size:14px}
@@ -256,7 +281,7 @@ function start() {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews' || A.view === 'rreport') render(); });
       if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sessRaw = v || {}; A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
-      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; ION_DEAL_COUNTS = A.data.dealCounts || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
+      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; ION_DEAL_COUNTS = A.data.dealCounts || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; if (h === 'game') A.view = 'game'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
       if (A.unsubR) { A.unsubR(); A.unsubR = null; }
@@ -622,7 +647,7 @@ function render() {
   const v = A.phase === 'loading' ? '<div class="spin" aria-label="불러오는 중"></div>'
     : A.phase === 'login' ? viewLogin()
     : A.phase === 'setup' ? viewSetup()
-    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : A.view === 'rreport' ? viewRReport() : A.view === 'dash' ? viewDash() : A.view === 'ledger' ? viewLedger() : A.view === 'promo' ? viewPromo() : viewMain();
+    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : A.view === 'rreport' ? viewRReport() : A.view === 'dash' ? viewDash() : A.view === 'ledger' ? viewLedger() : A.view === 'game' ? viewGame() : A.view === 'promo' ? viewPromo() : viewMain();
   const ae = document.activeElement; const q = ae && ae.dataset ? ae.dataset.k : null; const aid = ae && ae.id && ae.tagName !== 'BUTTON' ? ae.id : '';
   const pos = (q || aid) && ae ? ae.selectionStart : 0;
   // 입력 중인 값 지키기 (id가 있는 입력칸)
@@ -706,10 +731,11 @@ function appHead(active) {
     : `<button type="button" data-act="nav" data-v="${k}" class="${active === k ? 'on' : ''}">${label}</button>`;
   return `<div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">운영</span></div>
       <button class="icon-btn" data-act="logout" aria-label="로그아웃" style="margin-right:-8px">${ICON.out}</button></div>
-    <nav class="nav" aria-label="운영 메뉴">${item('apply', '신청')}${item('match', '매칭')}${item('reviews', '후기')}${item('ledger', '정산')}${item('settings', '설정')}</nav>`;
+    <nav class="nav" aria-label="운영 메뉴">${item('apply', '신청')}${item('match', '매칭')}${item('reviews', '후기')}${item('ledger', '정산')}${item('game', '게임')}${item('settings', '설정')}</nav>`;
 }
 function goView(v) {
   if (v === 'settings') return openSettings();
+  if (A.g) A.g.big = false; A.gd = null;
   A.view = v === 'apply' ? 'list' : v; render(); window.scrollTo(0, 0);
   try { history.replaceState(null, '', v === 'apply' ? location.pathname : '#' + v); } catch (e) {}
 }
@@ -847,6 +873,116 @@ function viewLedger() {
     </div>
     <div class="spacer" style="min-height:20px"></div></div>`;
 }
+/* ---------- 게임 (첫인상 카드 · 아이스브레이킹) ---------- */
+const GAME_CATS = [['love', '설렘'], ['faith', '신앙'], ['daily', '첫인상']];
+const GAME_CAT_NAME = Object.fromEntries(GAME_CATS);
+const GAME_DEFAULTS = (() => {
+  const L = {
+    love: ['연락을 가장 다정하게 해줄 것 같은 사람', '첫 데이트 코스를 제일 꼼꼼하게 짜올 것 같은 사람', '기념일을 절대 잊지 않을 것 같은 사람', '좋아하면 먼저 표현할 것 같은 사람', '손편지를 써줄 것 같은 사람', '웃는 모습이 가장 기억에 남는 사람', '연인에게 요리를 해줄 것 같은 사람', '깜짝 이벤트를 잘 준비할 것 같은 사람', '다퉈도 먼저 화해를 청할 것 같은 사람', '상대 이야기를 가장 잘 들어줄 것 같은 사람', '데이트 사진을 제일 예쁘게 찍어줄 것 같은 사람', '아플 때 죽 사 들고 달려올 것 같은 사람', '연애하면 부모님께 일찍 소개할 것 같은 사람', '오늘 이 자리에서 가장 설레 보이는 사람', '드라이브할 때 플레이리스트를 미리 준비할 것 같은 사람', '말투가 가장 다정한 사람', '만나면 시간이 제일 빨리 갈 것 같은 사람', '첫인상보다 알수록 더 매력 있을 것 같은 사람'],
+    faith: ['새벽기도를 꾸준히 나갈 것 같은 사람', '찬양팀에서 섬기고 있을 것 같은 사람', '대표기도를 가장 은혜롭게 할 것 같은 사람', '성경 통독을 완주해 봤을 것 같은 사람', '주일학교 선생님이 가장 잘 어울리는 사람', '수련회 때 분위기 메이커였을 것 같은 사람', '연인과 함께 큐티 나눔을 할 것 같은 사람', '단기선교를 다녀왔을 것 같은 사람', '교회 봉사를 묵묵히 끝까지 할 것 같은 사람', '기도제목을 끝까지 기억해 줄 것 같은 사람', '설교 노트를 제일 꼼꼼히 적을 것 같은 사람', '출근길에 찬양을 들을 것 같은 사람', '소그룹 리더를 맡고 있을 것 같은 사람', '감사일기를 쓸 것 같은 사람', '요셉처럼 어떤 상황에서도 성실할 것 같은 사람', '힘든 친구에게 먼저 "기도할게"라고 말해줄 것 같은 사람', '교회 행사 사회를 맡으면 가장 잘할 것 같은 사람', '함께 기도하면 마음이 편안해질 것 같은 사람'],
+    daily: ['주말엔 집에서 쉬는 걸 좋아할 것 같은 사람', '반려동물을 키우고 있을 것 같은 사람', 'MBTI가 E일 것 같은 사람', '운동을 꾸준히 할 것 같은 사람', '카페에서 늘 아이스 아메리카노만 마실 것 같은 사람', '노래방 18번이 발라드일 것 같은 사람', '친구들 사이에서 고민 상담 담당일 것 같은 사람', '아침형 인간일 것 같은 사람', '나만 아는 맛집 리스트가 있을 것 같은 사람', '학창 시절 반장을 했을 것 같은 사람', '단톡방 리액션 담당일 것 같은 사람', '손재주가 좋을 것 같은 사람', '아이들이 가장 잘 따를 것 같은 사람', '즉흥 여행을 좋아할 것 같은 사람', '여행 계획을 시간 단위로 짤 것 같은 사람', '의외의 취미가 있을 것 같은 사람']
+  };
+  return Object.entries(L).flatMap(([cat, qs]) => qs.map(q => ({ cat, q })));
+})();
+const GAME_INTRO = ['닉네임과 번호', '사는 동네 (대전·세종·청주 중)', '교회에서 섬기는 자리 (찬양팀, 교사, 새가족부 등)', '요즘 빠져 있는 것 한 가지', '나를 한 단어로 표현하면', '요즘 붙들고 있는 말씀 한 구절 (선택)'];
+const gameQs = () => { const g = A.data && A.data.game; const qs = g && g.qs ? Object.values(g.qs) : null; return (qs && qs.length ? qs : GAME_DEFAULTS).filter(x => x && x.q && GAME_CAT_NAME[x.cat]); };
+const G_ST = () => (A.g = A.g || { filter: 'all', used: {}, hist: [], cur: null, shown: false, anim: false, big: false });
+const gKey = x => x.cat + '|' + x.q;
+const gPool = () => { const g = G_ST(); return gameQs().filter(x => !x.off && (g.filter === 'all' || x.cat === g.filter) && !g.used[gKey(x)]); };
+
+function gameCard() {
+  const g = G_ST(); const c = g.cur; const n = g.hist.length;
+  const front = c ? `<span class="gno">${n}번째 카드</span><span class="gtag g-${c.cat}">${esc(GAME_CAT_NAME[c.cat])}</span><p class="gq">${esc(c.q)}</p><span class="ghint">지목하고, 이유를 한 문장으로 말해주세요</span>`
+    : `<p class="gq">${esc(g.endMsg || '')}</p>`;
+  return `<div class="gdeck"><button type="button" class="gcard" data-act="g-draw" aria-label="${g.shown ? '다음 카드 뽑기' : '카드 뽑기'}" aria-live="polite">
+    <span class="ginner ${g.shown ? 'flip' : ''} ${g.anim ? 'anim' : ''}">
+      <span class="gface gback"><span class="gmark">이<svg viewBox="0 0 12 14" aria-hidden="true"><rect x="5" width="2" height="14" fill="currentColor"/><rect x="1" y="4" width="10" height="2" fill="currentColor"/></svg>온</span><span class="small" style="color:var(--gold)">탭해서 카드 뽑기</span></span>
+      <span class="gface gfront">${front}</span></span></button></div>`;
+}
+function viewGame() {
+  const g = G_ST();
+  if (A.gd) return viewGameEdit();
+  const all = gameQs().filter(x => !x.off); const left = gPool().length;
+  if (g.big) return `<div class="gbig">${gameCard()}
+    <div class="row" style="flex-wrap:nowrap;width:100%;max-width:900px"><button class="btn gold" style="flex:2" data-act="g-draw">다음 카드</button><button class="btn soft" style="flex:1" data-act="g-big">닫기</button></div>
+    <span class="small" style="color:var(--sub)">남은 카드 ${left}장 · 스페이스바로도 뽑을 수 있어요</span></div>`;
+  const chip = (k, l, n) => `<button class="chipbtn ${g.filter === k ? 'on' : ''}" data-act="g-filter" data-v="${k}">${l} ${n}</button>`;
+  return `<div class="wrap">
+    ${appHead('game')}
+    <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">첫인상 카드 게임</span><button class="mini" data-act="g-edit">질문 편집</button></div>
+    <div class="stack" style="gap:12px">
+      <div class="chips" style="flex-wrap:wrap">${chip('all', '전체 섞기', all.length)}${GAME_CATS.map(([k, l]) => chip(k, l, all.filter(x => x.cat === k).length)).join('')}</div>
+      ${gameCard()}
+      <button class="btn" data-act="g-draw">카드 뽑기</button>
+      <div class="row" style="flex-wrap:nowrap"><button class="btn soft sm" style="flex:1" data-act="g-hide">카드 덮기</button><button class="btn soft sm" style="flex:1" data-act="g-reset">처음부터 섞기</button><button class="btn soft sm" style="flex:1" data-act="g-big">크게 보기</button></div>
+      <div class="card stack" style="gap:6px"><div class="between"><span class="round" style="font-size:16px">지금까지 나온 질문</span><span class="small">남은 카드 <b>${left}</b>장</span></div>
+        ${g.hist.length ? `<ol class="glist">${g.hist.slice().reverse().map(x => `<li>[${esc(GAME_CAT_NAME[x.cat])}] ${esc(x.q)}</li>`).join('')}</ol>` : '<span class="small">아직 뽑은 카드가 없어요</span>'}</div>
+      <details class="card"><summary class="round" style="font-size:16px;cursor:pointer">진행 순서 · 자기소개 틀</summary>
+        <ol class="glist" style="margin-top:10px">
+          <li><b>자기소개 1인 1분</b> — 번호와 닉네임을 크게 말해주면 지목하기 쉬워요.</li>
+          <li><b>카드 뽑기</b> — 순서대로 한 명씩 뽑아 질문을 소리 내어 읽고, 이성 중 한 명을 지목해요.</li>
+          <li><b>이유 말하기 + 한마디</b> — 지목받은 사람은 "정답/오답"과 짧은 한마디로 답하고, 다음 카드를 뽑아요.</li></ol>
+        <span class="small">자기소개 틀</span><ul class="glist">${GAME_INTRO.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+        <span class="small">지목이 한 사람에게 몰리면 "아직 안 불린 분 중에서"를 꺼내주세요. 분위기가 오르면 "하나, 둘, 셋!"에 모두 동시에 지목하는 방식도 좋아요.</span></details>
+    </div>
+    <div class="spacer" style="min-height:20px"></div></div>`;
+}
+function viewGameEdit() {
+  const d = A.gd;
+  const sec = ([k, l]) => {
+    const rows = d.map((x, i) => [x, i]).filter(([x]) => x.cat === k);
+    return `<div class="card stack" style="gap:8px"><div class="between"><span class="round" style="font-size:16px">${l}</span><span class="small">사용 ${rows.filter(([x]) => !x.off).length} / ${rows.length}</span></div>
+      ${rows.map(([x, i]) => `<div class="grow"><input type="checkbox" data-gq="${i}" data-gf="on" ${x.off ? '' : 'checked'} aria-label="이 질문 사용" style="width:20px;height:20px;accent-color:var(--green);flex-shrink:0">
+        <input class="input" data-gq="${i}" data-gf="q" value="${esc(x.q)}" maxlength="60" aria-label="${l} 질문" style="height:44px${x.off ? ';opacity:.5' : ''}">
+        <button class="mini del" data-act="g-del" data-v="${i}" aria-label="삭제">삭제</button></div>`).join('') || '<span class="small">질문이 없어요</span>'}
+      <div class="grow"><input class="input" id="g-new-${k}" placeholder="새 질문 (예: 같이 봉사활동 가고 싶은 사람)" maxlength="60" style="height:44px"><button class="mini go" data-act="g-add" data-v="${k}">추가</button></div></div>`;
+  };
+  return `<div class="wrap">
+    ${appHead('game')}
+    <div class="between" style="margin:6px 0 10px"><span class="h2" style="font-size:20px">질문 편집</span><button class="mini" data-act="g-editback">← 게임으로</button></div>
+    <div class="stack" style="gap:12px">
+      <span class="small">체크를 끄면 카드에서 빠져요(지우지 않고 보관). 저장하면 모든 운영진 기기에 바로 반영돼요. 칭찬·기대가 담긴 질문으로 적어주세요.</span>
+      ${GAME_CATS.map(sec).join('')}
+      <button class="btn" data-act="g-save">저장</button>
+      <button class="btn line" style="min-height:48px" data-act="g-default">기본 질문으로 되돌리기</button>
+    </div>
+    <div class="spacer" style="min-height:20px"></div></div>`;
+}
+function gDraw() {
+  const g = G_ST(); const p = gPool();
+  if (!p.length) { g.cur = null; g.endMsg = '이 카테고리 카드를 모두 뽑았어요. 다른 카테고리를 고르거나 처음부터 섞어주세요.'; g.shown = true; g.anim = false; render(); return; }
+  const pick = p[Math.floor(Math.random() * p.length)];
+  g.used[gKey(pick)] = 1; g.hist.push({ cat: pick.cat, q: pick.q }); g.cur = pick; g.endMsg = ''; g.shown = true; g.anim = true;
+  render(); g.anim = false;
+}
+async function gameAct(act, v) {
+  const g = G_ST();
+  if (act === 'g-draw') gDraw();
+  else if (act === 'g-filter') { g.filter = v; render(); }
+  else if (act === 'g-hide') { g.shown = false; render(); }
+  else if (act === 'g-reset') { if (g.hist.length && !(await confirmBox('처음부터 섞을까요?', '나온 카드 기록이 지워지고 모든 카드를 다시 뽑을 수 있어요.', '섞기'))) return; A.g = { filter: g.filter, used: {}, hist: [], cur: null, shown: false, anim: false, big: g.big }; render(); }
+  else if (act === 'g-big') { g.big = !g.big; render(); window.scrollTo(0, 0); try { if (g.big && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen(); else if (!g.big && document.fullscreenElement) await document.exitFullscreen(); } catch (e) {} }
+  else if (act === 'g-edit') { A.gd = gameQs().map(x => ({ cat: x.cat, q: x.q, ...(x.off ? { off: true } : {}) })); render(); window.scrollTo(0, 0); }
+  else if (act === 'g-editback') { if (await confirmBox('편집을 그만둘까요?', '저장하지 않은 변경은 사라져요.', '그만두기')) { A.gd = null; render(); window.scrollTo(0, 0); } }
+  else if (act === 'g-del') { A.gd.splice(+v, 1); render(); }
+  else if (act === 'g-add') { const el = document.getElementById('g-new-' + v); const t = (el && el.value || '').trim(); if (!t) return toast('질문을 적어주세요'); if (A.gd.some(x => x.cat === v && x.q === t)) return toast('이미 있는 질문이에요'); A.gd.push({ cat: v, q: t.slice(0, 60) }); el.value = ''; render(); }
+  else if (act === 'g-default') { if (await confirmBox('기본 질문으로 되돌릴까요?', '편집 중인 목록이 기본 질문 52개로 바뀌어요. 저장을 눌러야 반영돼요.', '되돌리기')) { A.gd = GAME_DEFAULTS.map(x => ({ ...x })); render(); } }
+  else if (act === 'g-save') {
+    const seen = new Set(); const clean = A.gd.map(x => ({ cat: x.cat, q: String(x.q || '').trim().slice(0, 60), ...(x.off ? { off: true } : {}) })).filter(x => x.q && !seen.has(gKey(x)) && seen.add(gKey(x)));
+    if (!clean.some(x => !x.off)) return toast('사용하는 질문이 하나는 있어야 해요');
+    try { await IonStore.set('apply/game', { qs: clean, at: Date.now() }); A.gd = null; toast(`질문 ${clean.length}개를 저장했어요`); render(); window.scrollTo(0, 0); }
+    catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  }
+}
+document.addEventListener('keydown', e => {
+  if (A.phase !== 'main' || A.view !== 'game' || A.gd) return;
+  const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (document.getElementById('modal').innerHTML) return;
+  if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); gDraw(); }
+  else if (e.key === 'Escape' && G_ST().big) { G_ST().big = false; render(); }
+});
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && A.g && A.g.big && A.view === 'game') { A.g.big = false; render(); } });
+
 function openRefund(id) {
   const r = (A.data.apps || {})[id]; if (!r) return; const fee = +r.paidAmt || feeOf(r); const m = document.getElementById('modal');
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="환불 처리">
@@ -2310,6 +2446,7 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset.gq !== undefined && A.gd) { const x = A.gd[+t.dataset.gq]; if (!x) return; if (t.dataset.gf === 'on') { if (t.checked) delete x.off; else x.off = true; render(); } else x.q = t.value; return; }
   if (t.dataset.k === 'q') { A.q = t.value; render(); return; }
   if (t.dataset.k === 'rq') { A.rq = t.value; render(); return; }
   if (t.dataset.pf) { PROMO[t.dataset.pf] = t.value; drawPromo(); return; }
@@ -2349,6 +2486,7 @@ document.addEventListener('click', async e => {
   else if (act === 'init') { await IonStore.update('apply', { config: ION_DEFAULTS.config, slots: ION_DEFAULTS.slots }); await syncSessions([]); toast('준비됐어요'); }
   else if (act === 'settings') openSettings();
   else if (act === 'nav') goView(v);
+  else if (act.startsWith('g-')) await gameAct(act, v);
   else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
   else if (act === 'rcohort') { A.rCohort = v; render(); }
   else if (act === 'revcopy') copyText(REV_URL(b.dataset.c, b.dataset.t), `${b.dataset.c} ${b.dataset.t} 후기 링크를 복사했어요`);
@@ -2510,7 +2648,7 @@ document.addEventListener('click', async e => {
   else if (act === 'seed') demoSeed();
   else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저의 데모 데이터만 지워져요.', '지우기', true)) IonStore.resetDemo(); }
 });
-window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'ledger', 'settings'].includes(want)) goView(want); });
+window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'ledger', 'game', 'settings'].includes(want)) goView(want); });
 document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.pick; if (!k || !e.target.value) return; if (k === 'cohort') { A.cohort = e.target.value; lsSet('ion_admin_cohort', A.cohort); } else A.rCohort = e.target.value; render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maintain(true); });
 setInterval(() => { if (A.phase === 'main' && A.view === 'list' && document.visibilityState === 'visible' && !document.getElementById('modal').innerHTML) { maintain(); render(); } }, 60000);
