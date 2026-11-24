@@ -187,7 +187,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261113a"></script>
-<script src="ion-sms.js?v=20261112a"></script>
+<script src="ion-sms.js?v=20261125a"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -198,7 +198,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261105b';
+const BUILD = '20261125a';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -2125,25 +2125,82 @@ async function syncSessions(removed) {
 /* ---------- 문자·카톡 모달 ---------- */
 function ctx(r) {
   const sl = slots().find(x => x.id === r.slotId) || {};   // 설정에서 바꾼 최신 날짜·시간·장소를 우선
-  return ION_SMS.ctx({ ...r, fee: feeOf(r) }, { ...conf(), openchat: conf().openchat || ION_DEFAULTS.config.openchat }, sl, { waitNo: waitNo(r), from: A._moveFrom || '', cross: !!A._moveCross });
+  return ION_SMS.ctx({ ...r, fee: feeOf(r) }, { ...conf(), openchat: conf().openchat || ION_DEFAULTS.config.openchat }, sl, { waitNo: waitNo(r), from: A._moveFrom || '', cross: !!A._moveCross, sx: sxOf(r) });
 }
+/* ---------- 인원미달 안내: 문자 창 추가 입력 (옮겨 갈 타임 · 회신 마감 · 대기 확정 마감) ----------
+   A.sx = { to: 타임id|'', mode: 'auto'|'direct'|'wait', reply, fix } · 창을 닫아도 유지(단체 문자에서 한 번만 입력)
+   자동: 옮겨 갈 타임에서 내 성별이 상대 성별보다 적거나 같고 정원이 남으면 '바로 이동', 아니면 '대기 등록'
+   대상 연령 밖이면 이동 항목을 빼고 보냄 */
+function sxInit(r) {
+  if (A.sx && A.sx.cohort === r.cohort) return;
+  const o = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId);
+  const same = o.find(x => x.date === r.date) || o[0];
+  A.sx = { cohort: r.cohort, to: same ? same.id : '', mode: 'auto', reply: '', fix: '' };
+}
+function sxTarget(r) {
+  const x = A.sx || {}, sl = x.to ? slots().find(s => s.id === x.to) : null;
+  if (!sl) return null;
+  const n = g => Object.values(A.data.apps || {}).filter(a => a.slotId === sl.id && a.gender === g && ION_HOLDING.includes(a.status) && a.id !== r.id).length;
+  const mine = n(r.gender), other = n(r.gender === 'M' ? 'F' : 'M'), left = ((sl.cap || {})[r.gender] || 0) - mine;
+  const auto = left > 0 && mine <= other;
+  return { sl, mine, other, auto, direct: x.mode === 'direct' ? true : x.mode === 'wait' ? false : auto, ageOk: ionAgeOk(sl, r.birthYear) };
+}
+function sxOf(r) {
+  const t = A.sx ? sxTarget(r) : null, x = A.sx || {};
+  return { toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
+}
+// 빈칸 확인: 비어 있으면 보낼 수 없음 (이유 문구 반환)
+function sxMissing(r, k) {
+  if (k !== 'short') return '';
+  const e = sxOf(r), need = [];
+  if (!e.replyBy) need.push('회신 마감');
+  if (e.toHour && e.ageOk && !e.direct && !e.fixBy) need.push('대기 확정 마감');
+  return need.length ? `빈칸을 채워야 보낼 수 있어요: ${need.join(', ')}` : '';
+}
+function sxPanel(r, k) {
+  if (k !== 'short') return '';
+  const x = A.sx, t = sxTarget(r), o = slots().filter(s => s.cohort === r.cohort && s.id !== r.slotId);
+  const chip = (v, l) => `<button class="chipbtn ${x.mode === v ? 'on' : ''}" data-sxm="${v}">${l}</button>`;
+  const note = !t ? '옮겨 갈 타임 없이 환불·이월만 안내해요'
+    : !t.ageOk ? `${esc(r.name)}님은 ${esc(ionAgeText(t.sl))} 대상이 아니라 이동 항목을 빼고 보내요`
+    : `${G[r.gender]} → <b>${t.direct ? '바로 이동' : '대기 등록'}</b>${x.mode === 'auto' ? ' (자동)' : ''} · 그 타임 지금 형제 ${r.gender === 'M' ? t.mine : t.other} · 자매 ${r.gender === 'F' ? t.mine : t.other}`;
+  return `<div class="card stack" style="gap:6px;padding:10px">
+    <label class="small stack" style="gap:2px">옮겨 갈 타임<select class="input" id="sx-to"><option value="">없음 (환불·이월만)</option>${o.map(s => `<option value="${esc(s.id)}" ${s.id === x.to ? 'selected' : ''}>${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ' · ' + esc(ionAgeText(s)) : ''}</option>`).join('')}</select></label>
+    ${t ? `<div class="chips">${chip('auto', '자동')}${chip('direct', '바로 이동')}${chip('wait', '대기 등록')}</div>` : ''}
+    <span class="small">${note}</span>
+    <label class="small stack" style="gap:2px">회신 마감<input class="input" id="sx-reply" value="${esc(x.reply)}" placeholder="예: 11/26(목) 18시"></label>
+    ${t && t.ageOk && !t.direct ? `<label class="small stack" style="gap:2px">대기 확정 마감<input class="input" id="sx-fix" value="${esc(x.fix)}" placeholder="예: 11/27(금) 12시"></label>` : ''}
+  </div>`;
+}
+// 패널 입력이 바뀌면 같은 창을 다시 그림 (again = 다시 열기 함수)
+function sxWire(m, again) {
+  const to = m.querySelector('#sx-to'); if (!to) return;
+  to.onchange = () => { A.sx.to = to.value; again(); };
+  m.querySelectorAll('[data-sxm]').forEach(b => b.onclick = () => { A.sx.mode = b.dataset.sxm; again(); });
+  [['#sx-reply', 'reply'], ['#sx-fix', 'fix']].forEach(([q, f]) => { const el = m.querySelector(q); if (el) el.onchange = () => { A.sx[f] = el.value; again(); }; });
+}
+const sxLock = why => why ? ' aria-disabled="true" tabindex="-1" style="pointer-events:none;opacity:.45"' : '';
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
   const keys = Object.keys(TPL).filter(k => TPL[k].for.includes(r.status));
   const k = pick || (r.status === 'pending' && String(r.log).includes('승격') && !String(r.log).includes('자리 확보') ? 'promote' : keys[0]);
-  const text = TPL[k].make(r, ctx(r));
+  if (k === 'short') sxInit(r);
+  const text = TPL[k].make(r, ctx(r)), why = sxMissing(r, k);
   const smsHref = t => `sms:${digits(r.phone)}${IOS ? '&' : '?'}body=${encodeURIComponent(t)}`;
   const m = document.getElementById('modal');
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="문자 보내기">
     <div class="between"><span class="round" style="font-size:19px">${esc(r.name)}님께 보내기</span><span class="small">${esc(r.phone)}</span></div>
     <div class="chips">${keys.map(x => `<button class="chipbtn ${x === k ? 'on' : ''}" data-tpl="${x}">${TPL[x].label}</button>`).join('')}</div>
+    ${sxPanel(r, k)}
     <textarea class="input" id="msg-text" aria-label="보낼 문구" style="min-height:240px">${esc(text)}</textarea>
-    <a class="btn" id="msg-sms" href="${esc(smsHref(text))}">${ICON.msg}문자 앱으로 보내기</a>
-    <button class="btn soft" id="msg-copy">${ICON.copy}문구 복사 (카톡용)</button>
+    ${why ? `<span class="small" style="color:var(--danger)">${esc(why)}</span>` : ''}
+    <a class="btn" id="msg-sms" href="${esc(smsHref(text))}"${sxLock(why)}>${ICON.msg}문자 앱으로 보내기</a>
+    <button class="btn soft" id="msg-copy" ${why ? 'disabled' : ''}>${ICON.copy}문구 복사 (카톡용)</button>
     <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
   const ta = m.querySelector('#msg-text');
   ta.addEventListener('input', () => { m.querySelector('#msg-sms').href = smsHref(ta.value); });
   m.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => openMsg(id, b.dataset.tpl));
+  sxWire(m, () => openMsg(id, k));
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
   m.querySelector('#msg-sms').addEventListener('click', () => { logSend(id, TPL[k].label + ' 문자'); setTimeout(() => { m.innerHTML = ''; }, 300); });
   m.querySelector('#msg-copy').onclick = async () => { await copyText(ta.value, '복사했어요 · 카톡에 붙여넣어 주세요'); logSend(id, TPL[k].label + ' 카톡'); m.innerHTML = ''; };
@@ -2157,6 +2214,8 @@ function openBulk(ids, tplKey, i = 0) {
   const m = document.getElementById('modal');
   if (i >= targets.length) { m.innerHTML = ''; toast(`${targets.length}명 모두 처리했어요`); return; }
   const r = targets[i]; if (i === 0) A.bulkLast = null;
+  if (k === 'short') sxInit(r);
+  const why = sxMissing(r, k);
   // '직접 쓰기'는 앞사람에게 쓴 문구를 이름만 바꿔 이어서 사용
   const text = k === 'free' && A.bulkLast ? A.bulkLast.text.split(A.bulkLast.name).join(r.name) : TPL[k].make(r, ctx(r));
   const smsHref = t => `sms:${digits(r.phone)}${IOS ? '&' : '?'}body=${encodeURIComponent(t)}`;
@@ -2165,14 +2224,17 @@ function openBulk(ids, tplKey, i = 0) {
     <div class="chips">${keys.map(x => `<button class="chipbtn ${x === k ? 'on' : ''}" data-btpl="${x}">${TPL[x].label}</button>`).join('')}</div>
     ${targets.length < all.length ? `<span class="small">'${TPL[k].label}'은 상태가 맞는 ${targets.length}명에게만 보내요 (${all.length - targets.length}명 제외)</span>` : ''}
     <div class="between"><span class="round" style="font-size:17px">${esc(r.name)} <span class="small">${ION_STATUS[r.status]}</span></span><span class="small">${esc(r.phone)}</span></div>
+    ${sxPanel(r, k)}
     <textarea class="input" id="bk-text" aria-label="보낼 문구" style="min-height:200px">${esc(text)}</textarea>
-    <a class="btn" id="bk-sms" href="${esc(smsHref(text))}">${ICON.msg}문자 앱으로 보내고 다음</a>
-    <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="bk-copy">${ICON.copy}카톡용 복사 · 다음</button><button class="btn line" style="flex:1;min-height:48px" id="bk-skip">건너뛰기</button></div>
+    ${why ? `<span class="small" style="color:var(--danger)">${esc(why)}</span>` : ''}
+    <a class="btn" id="bk-sms" href="${esc(smsHref(text))}"${sxLock(why)}>${ICON.msg}문자 앱으로 보내고 다음</a>
+    <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="bk-copy" ${why ? 'disabled' : ''}>${ICON.copy}카톡용 복사 · 다음</button><button class="btn line" style="flex:1;min-height:48px" id="bk-skip">건너뛰기</button></div>
     <button class="mini" id="bk-phones" style="align-self:center">${ICON.copy}${targets.length}명 번호만 모두 복사</button></div></div>`;
   const ta = m.querySelector('#bk-text');
   ta.addEventListener('input', () => { m.querySelector('#bk-sms').href = smsHref(ta.value); });
   m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
   m.querySelectorAll('[data-btpl]').forEach(b => b.onclick = () => openBulk(ids, b.dataset.btpl, 0));
+  sxWire(m, () => openBulk(ids, k, i));
   const keep = () => { A.bulkLast = { text: ta.value, name: r.name }; };
   m.querySelector('#bk-sms').addEventListener('click', () => { keep(); logSend(r.id, TPL[k].label + ' 문자(단체)'); setTimeout(() => openBulk(ids, k, i + 1), 600); });
   m.querySelector('#bk-copy').onclick = async () => { keep(); await copyText(ta.value, `${r.name}님 문구 복사 · 카톡에 붙여넣어 주세요`); logSend(r.id, TPL[k].label + ' 카톡(단체)'); openBulk(ids, k, i + 1); };

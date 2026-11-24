@@ -10,13 +10,16 @@
     if (!ms) return ''; const d = new Date(+ms + 9 * 3600e3); if (isNaN(d)) return '';
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}${withDay ? '(' + '일월화수목금토'[d.getUTCDay()] + ')' : ''} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
   }
+  // "17:00~19:00" → "17시" (분이 있으면 "17시 30분")
+  function hourOf(t) { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? `${+m[1]}시${m[2] !== '00' ? ' ' + +m[2] + '분' : ''}` : String(t || ''); }
   // r: 신청서, cfg: apply/config, sl: 신청한 타임(apply/slots/{id}), ex: { waitNo, from }
   function ctx(r, cfg, sl, ex) {
     sl = sl || {}; ex = ex || {}; cfg = cfg || {};
     const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
     const fee = r.fee != null ? +r.fee : +cfg.fee || 0;
     return { chat: cfg.openchat || '', from: ex.from || '', cross: !!ex.cross, when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
-      feeNote: (() => { const n = [+r.dealDisc > 0 ? `${r.dealLabel || '이벤트 할인'} -${won(r.dealDisc)}원` : '', +r.discount > 0 ? `재참여 할인 -${won(r.discount)}원` : ''].filter(Boolean); return n.length ? ` (${n.join(', ')} 적용)` : ''; })(), deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1 };
+      feeNote: (() => { const n = [+r.dealDisc > 0 ? `${r.dealLabel || '이벤트 할인'} -${won(r.dealDisc)}원` : '', +r.discount > 0 ? `재참여 할인 -${won(r.discount)}원` : ''].filter(Boolean); return n.length ? ` (${n.join(', ')} 적용)` : ''; })(), deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1,
+      date: date || '', time: time || '', hour: hourOf(time), ex: ex.sx || {} };
   }
 const T = {
   pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청 감사합니다 🙂
@@ -62,6 +65,54 @@ ${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리�
 
 문의: 카카오톡 오픈채팅
 ${x.chat || ''}` },
+  // ↓ 운영진 수동 발송 전용 (자동 발송 엔진은 쓰지 않음). x.ex = 관리자 문자 창의 추가 입력값
+  //   ex = { toHour: '15시'|'', direct: true(바로 이동)|false(대기 등록), ageOk, replyBy: '11/26(목) 18시', fixBy: '11/27(금) 12시' }
+  short: { label: '인원미달 안내', for: ['pending', 'confirmed', 'waiting'], manual: true, make: (r, x) => {
+    const e = x.ex || {}, opts = [];
+    if (e.toHour && e.ageOk !== false) opts.push(e.direct
+      ? `같은 날 ${e.toHour} 타임으로 이동 (장소 동일)`
+      : `같은 날 ${e.toHour} 타임 대기 등록\n - 성비가 맞춰지면 신청 순서대로 확정 연락드립니다.\n - ${e.fixBy || ''}까지 확정되지 않으면 전액 환불해 드립니다.`);
+    opts.push('참가비 전액 환불', '다음 기수 우선 참가로 이월');
+    return `[이온 크리스천 소개팅] ${r.cohort} ${x.hour} 타임 안내
+
+안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
+${x.date} ${x.hour} 타임에 신청해 주셔서 감사합니다.
+
+아쉽게도 해당 타임이 최소 인원을 채우지 못해 진행이 어렵게 되었습니다. 기다려 주셨는데 죄송합니다.
+
+아래 중 원하시는 방법을 번호로 회신해 주세요.
+
+${opts.map((o, i) => '①②③'[i] + ' ' + o).join('\n')}
+
+※ ${e.replyBy || ''}까지 회신이 없으시면 전액 환불로 처리합니다.
+※ 환불을 원하시면 은행/계좌번호/예금주를 함께 보내주세요.
+
+감사합니다. 🌿`; } },
+  waitOk: { label: '대기 확정', for: ['confirmed', 'pending', 'waiting'], manual: true, make: (r, x) => `[이온 크리스천 소개팅] ${x.hour} 타임 참가 확정 안내
+
+안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
+기다려 주셔서 감사합니다. ${x.hour} 타임 참가가 확정되었습니다.
+
+▶ 일시: ${x.date} ${x.time}
+▶ 장소: ${x.place}
+▶ 도착: 시작 10분 전까지
+
+참가비는 이미 입금하신 금액 그대로 적용되며 추가 입금은 없습니다.
+
+※ 확정 후에는 환불 규정이 적용됩니다.
+※ 참석이 어려우시면 오늘 중으로 꼭 알려주세요.
+
+그날 반갑게 뵙겠습니다. 🌿` },
+  refundDone: { label: '환불 완료', for: ['refunded', 'cancelled'], manual: true, make: (r, x) => `[이온 크리스천 소개팅] 환불 완료 안내
+
+안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
+${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸습니다.
+
+입금이 확인되지 않으시면 이 번호로 연락 주세요.
+
+함께하지 못해 아쉽습니다. 다음 기수 소식은 인스타그램과 카카오톡 오픈채팅방에서 가장 먼저 안내드릴게요.
+
+감사합니다. 🌿` },
   cancel: { label: '취소 안내', for: ['cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청이 취소되었어요.
 
 다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
@@ -69,5 +120,5 @@ ${x.chat || ''}` },
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
   ['pay', 'promote', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261112a' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261125a' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
