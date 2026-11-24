@@ -2172,14 +2172,21 @@ function sxPanel(r, k) {
     ${t && t.ageOk && !t.direct ? `<label class="small stack" style="gap:2px">대기 확정 마감<input class="input" id="sx-fix" value="${esc(x.fix)}" placeholder="예: 11/27(금) 12시"></label>` : ''}
   </div>`;
 }
-// 패널 입력이 바뀌면 같은 창을 다시 그림 (again = 다시 열기 함수)
-function sxWire(m, again) {
+// 타임·방식을 바꾸면 창을 다시 그리고(again), 마감 칸은 입력하는 대로 문구만 바로 바꿈(refresh) — 입력 중 포커스 유지
+function sxWire(m, again, refresh) {
   const to = m.querySelector('#sx-to'); if (!to) return;
   to.onchange = () => { A.sx.to = to.value; again(); };
   m.querySelectorAll('[data-sxm]').forEach(b => b.onclick = () => { A.sx.mode = b.dataset.sxm; again(); });
-  [['#sx-reply', 'reply'], ['#sx-fix', 'fix']].forEach(([q, f]) => { const el = m.querySelector(q); if (el) el.onchange = () => { A.sx[f] = el.value; again(); }; });
+  [['#sx-reply', 'reply'], ['#sx-fix', 'fix']].forEach(([q, f]) => { const el = m.querySelector(q); if (el) el.oninput = () => { A.sx[f] = el.value; refresh(); }; });
 }
 const sxLock = why => why ? ' aria-disabled="true" tabindex="-1" style="pointer-events:none;opacity:.45"' : '';
+// 문구·잠금 상태만 제자리에서 갱신
+function sxApply(m, ta, a, copy, text, why, href) {
+  ta.value = text; a.href = href(text);
+  if (why) { a.setAttribute('aria-disabled', 'true'); a.tabIndex = -1; a.style.pointerEvents = 'none'; a.style.opacity = '.45'; }
+  else { a.removeAttribute('aria-disabled'); a.removeAttribute('tabindex'); a.style.pointerEvents = ''; a.style.opacity = ''; }
+  copy.disabled = !!why; const w = m.querySelector('#sx-why'); if (w) w.textContent = why;
+}
 function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
   const keys = Object.keys(TPL).filter(k => TPL[k].for.includes(r.status));
@@ -2193,14 +2200,14 @@ function openMsg(id, pick) {
     <div class="chips">${keys.map(x => `<button class="chipbtn ${x === k ? 'on' : ''}" data-tpl="${x}">${TPL[x].label}</button>`).join('')}</div>
     ${sxPanel(r, k)}
     <textarea class="input" id="msg-text" aria-label="보낼 문구" style="min-height:240px">${esc(text)}</textarea>
-    ${why ? `<span class="small" style="color:var(--danger)">${esc(why)}</span>` : ''}
+    <span class="small" id="sx-why" style="color:var(--danger)">${esc(why)}</span>
     <a class="btn" id="msg-sms" href="${esc(smsHref(text))}"${sxLock(why)}>${ICON.msg}문자 앱으로 보내기</a>
     <button class="btn soft" id="msg-copy" ${why ? 'disabled' : ''}>${ICON.copy}문구 복사 (카톡용)</button>
     <button class="btn line" data-close="1" style="min-height:48px">닫기</button></div></div>`;
   const ta = m.querySelector('#msg-text');
   ta.addEventListener('input', () => { m.querySelector('#msg-sms').href = smsHref(ta.value); });
   m.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => openMsg(id, b.dataset.tpl));
-  sxWire(m, () => openMsg(id, k));
+  sxWire(m, () => openMsg(id, k), () => sxApply(m, ta, m.querySelector('#msg-sms'), m.querySelector('#msg-copy'), TPL[k].make(r, ctx(r)), sxMissing(r, k), smsHref));
   m.querySelectorAll('[data-close]').forEach(b => b.onclick = ev => { if (ev.target === b) m.innerHTML = ''; });
   m.querySelector('#msg-sms').addEventListener('click', () => { logSend(id, TPL[k].label + ' 문자'); setTimeout(() => { m.innerHTML = ''; }, 300); });
   m.querySelector('#msg-copy').onclick = async () => { await copyText(ta.value, '복사했어요 · 카톡에 붙여넣어 주세요'); logSend(id, TPL[k].label + ' 카톡'); m.innerHTML = ''; };
@@ -2226,7 +2233,7 @@ function openBulk(ids, tplKey, i = 0) {
     <div class="between"><span class="round" style="font-size:17px">${esc(r.name)} <span class="small">${ION_STATUS[r.status]}</span></span><span class="small">${esc(r.phone)}</span></div>
     ${sxPanel(r, k)}
     <textarea class="input" id="bk-text" aria-label="보낼 문구" style="min-height:200px">${esc(text)}</textarea>
-    ${why ? `<span class="small" style="color:var(--danger)">${esc(why)}</span>` : ''}
+    <span class="small" id="sx-why" style="color:var(--danger)">${esc(why)}</span>
     <a class="btn" id="bk-sms" href="${esc(smsHref(text))}"${sxLock(why)}>${ICON.msg}문자 앱으로 보내고 다음</a>
     <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="bk-copy" ${why ? 'disabled' : ''}>${ICON.copy}카톡용 복사 · 다음</button><button class="btn line" style="flex:1;min-height:48px" id="bk-skip">건너뛰기</button></div>
     <button class="mini" id="bk-phones" style="align-self:center">${ICON.copy}${targets.length}명 번호만 모두 복사</button></div></div>`;
@@ -2234,7 +2241,7 @@ function openBulk(ids, tplKey, i = 0) {
   ta.addEventListener('input', () => { m.querySelector('#bk-sms').href = smsHref(ta.value); });
   m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; };
   m.querySelectorAll('[data-btpl]').forEach(b => b.onclick = () => openBulk(ids, b.dataset.btpl, 0));
-  sxWire(m, () => openBulk(ids, k, i));
+  sxWire(m, () => openBulk(ids, k, i), () => sxApply(m, ta, m.querySelector('#bk-sms'), m.querySelector('#bk-copy'), TPL[k].make(r, ctx(r)), sxMissing(r, k), smsHref));
   const keep = () => { A.bulkLast = { text: ta.value, name: r.name }; };
   m.querySelector('#bk-sms').addEventListener('click', () => { keep(); logSend(r.id, TPL[k].label + ' 문자(단체)'); setTimeout(() => openBulk(ids, k, i + 1), 600); });
   m.querySelector('#bk-copy').onclick = async () => { keep(); await copyText(ta.value, `${r.name}님 문구 복사 · 카톡에 붙여넣어 주세요`); logSend(r.id, TPL[k].label + ' 카톡(단체)'); openBulk(ids, k, i + 1); };
