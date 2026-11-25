@@ -66,7 +66,7 @@ const T = {
 자리가 생기면 바로 연락드릴게요. 지금은 입금하지 않으셔도 돼요.` },
   move: { label: '타임 변경 안내', for: ['pending', 'paid', 'confirmed', 'waiting'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.cross ? '' : r.cohort + ' '}신청 감사합니다 🙂
 더 편안한 만남을 위해 참가 ${x.cross ? '기수·타임' : '타임'}을 ${x.from ? x.from + ' → ' : ''}${x.cross ? r.cohort + ' ' : ''}${r.date} ${r.time} 으로 조정해 드렸어요.${x.cross && r.place ? '\n장소: ' + r.place : ''}
-${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리가 나면 바로 연락드릴게요.\n' : ''}일정이 어려우시면 편하게 말씀해 주세요. 감사합니다.` },
+${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리가 나면 바로 연락드릴게요.\n' : ''}${r.status === 'paid' ? '입금하신 참가비는 그대로 유지되고, 지금은 확정대기예요. 그 타임 인원이 모이면 참가 확정 문자를 드릴게요.\n' : ''}일정이 어려우시면 편하게 말씀해 주세요. 감사합니다.` },
   free: { label: '직접 쓰기', for: ['pending', 'paid', 'confirmed', 'waiting', 'cancelled', 'refunded'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, 안녕하세요 🙂
 
 (여기에 내용을 적어주세요)
@@ -128,5 +128,5 @@ ${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
   ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261125c' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261125d' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

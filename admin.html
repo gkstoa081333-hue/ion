@@ -187,7 +187,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261125a"></script>
-<script src="ion-sms.js?v=20261125c"></script>
+<script src="ion-sms.js?v=20261125d"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -444,6 +444,7 @@ async function changeStatus(id, to, memo) {
     if (to === 'confirmed' && !r.confirmedAt) r.confirmedAt = Date.now();
     if (to === 'confirmed' && !r.paidAmt) r.paidAmt = feeOf(r);
     if (to === 'paid') { if (!r.paidAt) r.paidAt = Date.now(); if (!r.paidAmt) r.paidAmt = feeOf(r); }
+    if (to === 'paid' && from === 'confirmed') { r.confirmedAt = null; r.log = addLog(r, '확정→확정대기'); }
     if (to === 'pending' && from === 'paid') { r.paidAt = null; r.log = addLog(r, '입금확인 취소'); }
     if (to === 'pending') {
       r.deadline = Date.now() + (Number(conf().promoteHours) || 12) * 3600e3;
@@ -453,6 +454,7 @@ async function changeStatus(id, to, memo) {
   }
   if (memo !== undefined) r.memo = memo;
   const { up, promoted } = plan(list, { [`apps/${id}/status`]: r.status });
+  if (to === 'paid' && from === 'confirmed') { up[`apps/${id}/sms/confirm`] = null; up[`apps/${id}/sms/d1`] = null; }   // 다시 확정되면 확정·D-1 문자가 새로 나가게
   try {
     await IonStore.update('apply', up);
     const others = promoted.filter(p => p.id !== id);
@@ -606,7 +608,7 @@ function openMove(id) {
     ${groups.map(g => `<div class="cgroup" style="margin-top:6px">${g.c === r.cohort ? `같은 기수 · ${esc(g.c)}` : `다른 기수로 · ${esc(g.c)} <span class="chip mute">${cohortState(g.c).label}</span>`}</div>
       ${g.list.map(x => { const left = (x.cap?.[r.gender] || 0) - held(x.id, r.gender); const cf = conflictsOf(r, x.id); const ageBad = !ionAgeOk(x, r.birthYear);
       return `<button class="card stack" style="gap:6px;text-align:left;cursor:pointer;border:1.5px solid var(--line-2)" data-move="${x.id}">
-        <div class="between"><span class="round" style="font-size:17px">${g.c === r.cohort ? '' : esc(x.cohort) + ' · '}${esc(x.date)} ${esc(x.time)}</span><span class="chip ${left > 0 ? 'ok' : 'wait'}">${left > 0 ? `${G[r.gender]} ${left}자리` : '정원 마감 → 대기'}</span></div>
+        <div class="between"><span class="round" style="font-size:17px">${g.c === r.cohort ? '' : esc(x.cohort) + ' · '}${esc(x.date)} ${esc(x.time)}</span><span class="chip ${left > 0 ? 'ok' : 'wait'}">${left > 0 ? `${G[r.gender]} ${left}자리` : ['paid', 'confirmed'].includes(r.status) ? '정원 마감 → 확정대기' : '정원 마감 → 대기'}</span></div>
         ${x.place && x.place !== r.place ? `<span class="small">장소: ${esc(x.place)}</span>` : ''}
         ${ionAgeText(x) ? `<span class="small">${ionAgeText(x)}${ageBad ? ' · <b style="color:var(--danger)">대상 연령 밖</b>' : ''}</span>` : ''}
         ${cf.length ? `<span class="small" style="color:#7A5300">⚠ 여기서도 겹침: ${cf.map(c => esc(c.text)).join(', ')}</span>` : '<span class="small" style="color:var(--green)">겹치는 사람 없음</span>'}
@@ -622,6 +624,8 @@ async function moveApp(id, to) {
   const toLabel = cross ? `${t.cohort} ${t.date} ${t.time}` : t.time;
   const held = list.filter(x => x.slotId === to && x.gender === r.gender && ION_HOLDING.includes(x.status) && x.id !== id).length;
   const full = held >= (t.cap?.[r.gender] || 0);
+  const paidIn = ['paid', 'confirmed'].includes(r.status);   // 입금한 분: 대기(입금 전)로 떨어뜨리지 않고 확정대기로
+  const toPaid = paidIn && (cross || full);
   // 다른 기수로: 그 기수에 같은 연락처 신청이 이미 있으면 막기 (신청 페이지 중복 방지와 같은 기준)
   let newKey = r.phoneKey || '';
   if (cross) {
@@ -631,13 +635,16 @@ async function moveApp(id, to) {
     if (ph) newKey = (await ionSha(t.cohort + '|' + ph)).slice(0, 32);
     const on = ((A.data.phones || {})[t.cohort] || {})[newKey];
     if (on && on !== id && (A.data.apps || {})[on] && !['cancelled', 'refunded'].includes((A.data.apps || {})[on].status)) return toast(`${t.cohort}에 같은 연락처 신청(${on})이 이미 있어요`);
-    if (!full && !(await confirmBox(`${r.name}님을 ${t.cohort}로 옮길까요?`, `${r.cohort} ${r.date} ${r.time} → ${t.cohort} ${t.date} ${t.time}${t.place && t.place !== r.place ? ` (장소: ${t.place})` : ''}. 상태(${ION_STATUS[r.status]})와 참가비는 그대로 유지돼요.`, '기수 옮기기'))) return;
+    if (!(full && !paidIn) && !(await confirmBox(`${r.name}님을 ${t.cohort}로 옮길까요?`, `${r.cohort} ${r.date} ${r.time} → ${t.cohort} ${t.date} ${t.time}${t.place && t.place !== r.place ? ` (장소: ${t.place})` : ''}.${cohortState(t.cohort).code !== 'open' ? `\n${t.cohort}는 지금 '${cohortState(t.cohort).label}' 상태예요. 모집 전이어도 미리 옮겨 둘 수 있어요.` : ''}\n${toPaid ? `입금한 참가비는 그대로 두고 ${t.cohort}에서 '확정대기'로 기다려요. 그 타임이 성사되면 다시 확정 안내가 떠요.${full ? `\n(그 타임 ${G[r.gender]} 정원이 차 있어서 빈자리가 나야 확정할 수 있어요)` : ''}` : `상태(${ION_STATUS[r.status]})와 참가비는 그대로 유지돼요.`}`, '기수 옮기기'))) return;
   }
-  if (full && ION_HOLDING.includes(r.status) && !(await confirmBox(`${toLabel} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 그 타임 대기 순번으로 들어가요. ${r.status === 'confirmed' ? '이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '대기로 옮기기', true))) return;
+  if (!cross && full && paidIn && !(await confirmBox(`${toLabel} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 입금한 상태 그대로 그 타임 '확정대기'로 기다려요. 빈자리가 나서 성사되면 확정 안내가 떠요.${r.status === 'confirmed' ? '\n이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '확정대기로 옮기기', true))) return;
+  if (full && !paidIn && ION_HOLDING.includes(r.status) && !(await confirmBox(`${toLabel} 타임은 ${G[r.gender]} 정원이 찼어요`, `옮기면 ${r.name}님은 그 타임 대기 순번으로 들어가요. ${r.status === 'confirmed' ? '이미 확정된 분이라 신중히 결정해 주세요.' : ''}`, '대기로 옮기기', true))) return;
   r.slotId = to; r.cohort = t.cohort; r.date = t.date; r.time = t.time; r.place = t.place || '';
-  if (full && ION_HOLDING.includes(r.status)) { r.status = 'waiting'; r.at = Date.now(); }
+  const wasConf = r.status === 'confirmed';
+  if (toPaid) { r.status = 'paid'; if (!r.paidAt) r.paidAt = Date.now(); if (!r.paidAmt) r.paidAmt = feeOf(r); r.confirmedAt = null; }
+  else if (full && ION_HOLDING.includes(r.status)) { r.status = 'waiting'; r.at = Date.now(); }
   r.log = addLog(r, cross ? `기수 변경(${from}→${toLabel})` : `타임 변경(${from}→${t.time})`);
-  const extra = { [`apps/${id}/slotId`]: to, [`apps/${id}/date`]: t.date, [`apps/${id}/time`]: t.time, [`apps/${id}/place`]: t.place || '', [`apps/${id}/status`]: r.status, [`apps/${id}/log`]: r.log, ...(r.status === 'waiting' ? { [`apps/${id}/at`]: r.at } : {}) };
+  const extra = { ...(toPaid ? { [`apps/${id}/paidAt`]: r.paidAt, [`apps/${id}/paidAmt`]: r.paidAmt, [`apps/${id}/confirmedAt`]: null, ...(wasConf ? { [`apps/${id}/sms/confirm`]: null, [`apps/${id}/sms/d1`]: null } : {}) } : {}), [`apps/${id}/slotId`]: to, [`apps/${id}/date`]: t.date, [`apps/${id}/time`]: t.time, [`apps/${id}/place`]: t.place || '', [`apps/${id}/status`]: r.status, [`apps/${id}/log`]: r.log, ...(r.status === 'waiting' ? { [`apps/${id}/at`]: r.at } : {}) };
   if (cross) {
     extra[`apps/${id}/cohort`] = t.cohort;
     if (r.phoneKey && (((A.data.phones || {})[oldCohort] || {})[r.phoneKey] === id)) extra[`phones/${oldCohort}/${r.phoneKey}`] = null;
@@ -647,7 +654,7 @@ async function moveApp(id, to) {
   if (cross && newKey) up[`phones/${t.cohort}/${newKey}`] = id;   // plan()이 옛 기수 기준으로 덮어쓰지 않게 마지막에 확정
   try {
     await IonStore.update('apply', up);
-    toast(`${r.name}님을 ${toLabel}${cross ? '' : ' 타임'}으로 옮겼어요${promoted.length ? ` · 빈자리에 대기 ${promoted.length}명 배정` : ''}`);
+    toast(`${r.name}님을 ${toLabel}${cross ? '' : ' 타임'}으로 옮겼어요${toPaid ? ' · 확정대기' : ''}${promoted.length ? ` · 빈자리에 대기 ${promoted.length}명 배정` : ''}`);
     A._moveFrom = from; A._moveCross = cross; setTimeout(() => openMsg(id, 'move'), 250);
   } catch (e) { toast('옮기지 못했어요: ' + e.message); }
 }
@@ -1769,6 +1776,8 @@ function detail(r) {
   if (ACTIVE.includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, ...(st === 'paid' ? [] : [`<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`]));
   if (ACTIVE.includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
+  if (st === 'paid') more.unshift(`<button class="mini gold" data-act="fix1" data-v="${r.id}">${ICON.ok}확정으로 변경</button>`);
+  if (st === 'confirmed') more.unshift(`<button class="mini" data-act="unfix" data-v="${r.id}">확정대기로 되돌리기</button>`);
   if (st === 'paid') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">전액 환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">입금확인 취소(입금대기로)</button>`);
   if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
@@ -2745,9 +2754,15 @@ document.addEventListener('click', async e => {
     }
   }
   else if (act === 'fixslot') {
-    const list = apps().map(x => ({ ...x })); const ids = await askFix(v, list); if (!ids.length) return;
+    const list = apps().map(x => ({ ...x })); const p0 = slotPlan(v, list); if (!p0.fix.length) return toast(`아직 확정할 수 없어요 · ${waitText(p0)} · 한 명만 확정하려면 카드의 '바로 확정'`);
+    const ids = await askFix(v, list); if (!ids.length) return;
     try { await saveList(list, ids); } catch (e) { console.error(e); return toast('저장하지 못했어요: ' + e.message); }
     A.tab = 'confirmed'; render(); afterFix(ids);
+  }
+  else if (act === 'unfix') {
+    const r = row(v);
+    if (!(await confirmBox(`${r.name}님을 확정대기로 되돌릴까요?`, '입금 기록과 자리는 그대로 두고 확정만 풀어요. 나중에 다시 확정하면 확정 문자가 새로 나가요.\n(다른 기수로 옮길 분이면 \'타임·기수 변경\'을 쓰세요. 옮기면서 확정대기로 바뀌어요.)', '확정대기로'))) return;
+    if (await changeStatus(v, 'paid')) { A.tab = 'paid'; render(); toast(`${r.name}님을 확정대기로 되돌렸어요`); }
   }
   else if (act === 'fix1') {
     const r = row(v); const p = slotPlan(r.slotId);
