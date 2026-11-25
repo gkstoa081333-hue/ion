@@ -32,8 +32,9 @@ const ION_DEFAULTS = {
     's4b': { cohort: '4기', date: '11/28(토)', time: '17:00~19:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 }, public: true, order: 4 }
   }
 };
-const ION_STATUS = { pending: '입금대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
-const ION_HOLDING = ['pending', 'confirmed'];
+const ION_STATUS = { pending: '입금대기', paid: '확정대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
+// paid(확정대기) = 입금은 확인됐지만 타임 최소 인원(기본 4:4)·성비가 맞을 때까지 확정을 미룬 상태 · 자리는 차지함
+const ION_HOLDING = ['pending', 'paid', 'confirmed'];
 /* 타임별 대상 연령 (운영진이 설정에서 년생으로 지정 · 비우면 제한 없음) */
 function ionAgeRange(s) { let a = Number(s && s.ageFrom) || 0, b = Number(s && s.ageTo) || 0; if (a && b && a > b) [a, b] = [b, a]; return { a, b }; }
 function ionAgeText(s) { const { a, b } = ionAgeRange(s); const yy = y => String(y).slice(2); return a && b ? `${yy(a)}~${yy(b)}년생` : a ? `${yy(a)}년생부터` : b ? `${yy(b)}년생까지` : ''; }

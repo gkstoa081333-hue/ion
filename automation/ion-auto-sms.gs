@@ -9,7 +9,7 @@
    ===================================================================== */
 const DB_URL = 'https://eon-signal-default-rtdb.asia-southeast1.firebasedatabase.app';
 const SITE = 'https://gkstoa081333-hue.github.io/ion/';
-const VERSION = '2026-11-17a';
+const VERSION = '2026-11-25a';
 const RETRY_MIN = 10, RETRY_MAX = 5;  // 실패하면 10분 뒤 다시, 최대 5번
 const MAX_PER_RUN = 20;               // 한 번에 최대 발송 수 (사고 방지)
 const QUIET_FROM = 22, QUIET_TO = 8;  // 밤 10시~아침 8시는 보류했다가 8시에 발송
@@ -51,6 +51,7 @@ function tick() {
         if (on(k) && t0 >= since && !quiet) jobs.push([r, k, sl]);
       }
       if (r.status === 'waiting' && on('wait') && !done.wait && +r.at >= since && !quiet) jobs.push([r, 'wait', sl]);
+      if (r.status === 'paid' && on('paid') && !done.paid && (+r.paidAt || 0) >= since && !quiet) jobs.push([r, 'paid', sl]);   // 확정대기 안내 (2026-11-25a~)
       if (r.status === 'confirmed' && on('confirm') && !done.confirm && (+r.confirmedAt || 0) >= since && !quiet) jobs.push([r, 'confirm', sl]);
       if (r.status === 'confirmed' && on('d1') && !done.d1 && isEveBefore(sl.date || r.date, now)) jobs.push([r, 'd1', sl]);
     });

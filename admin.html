@@ -93,8 +93,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .chipbtn{min-height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-2);background:var(--paper);font-family:var(--round);font-size:14px;color:var(--ink-2);white-space:nowrap}
 .chipbtn.on{background:var(--green);border-color:var(--green);color:var(--cream)}
-.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand)}
-.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:13px;color:var(--ink-2)}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand)}
+.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:12.5px;padding:0 2px;word-break:keep-all;color:var(--ink-2)}
 .tab.on{background:var(--green);color:var(--cream)}
 .bar{height:8px;border-radius:999px;background:var(--green-2);overflow:hidden;display:flex}
 .bar>i{display:block;height:8px;background:var(--gold)}
@@ -186,8 +186,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="ion-store.js?v=20261113a"></script>
-<script src="ion-sms.js?v=20261125a"></script>
+<script src="ion-store.js?v=20261125a"></script>
+<script src="ion-sms.js?v=20261125b"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -405,7 +405,7 @@ function plan(list, extra = {}) {
   }));
   touched.forEach(id => {
     const r = byId[id]; const prev = (A.data.apps || {})[id] || {};
-    ['status', 'deadline', 'payName', 'log', 'memo', 'confirmedAt', 'paidAmt'].forEach(k => { if (r[k] !== undefined && r[k] !== prev[k]) up[`apps/${id}/${k}`] = r[k]; });
+    ['status', 'deadline', 'payName', 'log', 'memo', 'confirmedAt', 'paidAt', 'paidAmt'].forEach(k => { if (r[k] !== undefined && r[k] !== prev[k]) up[`apps/${id}/${k}`] = r[k]; });
     // 중복 방지 표시: 취소·환불이면 풀어서 재신청 가능하게, 다시 살리면 복구
     if (r.phoneKey) {
       const ph = `phones/${r.cohort}/${r.phoneKey}`;
@@ -441,6 +441,8 @@ async function changeStatus(id, to, memo) {
     r.status = to;
     if (to === 'confirmed' && !r.confirmedAt) r.confirmedAt = Date.now();
     if (to === 'confirmed' && !r.paidAmt) r.paidAmt = feeOf(r);
+    if (to === 'paid') { if (!r.paidAt) r.paidAt = Date.now(); if (!r.paidAmt) r.paidAmt = feeOf(r); }
+    if (to === 'pending' && from === 'paid') { r.paidAt = null; r.log = addLog(r, '입금확인 취소'); }
     if (to === 'pending') {
       r.deadline = Date.now() + (Number(conf().promoteHours) || 12) * 3600e3;
       if (!r.payName) r.payName = payNameOf(r, list);
@@ -457,11 +459,60 @@ async function changeStatus(id, to, memo) {
   } catch (e) { console.error(e); toast('저장하지 못했어요: ' + e.message); return false; }
 }
 
+/* ---------- 확정대기 → 확정: 타임별 최소 인원(기본 4:4) · 성비 1:1 · 입금 순서 ----------
+   입금확인하면 바로 확정하지 않고 '확정대기(paid)'로 둠 → 형제·자매가 각각 최소 인원 이상 모이면
+   두 성별 중 적은 쪽 인원(정원 이내)만큼 입금 순서대로 확정 추천 · 운영진이 겹침 확인 후 확정 */
+function minOf() { return Math.max(1, Number(conf().minPer) || 4); }
+function slotPlan(sid, list = apps()) {
+  const s = slots().find(x => x.id === sid) || {}; const min = minOf(); const g = {};
+  ['M', 'F'].forEach(k => {
+    const mine = list.filter(r => r.slotId === sid && r.gender === k);
+    g[k] = { ok: mine.filter(r => r.status === 'confirmed'), paid: mine.filter(r => r.status === 'paid').sort((a, b) => (a.paidAt || a.at) - (b.paidAt || b.at)), cap: s.cap?.[k] || 6 };
+  });
+  const tot = k => g[k].ok.length + g[k].paid.length;
+  const n = Math.min(tot('M'), tot('F'), g.M.cap, g.F.cap);   // 1:1로 맞출 수 있는 인원
+  const ready = n >= min;
+  const fix = ready ? ['M', 'F'].flatMap(k => g[k].paid.slice(0, Math.max(0, n - g[k].ok.length))) : [];
+  const extra = ready ? ['M', 'F'].flatMap(k => g[k].paid.slice(Math.max(0, n - g[k].ok.length))) : [];   // 성비가 안 맞아 남는 분
+  return { min, n, ready, fix, extra, need: { M: Math.max(0, min - tot('M')), F: Math.max(0, min - tot('F')) }, g };
+}
+function waitText(p) {
+  if (!p.ready) return `성사까지 ${[p.need.M ? `형제 ${p.need.M}명` : '', p.need.F ? `자매 ${p.need.F}명` : ''].filter(Boolean).join(' · ')} 더 필요`;
+  return p.extra.length ? `${p.n}대${p.n} 성사 · ${G[p.extra[0].gender]} ${p.extra.length}명은 성비 대기` : `${p.n}대${p.n} 성사`;
+}
+// 확정 추천을 운영진에게 묻고, 동의하면 list(복사본)를 확정으로 바꿈 → 바꾼 id 배열 반환 (저장은 saveList)
+async function askFix(sid, list) {
+  const p = slotPlan(sid, list); if (!p.ready || !p.fix.length) return [];
+  const sl = slots().find(x => x.id === sid) || {};
+  const line = r => `· ${G[r.gender]} ${r.name} (${String(r.birthYear || '').slice(2)}년생${r.church ? ' · ' + r.church : ''})`;
+  const cf = p.fix.filter(r => conflictsOf(r).length);
+  const body = [`형제 ${p.g.M.ok.length + p.g.M.paid.length}명 · 자매 ${p.g.F.ok.length + p.g.F.paid.length}명이 입금을 마쳐 ${p.n}대${p.n}로 진행할 수 있어요.`,
+    `아래 ${p.fix.length}명을 입금 순서대로 확정할게요.`, ...p.fix.map(line),
+    p.extra.length ? `\n성비가 안 맞아 확정대기로 남는 분: ${p.extra.map(r => r.name).join(', ')}` : '',
+    cf.length ? `\n⚠ 겹침 경고: ${cf.map(r => r.name).join(', ')} — 확정 전에 카드에서 내용을 확인해 주세요.` : '',
+    autoOn('confirm') ? '\n확정 문자는 1분 안에 자동으로 나가요.' : '\n확정 문자 창이 이어서 열려요.'].filter(Boolean).join('\n');
+  if (!(await confirmBox(`${sl.time || ''} 타임 ${p.n}대${p.n} 성사!`, body, `${p.fix.length}명 확정`))) return [];
+  const now = Date.now();
+  p.fix.forEach(t => { const r = list.find(x => x.id === t.id); r.status = 'confirmed'; r.confirmedAt = now; if (!r.paidAmt) r.paidAmt = feeOf(r); r.log = addLog(r, '확정대기→확정'); });
+  return p.fix.map(r => r.id);
+}
+async function saveList(list, ids) {
+  const extra = {}; ids.forEach(id => { const r = list.find(x => x.id === id); if (r) extra[`apps/${id}/status`] = r.status; });
+  const { up } = plan(list, extra);
+  await IonStore.update('apply', up);
+}
+function afterFix(ids) {
+  if (!ids.length) return;
+  if (autoOn('confirm')) toast(`${ids.length}명 확정했어요 · 확정 문자는 1분 안에 자동 발송돼요`);
+  else if (ids.length === 1) openMsg(ids[0], 'confirm'); else openBulk(ids, 'confirm');
+}
+
 /* ---------- 타임 변경 ---------- */
 /* ---------- 자동 문자 (구글 Apps Script 엔진 + 솔라피 · automation/ 폴더 참고) ---------- */
-const ASMS_KINDS = [['pay', '입금 안내 (신청 직후)'], ['wait', '대기 안내'], ['promote', '자리 확보 (대기→배정)'], ['confirm', '참가 확정 (입금확인 후)'], ['d1', 'D-1 안내 (전날 저녁 6시)']];
+const ASMS_KINDS = [['pay', '입금 안내 (신청 직후)'], ['wait', '대기 안내'], ['promote', '자리 확보 (대기→배정)'], ['paid', '확정대기 안내 (입금확인 후)'], ['confirm', '참가 확정 (성사·확정 후)'], ['d1', 'D-1 안내 (전날 저녁 6시)']];
 const ENGINE_QUEUE_VER = '2026-11-17a';   // 이 버전 이상의 자동 문자 엔진이 일괄 발송(apply/smsQueue)을 처리함
-function autoOn(kind) { const a = (A.data && A.data.autoSms) || {}; return a.mode === 'live' && (a.kinds || {})[kind] !== false; }
+const ENGINE_PAID_VER = '2026-11-25a';   // 이 버전 이상의 엔진이 확정대기 안내(paid)를 자동 발송함
+function autoOn(kind) { const a = (A.data && A.data.autoSms) || {}; if (kind === 'paid' && String(((A.data && A.data.smsEngine) || {}).version || '') < ENGINE_PAID_VER) return false; return a.mode === 'live' && (a.kinds || {})[kind] !== false; }
 function autoSmsCard() {
   const a = A.data.autoSms || {}, eng = A.data.smsEngine || {}, mode = a.mode || 'off';
   const alive = eng.lastRun && Date.now() - eng.lastRun < 5 * 60e3;
@@ -697,7 +748,7 @@ function viewMain() {
   const global = !!(q && A.qAll);
   const list = global ? apps().filter(match).sort((a, b) => b.at - a.at)
     : rows.filter(r => (A.tab === 'cancelled' ? ['cancelled', 'refunded'].includes(r.status) : r.status === A.tab)).filter(match)
-      .sort((a, b) => A.tab === 'pending' ? a.deadline - b.deadline : a.at - b.at);
+      .sort((a, b) => A.tab === 'pending' ? a.deadline - b.deadline : A.tab === 'paid' ? (a.paidAt || a.at) - (b.paidAt || b.at) : a.at - b.at);
   const elsewhere = q && !A.qAll ? apps().filter(r => r.cohort !== A.cohort && match(r)).length : 0;
   A.curList = list.map(r => r.id);
   return `<div class="wrap">
@@ -714,7 +765,7 @@ function viewMain() {
       <button class="chipbtn ${A.qAll ? 'on' : ''}" data-act="qall" aria-pressed="${A.qAll}">전체 기수</button></div>
     ${elsewhere ? `<button class="mini" style="margin-top:8px" data-act="qall">다른 기수에서 ${elsewhere}건 더 있어요 · 전체 기수에서 보기</button>` : ''}
     ${global ? `<div class="small" style="margin-top:12px">전체 기수 검색 결과 <b>${list.length}건</b> · 상태와 상관없이 모두 보여요</div>`
-      : `<div class="tabs" style="margin-top:12px">${['pending', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>`}
+      : `<div class="tabs" style="margin-top:12px">${['pending', 'paid', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>`}
     ${!global && A.tab === 'cancelled' && list.length ? `<div class="between" style="margin-top:12px"><span class="small">취소·환불 내역은 정원에 영향이 없어요. 필요 없으면 영구삭제하세요.</span><button class="mini del" data-act="purgeall">${esc(A.cohort)} 취소·환불 ${list.length}건 모두 삭제</button></div>` : ''}
     ${list.length ? `<div class="row" style="margin-top:12px"><button class="mini go" data-act="bulk">📨 이 목록 ${list.length}명에게 문자 보내기</button><button class="mini" data-act="table">📋 명단 표로 보기</button></div>` : ''}
     <div class="stack" style="margin-top:12px;gap:10px">${list.length ? list.map(r => card(r, global)).join('') : `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>`}</div>
@@ -764,15 +815,16 @@ function viewStatus() {
     ${ss.map(s => {
       const g = key => {
         const mine = rows.filter(r => r.slotId === s.id && r.gender === key);
-        const ok = mine.filter(r => r.status === 'confirmed').length, pend = mine.filter(r => r.status === 'pending').length, wait = mine.filter(r => r.status === 'waiting').length;
+        const ok = mine.filter(r => r.status === 'confirmed').length, paid = mine.filter(r => r.status === 'paid').length, pend = mine.filter(r => r.status === 'pending').length, wait = mine.filter(r => r.status === 'waiting').length;
         const cap = s.cap?.[key] || 0; const okW = cap ? Math.min(100, ok / cap * 100) : 0;
         return `<div class="gline"><span class="round">${G[key]}</span>
-          <div class="bar" aria-hidden="true"><i style="width:${okW}%"></i><b style="width:${cap ? Math.min(100 - okW, pend / cap * 100) : 0}%"></b></div>
-          <span class="small" style="color:var(--cream)"><b class="round">${ok}</b>/${cap}${pend ? ` · 입금대기 ${pend}` : ''}${wait ? ` · 대기 ${wait}` : ''}</span></div>`;
+          <div class="bar" aria-hidden="true"><i style="width:${okW}%"></i><b style="width:${cap ? Math.min(100 - okW, (paid + pend) / cap * 100) : 0}%"></b></div>
+          <span class="small" style="color:var(--cream)"><b class="round">${ok}</b>/${cap}${paid ? ` · 확정대기 ${paid}` : ''}${pend ? ` · 입금대기 ${pend}` : ''}${wait ? ` · 대기 ${wait}` : ''}</span></div>`;
       };
       const nc = rows.filter(r => r.slotId === s.id && conflictsOf(r).length).length;
       return `<div class="slotline"><div class="between"><span class="round" style="font-size:17px">${esc(s.time)}${nc ? ` <span class="chip warn">겹침 ${nc}명</span>` : ''}${ionAgeText(s) ? ` <span class="small">${ionAgeText(s)}</span>` : ''}${s.public ? '' : ' <span class="small">(비공개)</span>'}</span>
-        <button class="mini on-dark" data-act="roster" data-v="${esc(s.id)}">${ICON.copy}매칭앱 명단</button></div>${g('M')}${g('F')}</div>`;
+        <button class="mini on-dark" data-act="roster" data-v="${esc(s.id)}">${ICON.copy}매칭앱 명단</button></div>${g('M')}${g('F')}${(() => { const p = slotPlan(s.id); const np = p.g.M.paid.length + p.g.F.paid.length; if (!np) return '';
+          return p.fix.length ? `<button class="mini gold" style="margin-top:6px" data-act="fixslot" data-v="${esc(s.id)}">${ICON.ok}${p.n}대${p.n} 성사 · 확정대기 ${p.fix.length}명 확정하기</button>` : `<span class="small" style="color:var(--cream);opacity:.85">확정대기 ${np}명 · ${esc(waitText(p))}</span>`; })()}</div>`;
     }).join('')}
   </div>`;
 }
@@ -794,7 +846,7 @@ function matchStats(sess) {   // 매칭앱 computeMatches와 같은 규칙 (1순
   return { people: ids.length, voted: ids.filter(id => votes[id]).length, pairs, matchedPeople: done.size };
 }
 const refundOf = r => r.status === 'refunded' ? (r.refundAmt != null ? +r.refundAmt : (+r.paidAmt || feeOf(r))) : 0;
-const paidOf = r => (r.status === 'confirmed' || r.status === 'refunded' || r.confirmedAt) && r.status !== 'pending' && r.status !== 'waiting' ? (+r.paidAmt || feeOf(r)) : 0;
+const paidOf = r => (r.status === 'confirmed' || r.status === 'paid' || r.status === 'refunded' || r.confirmedAt || r.paidAt) && r.status !== 'pending' && r.status !== 'waiting' ? (+r.paidAmt || feeOf(r)) : 0;
 function ledgerOf(c) { return Object.entries(((A.data && A.data.ledger) || {})[ckey(c)] || {}).map(([id, x]) => ({ id, ...x })).sort((a, b) => (a.at || 0) - (b.at || 0)); }
 function settle(c) {
   const rs = apps().filter(r => r.cohort === c); const paid = rs.reduce((t, r) => t + paidOf(r), 0); const refund = rs.reduce((t, r) => t + refundOf(r), 0);
@@ -817,7 +869,7 @@ function viewDash() {
   const repeat = allConf.filter(r => apps().some(x => x.id !== r.id && x.cohort !== r.cohort && x.status === 'confirmed' && digits(x.phone) === digits(r.phone) && x.at < r.at)).length;
   const satAll = revs.length ? (revs.reduce((t, r) => t + (+r.sat || 0), 0) / revs.length).toFixed(1) : '-';
   const bars = (pairs, total) => pairs.map(([k, v]) => `<div class="hb"><span>${esc(k)}</span><span class="t"><i style="width:${total ? Math.round(v / total * 100) : 0}%"></i></span><span class="n">${v}</span></div>`).join('');
-  const act = apps().filter(r => ['pending', 'confirmed', 'waiting'].includes(r.status) || r.status === 'refunded');
+  const act = apps().filter(r => ACTIVE.includes(r.status) || r.status === 'refunded');
   const src = {}; act.forEach(r => { const k = r.source || '미응답'; src[k] = (src[k] || 0) + 1; });
   const age = {}; act.forEach(r => { const y = +r.birthYear; if (!y) return; const k = `${String(Math.floor(y / 5) * 5).slice(2)}~${String(Math.floor(y / 5) * 5 + 4).slice(2)}년생`; age[k] = (age[k] || 0) + 1; });
   const S = settle(A.cohort); const items = S.items;
@@ -1644,7 +1696,7 @@ function attendIndex() {
 }
 
 /* ---------- 겹침 경고: 같은 교회(이성) · 이전 만남(이성) ---------- */
-const ACTIVE = ['pending', 'confirmed', 'waiting'];
+const ACTIVE = ['pending', 'paid', 'confirmed', 'waiting'];
 const normChurch = n => String(n || '').replace(/\(.*?\)/g, '').replace(/[\s·.,\-_]/g, '').replace(/교회$/, '').replace(/^(대한예수교|기독교|예수교)/, '').toLowerCase();
 const normPlace = n => String(n || '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' ');
 // 지난 매칭 명단에서 함께 있었던 기록: 전화번호 → [{sid, label}]
@@ -1681,11 +1733,12 @@ function repeatRecord(r) {   // 재참여 기록: 다른 기수 확정 신청 �
 }
 function card(r, showCohort) {
   const st = r.status; const open = A.open[r.id]; const rep = repeatOf(r);
-  const chip = { pending: 'wait', confirmed: 'ok', waiting: 'mute', cancelled: 'bad', refunded: 'bad' }[st] || 'mute';
+  const chip = { pending: 'wait', paid: 'warn', confirmed: 'ok', waiting: 'mute', cancelled: 'bad', refunded: 'bad' }[st] || 'mute';
   const late = st === 'pending' && r.deadline - Date.now() < 3 * 3600e3;
   const actions = [];
   if (st === 'pending') actions.push(`<button class="mini gold" data-act="confirm" data-v="${r.id}">${ICON.ok}입금확인</button>`);
   if (st === 'waiting') actions.push(`<button class="mini go" data-act="promote" data-v="${r.id}">자리 배정</button>`);
+  if (st === 'paid') { const p = slotPlan(r.slotId); actions.push(p.fix.some(x => x.id === r.id) ? `<button class="mini gold" data-act="fixslot" data-v="${esc(r.slotId)}">${ICON.ok}성사 · 확정하기</button>` : `<button class="mini" data-act="fix1" data-v="${r.id}">바로 확정</button>`); }
   const cf = conflictsOf(r);
   if (ACTIVE.includes(st) && moveCands(r).length) actions.push(`<button class="mini ${cf.length ? 'gold' : ''}" data-act="move" data-v="${r.id}">타임·기수 변경</button>`);
   actions.push(`<button class="mini" data-act="msg" data-v="${r.id}">${ICON.msg}문자·카톡</button>`);
@@ -1696,7 +1749,7 @@ function card(r, showCohort) {
     ${cf.length ? `<div class="conflict">⚠ ${cf.map(c => esc(c.text)).join('<br>⚠ ')}<br><span style="font-size:12px">같은 타임의 이성과 겹쳐요. '타임 변경'으로 다른 타임에 옮길 수 있어요.</span></div>` : ''}
     <div class="small" style="color:var(--ink-2)">${showCohort ? `<b>${esc(r.cohort)}</b> · ` : ''}${esc(r.name)} · ${G[r.gender]} · ${String(r.birthYear).slice(2)}년생 · ${esc(r.time)}</div>
     <div class="between small"><a href="tel:${digits(r.phone)}" style="color:var(--ink-2)">${esc(r.phone)}</a>
-      ${st === 'pending' ? `<span class="${late ? 'late' : ''}">${esc(dt(r.deadline))} · ${esc(leftText(r.deadline))}</span>` : st === 'confirmed' ? `<span>확정 ${esc(dt(r.confirmedAt))}</span>` : `<span>신청 ${esc(dt(r.at))}</span>`}</div>
+      ${st === 'pending' ? `<span class="${late ? 'late' : ''}">${esc(dt(r.deadline))} · ${esc(leftText(r.deadline))}</span>` : st === 'paid' ? `<span>입금확인 ${esc(dt(r.paidAt))} · ${esc(waitText(slotPlan(r.slotId)))}</span>` : st === 'confirmed' ? `<span>확정 ${esc(dt(r.confirmedAt))}</span>` : `<span>신청 ${esc(dt(r.at))}</span>`}</div>
     ${r.log ? `<div class="log">✉ ${esc(r.log)}</div>` : ''}
     <div class="row" style="margin-top:2px">${actions.join('')}</div>
     ${open ? detail(r) : ''}
@@ -1710,9 +1763,10 @@ function detail(r) {
     ['신앙생활', r.faithYears], ['출석', r.attend], ['교회 섬김', r.serve], ['나에게 신앙이란', r.faithNote], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
-  if (['pending', 'confirmed', 'waiting'].includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
-  if (['pending', 'waiting', 'confirmed'].includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
+  if (ACTIVE.includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
+  if (ACTIVE.includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
+  if (st === 'paid') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">입금확인 취소(입금대기로)</button>`);
   if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
     ${kv.map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}
@@ -1987,7 +2041,8 @@ function viewSettings() {
         ${applyState(d)}
         ${cf('account', '입금 계좌', d.config.account)}
         <div class="sgrid">${cf('fee', '참가비(원)', d.config.fee, 'number')}${cf('repeatDiscount', '재참여 할인(원)', d.config.repeatDiscount, 'number')}
-          ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}</div>
+          ${cf('payHours', '입금 기한(시간)', d.config.payHours, 'number')}${cf('promoteHours', '대기→배정 후 기한(시간)', d.config.promoteHours, 'number')}
+          ${cf('minPer', '타임 성사 최소 인원(성별당)', d.config.minPer ?? 4, 'number')}</div>
         ${cf('openchat', '오픈채팅 링크 (문의·안내용)', d.config.openchat)}
         <div class="field"><label for="c-refund">환불 규정 (신청 페이지에 표시)</label><textarea id="c-refund" class="input" data-c="refund" style="min-height:120px">${esc(d.config.refund)}</textarea></div>
       </div>
@@ -2064,7 +2119,7 @@ async function saveSettings() {
   d.slots.sort(ionSlotCmp);   // 저장할 때 날짜·시간순으로 정리
   d.slots.forEach((s, i) => { outSlots[s.id] = { cohort: s.cohort.trim(), date: s.date.trim(), time: s.time.trim(), place: (s.place || '').trim(), cap: { M: Number(s.cap.M) || 0, F: Number(s.cap.F) || 0 }, public: !!s.public, order: i + 1, ...(Number(s.ageFrom) ? { ageFrom: Number(s.ageFrom) } : {}), ...(Number(s.ageTo) ? { ageTo: Number(s.ageTo) } : {}) }; });
   const removed = slots().filter(s => !outSlots[s.id]).map(s => s.id);
-  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), dealStack: !!c.dealStack, deals: (c.deals || []).map((x, i) => ({ id: x.id || 'd' + Date.now().toString(36) + i, label: String(x.label || '').trim().slice(0, 16) || '이벤트 할인', g: x.g || '', cohort: x.cohort || '', slotId: x.slotId && d.slots.some(s => s.id === x.slotId) ? x.slotId : '', amount: Math.round(+x.amount), on: x.on !== false, until: x.until || '', limit: Math.max(0, Math.round(+x.limit || 0)), ...(x.early ? { early: true } : {}) })), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };
+  const up = { config: { open: !!c.open, fee: Number(c.fee) || 0, repeatDiscount: Math.max(0, Number(c.repeatDiscount) || 0), account: String(c.account).trim(), payHours: Number(c.payHours) || 24, promoteHours: Number(c.promoteHours) || 12, minPer: Math.max(1, Math.round(Number(c.minPer) || 4)), contact: String(c.contact || '').trim(), openchat: String(c.openchat || '').trim(), refund: String(c.refund || ''), dealStack: !!c.dealStack, deals: (c.deals || []).map((x, i) => ({ id: x.id || 'd' + Date.now().toString(36) + i, label: String(x.label || '').trim().slice(0, 16) || '이벤트 할인', g: x.g || '', cohort: x.cohort || '', slotId: x.slotId && d.slots.some(s => s.id === x.slotId) ? x.slotId : '', amount: Math.round(+x.amount), on: x.on !== false, until: x.until || '', limit: Math.max(0, Math.round(+x.limit || 0)), ...(x.early ? { early: true } : {}) })), ...(conf().reviewForm ? { reviewForm: conf().reviewForm } : {}), ...(conf().lastBackup ? { lastBackup: conf().lastBackup } : {}), ...(conf().notify ? { notify: conf().notify } : {}) } };
   up.dealLimits = Object.fromEntries(up.config.deals.filter(x => x.limit > 0).map(x => [x.id, x.limit]));   // 신청 페이지가 선착순 자리를 잡을 때 규칙이 확인하는 값
   Object.entries(outSlots).forEach(([id, s]) => { up['slots/' + id] = s; });
   // 타임의 날짜·시간·장소를 바꾸면 이미 들어온 신청서에도 함께 반영 (문자·명단·CSV가 최신 정보로)
@@ -2311,7 +2366,7 @@ function repromoTargets(cohort, resend) {
     const past = rs.filter(r => r.cohort !== cohort && r.status === 'confirmed' && cohortEnded(r.cohort)).sort((a, b) => (b.at || 0) - (a.at || 0));
     if (!past.length && !ss.length) return;   // 지난 기수 참가 기록이 있는 분만
     // 이번 기수에 이미 신청한 분 (지난 기수를 명단으로만 참가했어도 연락처로 찾음)
-    if (rs.some(r => r.cohort === cohort && ['pending', 'confirmed', 'waiting'].includes(r.status))) return out.applied++;
+    if (rs.some(r => r.cohort === cohort && ACTIVE.includes(r.status))) return out.applied++;
     if (opt[d]) return out.optout++;
     const lastApp = rs.slice().sort((a, b) => (b.at || 0) - (a.at || 0))[0];
     const at = lastApp ? +((lastApp.consents || {}).marketing) || 0 : 0;
@@ -2672,8 +2727,29 @@ document.addEventListener('click', async e => {
   else if (act === 'table') openTable();
   else if (act === 'confirm') {
     const r = row(v);
-    if (!(await confirmBox(`${r.payName} 입금확인`, `${r.name}님을 확정으로 바꿀까요? ${autoOn('confirm') ? '확정 문자는 1분 안에 자동으로 나가요.' : '확정 문자 창이 이어서 열려요.'}`, '입금확인'))) return;
-    if (await changeStatus(v, 'confirmed')) { A.tab = 'confirmed'; render(); if (autoOn('confirm')) toast('확정했어요 · 확정 문자는 1분 안에 자동 발송돼요'); else openMsg(v, 'confirm'); }
+    if (!(await confirmBox(`${r.payName} 입금확인`, `${r.name}님을 확정대기로 바꿔요.\n타임에 형제·자매가 각각 ${minOf()}명 이상 입금하면 입금 순서대로 확정할 수 있어요.`, '입금확인'))) return;
+    const list = apps().map(x => ({ ...x })); const me = list.find(x => x.id === v);
+    me.status = 'paid'; me.paidAt = Date.now(); if (!me.paidAmt) me.paidAmt = feeOf(me); me.log = addLog(me, '입금확인');
+    const ids = await askFix(me.slotId, list);   // 이번 입금으로 성사되면 바로 확정할지 물어봄 (한 번에 저장 → 확정대기 문자가 먼저 나가지 않음)
+    try { await saveList(list, [v, ...ids]); } catch (e) { console.error(e); return toast('저장하지 못했어요: ' + e.message); }
+    A.tab = ids.includes(v) ? 'confirmed' : 'paid'; render();
+    afterFix(ids);
+    if (!ids.includes(v)) {
+      const wt = waitText(slotPlan(me.slotId, list));
+      if (autoOn('paid')) toast(`확정대기로 두었어요 · ${wt} · 안내 문자는 1분 안에 자동 발송돼요`);
+      else if (!ids.length) { toast(`확정대기 · ${wt}`); openMsg(v, 'paid'); }
+      else toast(`${me.name}님은 확정대기 · 안내는 카드의 문자·카톡 버튼으로 보내주세요`);
+    }
+  }
+  else if (act === 'fixslot') {
+    const list = apps().map(x => ({ ...x })); const ids = await askFix(v, list); if (!ids.length) return;
+    try { await saveList(list, ids); } catch (e) { console.error(e); return toast('저장하지 못했어요: ' + e.message); }
+    A.tab = 'confirmed'; render(); afterFix(ids);
+  }
+  else if (act === 'fix1') {
+    const r = row(v); const p = slotPlan(r.slotId);
+    if (!(await confirmBox(`${r.name}님 바로 확정`, `지금 이 타임은 ${waitText(p)} 상태예요.\n성비·최소 인원과 상관없이 ${r.name}님만 확정할까요? (운영진 판단으로 예외 처리할 때만 쓰세요)`, '바로 확정'))) return;
+    if (await changeStatus(v, 'confirmed')) { A.tab = 'confirmed'; render(); afterFix([v]); }
   }
   else if (act === 'promote') {
     const r = row(v);
@@ -2682,7 +2758,7 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'cancel') { const r = row(v); if (await confirmBox(`${r.name}님 취소 처리`, '자리가 비면 같은 타임 대기 1번이 자동으로 입금대기가 돼요.', '취소 처리', true)) changeStatus(v, 'cancelled'); }
   else if (act === 'refund') openRefund(v);
-  else if (act === 'restore') { if (await confirmBox('입금대기로 되돌릴까요?', '입금 기한이 새로 잡혀요.', '되돌리기')) changeStatus(v, 'pending'); }
+  else if (act === 'restore') { if (await confirmBox('입금대기로 되돌릴까요?', row(v) && row(v).status === 'paid' ? '입금확인을 취소하고 입금 기한을 새로 잡아요. 잘못 누른 경우에만 쓰세요.' : '입금 기한이 새로 잡혀요.', '되돌리기')) changeStatus(v, 'pending'); }
   else if (act === 'memo') { const ta = document.querySelector(`[data-memo="${v}"]`); if (await changeStatus(v, '', ta ? ta.value : '')) toast('메모를 저장했어요'); }
   else if (act === 'roster') { const { n, text } = rosterText(v); if (!n) return toast('이 타임에 확정자가 아직 없어요'); copyText(text, `확정 ${n}명 복사 · 매칭앱 참가자 탭 › 붙여넣기에 넣어주세요`); }
   else if (act === 'creq') {
