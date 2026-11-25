@@ -23,7 +23,7 @@ const ION_DEFAULTS = {
     promoteHours: 12,
     contact: '인스타그램 DM',
     openchat: 'https://open.kakao.com/o/s0Ro8WUi',
-    refund: '· 행사 7일 전(전주 토요일)까지 취소: 전액 환불\n· 행사 6~3일 전 취소: 50% 환불 (20,000원)\n· 행사 2일 전~당일 취소 및 불참: 환불이 어렵습니다 (대관비·음료·운영 인건비를 참가 인원 기준으로 미리 지출하고, 성비를 맞춘 빈자리를 채우기 어렵기 때문이에요)\n· 같은 성별의 대신 참석할 분이 있으면 행사 2일 전까지 운영진 확인 후 양도 가능\n· 다른 기수로 변경: 행사 3일 전까지 1회 가능\n· 운영진 사정 또는 성별 최소 인원 미달로 행사가 취소되면 전액 환불\n· 환불은 요청 확인 후 3영업일 안에 신청자 명의 계좌로 보내드려요'
+    refund: '· 입금 후 참가 확정 전(확정대기) 취소: 시점과 관계없이 전액 환불\n· 행사 7일 전(전주 토요일)까지 취소: 전액 환불\n· 행사 6~3일 전 취소: 50% 환불 (20,000원)\n· 행사 2일 전~당일 취소 및 불참: 환불이 어렵습니다 (대관비·음료·운영 인건비를 참가 인원 기준으로 미리 지출하고, 성비를 맞춘 빈자리를 채우기 어렵기 때문이에요)\n· 같은 성별의 대신 참석할 분이 있으면 행사 2일 전까지 운영진 확인 후 양도 가능\n· 다른 기수로 변경: 행사 3일 전까지 1회 가능\n· 운영진 사정 또는 성별 최소 인원 미달로 행사가 취소되면 전액 환불\n· 환불은 요청 확인 후 3영업일 안에 신청자 명의 계좌로 보내드려요'
   },
   slots: {
     's3a': { cohort: '3기', date: '11/14(토)', time: '15:00~17:00', place: '대전 괴정동 카페', cap: { M: 6, F: 6 }, public: true, order: 1 },
@@ -32,8 +32,9 @@ const ION_DEFAULTS = {
     's4b': { cohort: '4기', date: '11/28(토)', time: '17:00~19:00', place: '대전 학하동 카페', cap: { M: 6, F: 6 }, public: true, order: 4 }
   }
 };
-const ION_STATUS = { pending: '입금대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
-const ION_HOLDING = ['pending', 'confirmed'];
+const ION_STATUS = { pending: '입금대기', paid: '확정대기', confirmed: '확정', waiting: '대기', cancelled: '취소', refunded: '환불' };
+// paid(확정대기) = 입금은 확인됐지만 타임 최소 인원(기본 4:4)·성비가 맞을 때까지 확정을 미룬 상태 · 자리는 차지함
+const ION_HOLDING = ['pending', 'paid', 'confirmed'];
 /* 타임별 대상 연령 (운영진이 설정에서 년생으로 지정 · 비우면 제한 없음) */
 function ionAgeRange(s) { let a = Number(s && s.ageFrom) || 0, b = Number(s && s.ageTo) || 0; if (a && b && a > b) [a, b] = [b, a]; return { a, b }; }
 function ionAgeText(s) { const { a, b } = ionAgeRange(s); const yy = y => String(y).slice(2); return a && b ? `${yy(a)}~${yy(b)}년생` : a ? `${yy(a)}년생부터` : b ? `${yy(b)}년생까지` : ''; }

@@ -850,7 +850,7 @@ function cancelledInRoster(s) {
   if (!A.applyCache || !s.pub || !s.pub.applySlot) return [];
   const allApps = Object.values(A.applyCache.apps || {});
   const gone = new Set(allApps.filter(r => r.slotId === s.pub.applySlot && ['cancelled', 'refunded'].includes(r.status)).map(r => digits(r.phone)));
-  allApps.filter(r => r.cohort === (A.applyCache.slots[s.pub.applySlot] || {}).cohort && r.slotId !== s.pub.applySlot && ['pending', 'confirmed', 'waiting'].includes(r.status)).forEach(r => gone.add(digits(r.phone)));   // 다른 타임으로 옮긴 분
+  allApps.filter(r => r.cohort === (A.applyCache.slots[s.pub.applySlot] || {}).cohort && r.slotId !== s.pub.applySlot && ['pending', 'paid', 'confirmed', 'waiting'].includes(r.status)).forEach(r => gone.add(digits(r.phone)));   // 다른 타임으로 옮긴 분
   const live = new Set(applyConfirmed(s.pub.applySlot).map(r => digits(r.phone)));
   return rosterList(s).filter(p => gone.has(digits(p.phone)) && !live.has(digits(p.phone)));
 }
@@ -883,7 +883,7 @@ function importBox(s) {
 const normChurch = n => String(n || '').replace(/\(.*?\)/g, '').replace(/[\s·.,\-_]/g, '').replace(/교회$/, '').replace(/^(대한예수교|기독교|예수교)/, '').toLowerCase();
 function rosterConflicts(s) {
   const people = rosterList(s); if (people.length < 2) return [];
-  const appsByPhone = {}; Object.values((A.applyCache && A.applyCache.apps) || {}).filter(r => ['pending', 'confirmed', 'waiting'].includes(r.status)).forEach(r => { appsByPhone[digits(r.phone)] = r; });
+  const appsByPhone = {}; Object.values((A.applyCache && A.applyCache.apps) || {}).filter(r => ['pending', 'paid', 'confirmed', 'waiting'].includes(r.status)).forEach(r => { appsByPhone[digits(r.phone)] = r; });
   const seen = {}; Object.entries(A.sessions || {}).forEach(([sid, x]) => { if (sid === A.sid || !x || !x.roster) return; const lab = `${(x.pub && x.pub.cohort) || ''} ${(x.pub && x.pub.slot) || ''}`.trim();
     Object.values(x.roster).forEach(p => { const d = digits(p && p.phone); if (d) (seen[d] = seen[d] || []).push({ sid, lab }); }); });
   const out = [];
