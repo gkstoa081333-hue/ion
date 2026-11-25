@@ -187,7 +187,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261125a"></script>
-<script src="ion-sms.js?v=20261125b"></script>
+<script src="ion-sms.js?v=20261125c"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -425,6 +425,8 @@ async function maintain(force) {
   if (!force && Date.now() - A.lastMaint < 20000) return;
   A.lastMaint = Date.now();
   const { up, promoted, expired } = plan(apps().map(r => ({ ...r })));
+  // 환불 규정에 '확정대기 전액 환불' 문구가 없으면 맨 앞에 한 번 추가 (2026-11-25 정책)
+  if (conf().refund && !String(conf().refund).includes('확정대기')) up['config/refund'] = '· 입금 후 참가 확정 전(확정대기) 취소: 시점과 관계없이 전액 환불\n' + conf().refund;
   // 신청서의 날짜·시간·장소를 현재 타임 설정과 맞춤 (설정에서 장소를 바꾼 경우)
   apps().forEach(r => { const sl = slots().find(x => x.id === r.slotId); if (!sl) return; ['date', 'time', 'place'].forEach(k => { if (sl[k] && (r[k] || '') !== sl[k]) up[`apps/${r.id}/${k}`] = sl[k]; }); });
   if (!Object.keys(up).length) return;
@@ -1040,6 +1042,7 @@ function openRefund(id) {
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal" role="dialog" aria-modal="true" aria-label="환불 처리">
     <span class="round" style="font-size:19px">${esc(r.name)}님 환불 처리</span>
     <span class="small">계좌이체로 환불한 뒤 금액을 골라주세요. 정산 기록에 반영되고, 대기자가 있으면 자동 배정돼요.</span>
+    ${r.status === 'paid' ? '<span class="small" style="color:var(--green)"><b>확정대기(확정 전) 취소라 전액 환불 대상이에요.</b> 시점과 관계없이 전액을 돌려드려요.</span>' : ''}
     <div class="chips" style="flex-wrap:wrap">${[[fee, `전액 ${won(fee)}원`], [Math.round(fee / 2), `50% ${won(Math.round(fee / 2))}원`], [0, '환불 없음(0원)']].map(([v, l], i) => `<button class="chipbtn ${i === 0 ? 'on' : ''}" data-ramt="${v}">${l}</button>`).join('')}</div>
     <div class="field"><label for="rf-amt">환불 금액(원)</label><input id="rf-amt" class="input" type="number" inputmode="numeric" min="0" value="${fee}"></div>
     <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" data-close="1">취소</button><button class="btn danger" style="flex:1" id="rf-ok">환불 처리</button></div></div></div>`;
@@ -1763,10 +1766,10 @@ function detail(r) {
     ['신앙생활', r.faithYears], ['출석', r.attend], ['교회 섬김', r.serve], ['나에게 신앙이란', r.faithNote], ['알게 된 경로', r.source], ['광고 수신', r.newsAgree], ['신청일시', dt(r.at, true)], ['취소요청', r.cancelReqAt ? dt(r.cancelReqAt, true) : ''], ['상세 정리', r.detailClearedAt ? dt(r.detailClearedAt, true) : ''], ['요청사항', r.note]]
     .filter(x => x[1] !== '' && x[1] != null);
   const more = [];
-  if (ACTIVE.includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, `<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`);
+  if (ACTIVE.includes(st)) more.push(`<button class="mini" data-act="creq" data-v="${r.id}">${r.cancelReqAt ? '취소요청 해제' : '취소요청 접수'}</button>`, ...(st === 'paid' ? [] : [`<button class="mini del" data-act="cancel" data-v="${r.id}">취소 처리</button>`]));
   if (ACTIVE.includes(st) && discOf() > 0) more.push(r.discount > 0 ? `<button class="mini" data-act="disc-off" data-v="${r.id}">재참여 할인 해제</button>` : `<button class="mini" data-act="disc-on" data-v="${r.id}">재참여 할인 적용 (-${won(discOf())}원)</button>`);
   if (st === 'confirmed') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">확정 취소(입금대기로)</button>`);
-  if (st === 'paid') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">입금확인 취소(입금대기로)</button>`);
+  if (st === 'paid') more.push(`<button class="mini del" data-act="refund" data-v="${r.id}">전액 환불 처리</button>`, `<button class="mini" data-act="restore" data-v="${r.id}">입금확인 취소(입금대기로)</button>`);
   if (['cancelled', 'refunded'].includes(st)) more.push(`<button class="mini" data-act="restore" data-v="${r.id}">입금대기로 되돌리기</button>`, `<button class="mini del" data-act="purge" data-v="${r.id}">영구삭제</button>`);
   return `<div style="border-top:1px solid var(--line-3);margin-top:6px;padding-top:6px">
     ${kv.map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}
@@ -2756,6 +2759,7 @@ document.addEventListener('click', async e => {
     if (!(await confirmBox(`${r.name}님 자리 배정`, '대기에서 입금대기로 올리고 입금자명과 기한을 새로 만들어요. 정원을 넘길 수 있으니 현황을 확인해 주세요.', '자리 배정'))) return;
     if (await changeStatus(v, 'pending')) { A.tab = 'pending'; render(); if (autoOn('promote')) toast('배정했어요 · 입금 안내는 1분 안에 자동 발송돼요'); else openMsg(v, 'promote'); }
   }
+  else if (act === 'cancel' && row(v) && row(v).status === 'paid') { toast('확정대기는 입금된 상태라 전액 환불로 처리해요'); openRefund(v); }
   else if (act === 'cancel') { const r = row(v); if (await confirmBox(`${r.name}님 취소 처리`, '자리가 비면 같은 타임 대기 1번이 자동으로 입금대기가 돼요.', '취소 처리', true)) changeStatus(v, 'cancelled'); }
   else if (act === 'refund') openRefund(v);
   else if (act === 'restore') { if (await confirmBox('입금대기로 되돌릴까요?', row(v) && row(v).status === 'paid' ? '입금확인을 취소하고 입금 기한을 새로 잡아요. 잘못 누른 경우에만 쓰세요.' : '입금 기한이 새로 잡혀요.', '되돌리기')) changeStatus(v, 'pending'); }

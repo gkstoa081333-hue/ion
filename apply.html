@@ -392,7 +392,7 @@ const FAQ = [
   ['취소하면 환불되나요?', null]
 ];
 function faqBlock() {
-  const refund = S.cfg.refund || '7일 전까지 전액, 6~3일 전은 50% 환불되고, 2일 전부터 당일까지는 대관비·음료 사전 지출로 환불이 어려워요.';
+  const refund = S.cfg.refund || '확정 전(확정대기)에는 언제든 전액, 확정 후에는 7일 전까지 전액, 6~3일 전은 50% 환불되고, 2일 전부터 당일까지는 대관비·음료 사전 지출로 환불이 어려워요.';
   return `<div class="notice" style="margin-top:14px;flex-direction:column;gap:0;padding:6px 14px">
     <span class="round" style="font-size:14px;padding:8px 0 4px;color:var(--gold)">자주 묻는 질문</span>
     ${FAQ.map(([q, a], i) => `<details style="padding:9px 0;${i ? 'border-top:1px dashed rgba(176,138,62,.35);' : ''}">
@@ -567,7 +567,7 @@ function refundGuide(r) {
   const ev = eventDay(r.date, r.savedAt || Date.now()); if (!ev) return '운영진이 환불 규정에 따라 금액을 안내해 드려요.';
   const t = new Date(); t.setHours(0, 0, 0, 0);
   const days = Math.round((ev - t) / 864e5);
-  const unpaid = '아직 입금 전이라면 환불 없이 취소만 처리돼요.';
+  const unpaid = '아직 입금 전이라면 환불 없이 취소만 처리돼요. 입금했지만 참가 확정 문자를 받기 전(확정대기)이라면 시점과 관계없이 전액 환불돼요.';
   if (days < 0) return '이미 지난 행사예요. 문의 내용을 적어 보내 주세요.';
   if (days >= 7) return `행사까지 ${days}일 남았어요. 입금하셨다면 전액 환불 대상이에요. ${unpaid}`;
   if (days >= 3) return `행사까지 ${days}일 남았어요. 입금하셨다면 50%(20,000원) 환불 대상이에요. ${unpaid}`;

@@ -44,7 +44,8 @@ const T = {
 현재 상태: 확정 대기
 
 타임별 최소 인원(${x.min}대${x.min})이 모이면 바로 참가 확정 문자를 보내드릴게요.
-인원이 모이지 않아 진행이 어려우면 다른 타임 이동 또는 참가비 전액 환불로 안내드려요.` },
+인원이 모이지 않아 진행이 어려우면 다른 타임 이동 또는 참가비 전액 환불로 안내드려요.
+확정 전에 취소하셔도 참가비는 전액 환불됩니다.` },
   confirm: { label: '참가 확정', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${r.paidAt && (+r.confirmedAt || Date.now()) - r.paidAt > 10 * 60e3 ? '기다려 주셔서 감사해요! 인원이 모여 참가가 확정되었어요' : '입금 확인되어 참가가 확정되었어요'} 🎉
 
 일정: ${x.when}
@@ -127,5 +128,5 @@ ${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
   ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261125b' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261125c' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
