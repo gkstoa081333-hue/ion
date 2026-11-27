@@ -91,6 +91,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .chip.warn{background:#FCEFC7;color:#7A5300}
 .conflict{border-left:0;background:#FFF8E6;border:1px solid #EBCB7A;border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.55;color:#5A4300}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.chips.cw{flex-wrap:wrap;overflow:visible}
 .chipbtn{min-height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-2);background:var(--paper);font-family:var(--round);font-size:14px;color:var(--ink-2);white-space:nowrap}
 .chipbtn.on{background:var(--green);border-color:var(--green);color:var(--cream)}
 .tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand)}
@@ -125,8 +126,8 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 .atbl td{padding:8px;border-bottom:1px solid var(--line-3);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .atbl tr[data-row]{cursor:pointer}.atbl tr[data-row]:hover td{background:var(--sand)}
 .atbl td.nm{font-family:var(--round);position:sticky;left:0;background:var(--paper)}
-.nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
-.nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:14px;color:var(--ink-2);text-decoration:none;cursor:pointer}
+.nav{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:5px;border-radius:14px;background:var(--sand);margin:6px 0 12px}
+.nav a,.nav button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;border-radius:10px;background:transparent;font-family:var(--round);font-size:13.5px;white-space:nowrap;color:var(--ink-2);text-decoration:none;cursor:pointer}
 .nav .on{background:var(--green);color:var(--cream)}
 /* 게임 */
 .gdeck{position:relative;width:100%;aspect-ratio:5/3.3;max-height:440px;perspective:1400px}
@@ -198,7 +199,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261125a';
+const BUILD = '20261127a';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -281,7 +282,7 @@ function start() {
     if (st.admin) {
       if (!A.unsubR) A.unsubR = IonStore.watch('reviews', v => { A.reviews = v || {}; if (A.view === 'reviews' || A.view === 'rreport') render(); });
       if (!A.unsubS) A.unsubS = IonStore.watch('sessions', v => { A.sessRaw = v || {}; A.sess = {}; A.sessT = {}; Object.values(v || {}).forEach(x => { if (x && x.pub && x.pub.cohort) { const c = x.pub.cohort; const d = x.pub.date || ''; if (x.pub.slot) { (A.sessT[c] = A.sessT[c] || []).includes(x.pub.slot) || A.sessT[c].push(x.pub.slot); } if (!A.sess[c] || (d && d < A.sess[c])) A.sess[c] = d; } }); if (A.phase === 'main') render(); }, () => {});
-      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; ION_DEAL_COUNTS = A.data.dealCounts || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; if (h === 'game') A.view = 'game'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
+      if (!A.unsub) A.unsub = IonStore.watch('apply', v => { A.data = v || {}; ION_DEAL_COUNTS = A.data.dealCounts || {}; A.phase = v && v.config ? 'main' : 'setup'; fixCohort(); if (A.phase === 'main' && START_HASH) { const h = START_HASH; START_HASH = ''; if (h === 'settings') { openSettings(); maintain(); return; } if (h === 'reviews') A.view = 'reviews'; if (h === 'ledger') A.view = 'ledger'; if (h === 'game') A.view = 'game'; if (h === 'sms') A.view = 'sms'; } render(); maintain(); }, e => { A.phase = 'login'; A.authErr = '명단을 불러오지 못했어요. 규칙 게시 여부를 확인해 주세요.'; render(); });
     } else {
       if (A.unsub) { A.unsub(); A.unsub = null; }
       if (A.unsubR) { A.unsubR(); A.unsubR = null; }
@@ -700,7 +701,7 @@ function render() {
   const v = A.phase === 'loading' ? '<div class="spin" aria-label="불러오는 중"></div>'
     : A.phase === 'login' ? viewLogin()
     : A.phase === 'setup' ? viewSetup()
-    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : A.view === 'rreport' ? viewRReport() : A.view === 'dash' ? viewDash() : A.view === 'ledger' ? viewLedger() : A.view === 'game' ? viewGame() : A.view === 'promo' ? viewPromo() : viewMain();
+    : A.view === 'settings' ? viewSettings() : A.view === 'reviews' ? viewReviews() : A.view === 'rform' ? viewRForm() : A.view === 'rreport' ? viewRReport() : A.view === 'dash' ? viewDash() : A.view === 'ledger' ? viewLedger() : A.view === 'game' ? viewGame() : A.view === 'promo' ? viewPromo() : A.view === 'sms' ? viewSms() : viewMain();
   const ae = document.activeElement; const q = ae && ae.dataset ? ae.dataset.k : null; const aid = ae && ae.id && ae.tagName !== 'BUTTON' ? ae.id : '';
   const pos = (q || aid) && ae ? ae.selectionStart : 0;
   // 입력 중인 값 지키기 (id가 있는 입력칸)
@@ -710,6 +711,7 @@ function render() {
   if (q) { const el = document.querySelector(`[data-k="${q}"]`); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
   else if (aid) { const el = document.getElementById(aid); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
   if (A.view === 'promo' && A.phase === 'main') setTimeout(drawPromo, 0);
+  if (A.view === 'sms' && A.phase === 'main' && A.ms && A.ms.tpl === 'short') sxWire($app, render, render);
 }
 
 function viewLogin() {
@@ -784,7 +786,7 @@ function appHead(active) {
     : `<button type="button" data-act="nav" data-v="${k}" class="${active === k ? 'on' : ''}">${label}</button>`;
   return `<div class="top"><div class="row"><span class="brand">ION</span><span class="pill on-cream">운영</span></div>
       <button class="icon-btn" data-act="logout" aria-label="로그아웃" style="margin-right:-8px">${ICON.out}</button></div>
-    <nav class="nav" aria-label="운영 메뉴">${item('apply', '신청')}${item('match', '매칭')}${item('reviews', '후기')}${item('ledger', '정산')}${item('game', '게임')}${item('settings', '설정')}</nav>`;
+    <nav class="nav" aria-label="운영 메뉴">${item('apply', '신청')}${item('match', '매칭')}${item('reviews', '후기')}${item('ledger', '정산')}${item('game', '게임')}${item('sms', '문자')}${item('settings', '설정')}</nav>`;
 }
 function goView(v) {
   if (v === 'settings') return openSettings();
@@ -2516,6 +2518,216 @@ async function logSend(id, what) {
   try { await IonStore.update('apply', { [`apps/${id}/log`]: addLog(r, what) }); } catch (e) { toast('발송 기록 저장 실패'); }
 }
 
+/* ---------- 문자 탭: 기수·타임·상태·성별로 골라서 한 번에 보내기 ----------
+   A.ms = { cohorts:[기수], slot:'', st:[상태], g:'', q:'', off:{id:true}, tpl:'custom'|TPL키|'saved:id', text, idx, name }
+   · 같은 전화번호는 한 번만 (가장 최근 신청 기준)
+   · 솔라피 일괄 발송은 apply/smsQueue (자동 문자 엔진이 1분마다 처리) — kind 'msgtab'
+   · 저장 문구: apply/smsTpl/{id} = { label, text, at } */
+const MS_ST = [['pending', '입금대기'], ['paid', '확정대기'], ['confirmed', '확정'], ['waiting', '대기'], ['cancelled', '취소·환불']];
+const MS_PH = [['{이름}', '이름'], ['{기수}', '기수'], ['{날짜}', '날짜'], ['{타임}', '시간(15:00~17:00)'], ['{시}', '시(15시)'], ['{장소}', '장소'], ['{신청번호}', '신청번호'], ['{참가비}', '참가비'], ['{오픈채팅}', '오픈채팅 링크']];
+const MS_DEFAULT = '[이온 크리스천 소개팅] {이름}님, 안녕하세요 🙂\n\n\n\n감사합니다. 🌿';
+const MS_AUTO_KINDS = ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait'];   // 자동 문자 엔진도 보내는 종류 → 보냄 표시해서 겹치지 않게
+function msInit() {
+  if (A.ms) return A.ms;
+  A.ms = { cohorts: A.cohort ? [A.cohort] : [], slot: '', st: ['paid', 'confirmed'], g: '', q: '', off: {}, tpl: 'custom', text: MS_DEFAULT, idx: 0, name: '' };
+  return A.ms;
+}
+function msPool() {   // 필터를 통과한 사람 (중복 번호 제거)
+  const s = msInit(), q = s.q.trim().toLowerCase();
+  const st = s.st.includes('cancelled') ? [...s.st, 'refunded'] : s.st;
+  const rows = apps().filter(r => s.cohorts.includes(r.cohort) && st.includes(r.status) && (!s.g || r.gender === s.g)
+    && (!s.slot || s.cohorts.length !== 1 || r.slotId === s.slot)
+    && (!q || [r.name, r.payName, r.id, r.phone, digits(r.phone)].some(v => String(v || '').toLowerCase().includes(q))));
+  const by = {}; rows.forEach(r => { const d = digits(r.phone); if (!d) return; if (!by[d] || (r.at || 0) > (by[d].at || 0)) by[d] = r; });
+  const out = Object.values(by);
+  const dup = rows.filter(r => digits(r.phone)).length - out.length;
+  out.sort((a, b) => String(a.cohort).localeCompare(String(b.cohort), 'ko', { numeric: true }) || String(a.time).localeCompare(String(b.time)) || (a.gender === b.gender ? 0 : a.gender === 'M' ? -1 : 1) || (a.at || 0) - (b.at || 0));
+  return { list: out, dup };
+}
+function msSaved() { return Object.entries((A.data && A.data.smsTpl) || {}).map(([id, x]) => ({ id, ...x })).sort((a, b) => (b.at || 0) - (a.at || 0)); }
+function msIsTpl(k) { return k && k !== 'custom' && !k.startsWith('saved:') && TPL[k]; }
+function msFill(text, r) {
+  const x = ctx(r);
+  const map = { '{이름}': r.name, '{기수}': r.cohort, '{날짜}': x.date, '{타임}': x.time, '{시}': x.hour, '{장소}': x.place, '{신청번호}': r.id, '{참가비}': x.fee + '원', '{오픈채팅}': x.chat };
+  return Object.entries(map).reduce((t, [k, v]) => t.split(k).join(v == null ? '' : String(v)), text);
+}
+// 보낼 대상 + 사람별 문구
+function msTargets() {
+  const s = msInit(), { list } = msPool();
+  const sel = list.filter(r => !s.off[r.id]);
+  const k = s.tpl, tp = msIsTpl(k);
+  const fit = tp ? sel.filter(r => TPL[k].for.includes(r.status)) : sel;
+  const items = fit.map(r => {
+    if (tp && k === 'short') sxInit(r);
+    return { r, text: tp ? TPL[k].make(r, ctx(r)) : msFill(s.text, r), why: tp ? sxMissing(r, k) : '' };
+  });
+  return { all: list, sel, items, skipped: sel.length - fit.length, label: tp ? TPL[k].label : k.startsWith('saved:') ? ((msSaved().find(x => 'saved:' + x.id === k) || {}).label || '저장 문구') : '직접 쓰기' };
+}
+function msEngine() {
+  const a = (A.data && A.data.autoSms) || {}, eng = (A.data && A.data.smsEngine) || {};
+  const q = Object.values((A.data && A.data.smsQueue) || {}).filter(x => x && x.kind === 'msgtab');
+  const st = { q: q.filter(x => !x.doneAt).length, fail: q.filter(x => x.gaveUp).length, test: a.mode === 'test', ok: false, why: '' };
+  if (DEMO) st.why = '데모 모드에서는 솔라피 발송을 쓸 수 없어요.';
+  else if (!eng.lastRun || Date.now() - eng.lastRun > 5 * 60e3) st.why = '자동 문자 엔진이 연결돼 있지 않아요 (설정 › 📱 자동 문자 확인).';
+  else if (String(eng.version || '') < ENGINE_QUEUE_VER) st.why = '구글 Apps Script의 자동 문자 엔진 코드를 새 버전으로 한 번 바꿔야 해요 (automation 폴더 안내).';
+  else if ((a.mode || 'off') === 'off') st.why = '자동 문자가 꺼져 있어요. 설정 › 📱 자동 문자에서 켜주세요.';
+  else st.ok = true;
+  return st;
+}
+function viewSms() {
+  const s = msInit(); const g = cohortGroups(); const T = msTargets(); const tp = msIsTpl(s.tpl);
+  const chip = (on, attrs, label) => `<button class="chipbtn ${on ? 'on' : ''}" ${attrs} aria-pressed="${on}">${label}</button>`;
+  const oneC = s.cohorts.length === 1 ? s.cohorts[0] : '';
+  const sl = oneC ? slots().filter(x => x.cohort === oneC) : [];
+  const cnt = c => apps().filter(r => r.cohort === c && ACTIVE.includes(r.status)).length;
+  const pastShown = A.msPast ? g.past : g.past.filter(c => s.cohorts.includes(c));
+  const i = Math.min(s.idx, Math.max(0, T.items.length - 1)); const cur = T.items[i];
+  const why = T.items.map(x => x.why).find(Boolean) || '';
+  const eng = msEngine(); const h = kstHour(); const ad = cur && /^\s*\(광고\)/.test(cur.text);
+  const hold = ad ? (h >= 21 || h < 8) : (h >= 22 || h < 8);
+  const logs = Object.entries((A.data && A.data.smsLog) || {}).map(([id, x]) => ({ id, ...x })).filter(x => x.kind === 'msgtab').sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 10);
+  const tplKeys = Object.keys(TPL).filter(k => k !== 'free');
+  return `<div class="wrap">
+    ${appHead('sms')}
+    <div class="card stack" style="gap:12px">
+      <span class="round" style="font-size:17px">① 받는 사람 고르기</span>
+      <div class="field"><span class="lab">기수 (여러 개 선택 가능)</span><div class="chips cw">
+        ${g.cur.map(c => chip(s.cohorts.includes(c), `data-act="ms-c" data-v="${esc(c)}"`, `${esc(c)} <span class="small">${cnt(c)}</span>`)).join('')}
+        ${pastShown.map(c => chip(s.cohorts.includes(c), `data-act="ms-c" data-v="${esc(c)}"`, `${esc(c)} <span class="small">종료</span>`)).join('')}
+        ${g.past.length ? `<button class="mini" data-act="ms-past">${A.msPast ? '지난 기수 접기' : `지난 기수 ${g.past.length}개 보기`}</button>` : ''}</div></div>
+      ${sl.length > 1 ? `<div class="field"><span class="lab">타임</span><div class="chips cw">${chip(!s.slot, 'data-act="ms-slot" data-v=""', '전체')}${sl.map(x => chip(s.slot === x.id, `data-act="ms-slot" data-v="${esc(x.id)}"`, `${esc(x.date)} ${esc(String(x.time || '').split('~')[0])}`)).join('')}</div></div>` : ''}
+      <div class="field"><span class="lab">상태</span><div class="chips cw">${MS_ST.map(([k, l]) => chip(s.st.includes(k), `data-act="ms-st" data-v="${k}"`, l)).join('')}</div></div>
+      <div class="field"><span class="lab">성별</span><div class="chips cw">${[['', '전체'], ['M', '형제'], ['F', '자매']].map(([k, l]) => chip(s.g === k, `data-act="ms-g" data-v="${k}"`, l)).join('')}</div></div>
+      <input class="input" id="ms-q" data-ms="q" value="${esc(s.q)}" placeholder="이름 · 전화번호로 찾기" aria-label="받는 사람 검색" inputmode="search">
+    </div>
+
+    <div class="card stack" style="gap:8px;margin-top:12px">
+      <div class="between"><span class="round" style="font-size:17px">② 받는 사람 <b>${T.sel.length}</b> / ${T.all.length}명</span>
+        <span class="row" style="gap:6px"><button class="mini" data-act="ms-all" data-v="1">모두 선택</button><button class="mini" data-act="ms-all" data-v="0">모두 해제</button></span></div>
+      ${msPool().dup ? `<span class="small">같은 번호로 여러 번 신청한 ${msPool().dup}건은 한 번만 보내요 (최근 신청 기준)</span>` : ''}
+      ${T.all.length ? `<div class="stack" style="gap:2px;max-height:320px;overflow:auto">${T.all.map(r => `<label class="row" style="gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);flex-wrap:nowrap;cursor:pointer">
+          <input type="checkbox" data-ms="pick" data-v="${esc(r.id)}" ${s.off[r.id] ? '' : 'checked'} style="width:20px;height:20px;flex-shrink:0">
+          <span class="stack" style="gap:1px;flex-grow:1;min-width:0"><span class="round" style="font-size:15px">${esc(r.name)} <span class="small">${G[r.gender] || ''} · ${esc(r.cohort)} ${esc(String(r.time || '').split('~')[0])} · ${ION_STATUS[r.status]}</span></span>
+          <span class="small">${esc(r.phone)}</span></span></label>`).join('')}</div>` : '<div class="card empty">조건에 맞는 분이 없어요. 기수·상태를 골라주세요</div>'}
+    </div>
+
+    <div class="card stack" style="gap:10px;margin-top:12px">
+      <span class="round" style="font-size:17px">③ 문구 고르기</span>
+      <div class="field"><span class="lab">직접 쓰기 · 저장한 문구</span><div class="chips cw">${chip(s.tpl === 'custom', 'data-act="ms-tpl" data-v="custom"', '✏️ 직접 쓰기')}${msSaved().map(x => chip(s.tpl === 'saved:' + x.id, `data-act="ms-tpl" data-v="saved:${esc(x.id)}"`, '⭐ ' + esc(x.label))).join('')}</div></div>
+      <div class="field"><span class="lab">기본 안내 (사람마다 일정·금액 자동)</span><div class="chips cw">${tplKeys.map(k => chip(s.tpl === k, `data-act="ms-tpl" data-v="${k}"`, TPL[k].label)).join('')}</div></div>
+      ${tp ? `${T.skipped ? `<span class="small">'${esc(T.label)}'은 상태가 맞는 ${T.items.length}명에게만 보내요 (${T.skipped}명 제외)</span>` : ''}
+        ${s.tpl === 'short' ? (s.cohorts.length === 1 && cur ? sxPanel(cur.r, 'short') : '<span class="small" style="color:var(--danger)">인원미달 안내는 기수를 하나만 골라주세요</span>') : ''}
+        <button class="mini" data-act="ms-edit" ${cur ? '' : 'disabled'} style="align-self:flex-start">✏️ 이 문구를 바탕으로 직접 고치기</button>`
+      : `<textarea class="input" id="ms-text" data-ms="text" aria-label="보낼 문구" style="min-height:200px">${esc(s.text)}</textarea>
+        <div class="chips cw">${MS_PH.map(([k, l]) => `<button class="mini" data-act="ms-ph" data-v="${k}" title="${l}">${k}</button>`).join('')}</div>
+        <span class="small">버튼을 누르면 커서 자리에 들어가요. 보낼 때 사람마다 바뀌어요.</span>
+        <div class="row" style="flex-wrap:nowrap;gap:6px"><input class="input" id="ms-name" data-ms="name" style="flex-grow:1" value="${esc(s.name)}" placeholder="문구 이름 (예: 2:2 진행 동의 요청)" aria-label="저장할 문구 이름">
+          <button class="mini go" data-act="ms-save">⭐ 저장</button>${s.tpl.startsWith('saved:') ? '<button class="mini del" data-act="ms-del">삭제</button>' : ''}</div>`}
+      <div class="stack" style="gap:6px;margin-top:4px"><div class="between"><span class="lab">미리보기 ${cur ? `· ${esc(cur.r.name)}님` : ''}</span>
+        ${T.items.length > 1 ? `<span class="row" style="gap:6px"><button class="mini" data-act="ms-idx" data-v="-1" aria-label="이전 사람">◀</button><span class="small">${i + 1} / ${T.items.length}</span><button class="mini" data-act="ms-idx" data-v="1" aria-label="다음 사람">▶</button></span>` : ''}</div>
+        <div class="card" id="ms-prev" style="white-space:pre-wrap;font-size:14px;line-height:1.6;background:var(--sand)">${cur ? esc(cur.text) : '받는 사람을 먼저 골라주세요'}</div>
+        <span class="small" id="ms-len">${cur ? msLen(cur.text) : ''}</span></div>
+    </div>
+
+    <div class="card stack" style="gap:8px;margin-top:12px">
+      <span class="round" style="font-size:17px">④ 보내기 · ${T.items.length}명</span>
+      ${why ? `<span class="small" style="color:var(--danger)">${esc(why)}</span>` : ''}
+      <button class="btn gold" data-act="ms-send" ${T.items.length && !why && eng.ok ? '' : 'disabled'}>📤 ${T.items.length}명 솔라피로 한 번에 보내기</button>
+      <span class="small">${eng.ok ? (eng.test ? '자동 문자가 <b>시험 모드</b>라 실제로는 안 가고 기록만 남아요.' : hold ? `지금은 ${ad ? '광고 문자 금지 시간(밤 9시~아침 8시)' : '야간(밤 10시~아침 8시)'}이라 아침 8시에 나가요.` : '1~2분 안에 솔라피로 나가요. 받는 분끼리 번호는 안 보여요.') : esc(eng.why)}${eng.q ? `<br>보내는 중 ${eng.q}건` : ''}${eng.fail ? ` · <b style="color:var(--danger)">실패 ${eng.fail}건</b>` : ''}</span>
+      <button class="btn soft" data-act="ms-one" ${T.items.length && !why ? '' : 'disabled'}>${ICON.msg}한 명씩 문자 앱 · 카톡으로 보내기</button>
+      <button class="mini" data-act="ms-phones" ${T.items.length ? '' : 'disabled'} style="align-self:center">${ICON.copy}${T.items.length}명 번호만 모두 복사</button>
+    </div>
+
+    ${logs.length ? `<div class="card stack" style="gap:4px;margin-top:12px"><span class="round" style="font-size:16px">⑤ 최근 발송 기록 (문자 탭)</span>
+      ${logs.map(x => `<button class="between" data-act="asms-log" data-v="${esc(x.id)}" style="background:none;border:0;border-bottom:1px solid var(--line);padding:8px 2px;text-align:left;cursor:pointer;width:100%">
+        <span class="small"><b>${esc(x.name || '')}</b> · ${esc(x.label || '')}</span><span class="small">${dt(x.at)} · ${x.mode === 'test' ? '시험' : x.ok ? '<b style="color:var(--green)">성공</b>' : '<b style="color:var(--danger)">실패</b>'}</span></button>`).join('')}</div>` : ''}
+    <div class="spacer" style="min-height:24px"></div>
+  </div>`;
+}
+// 글자 수 (솔라피: 90바이트 넘으면 장문 LMS)
+function msLen(t) { let b = 0; for (const ch of String(t)) b += ch.charCodeAt(0) > 127 ? 2 : 1; return `${String(t).length}자 · ${b <= 90 ? '단문(SMS)' : b <= 2000 ? '장문(LMS)' : '<b style="color:var(--danger)">너무 길어요 (2000바이트 초과)</b>'}`; }
+function msLive() {   // 직접 쓰기 중: 화면 전체를 다시 그리지 않고 미리보기만 갱신
+  const T = msTargets(); const i = Math.min(A.ms.idx, Math.max(0, T.items.length - 1)); const cur = T.items[i];
+  const p = document.getElementById('ms-prev'), l = document.getElementById('ms-len');
+  if (p) p.textContent = cur ? cur.text : '받는 사람을 먼저 골라주세요'; if (l) l.innerHTML = cur ? msLen(cur.text) : '';
+}
+async function msAct(act, v) {
+  const s = msInit(); const tog = (arr, x) => arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x];
+  if (act === 'ms-c') { s.cohorts = tog(s.cohorts, v); s.slot = ''; s.idx = 0; A.sx = null; }
+  else if (act === 'ms-past') A.msPast = !A.msPast;
+  else if (act === 'ms-slot') { s.slot = v; s.idx = 0; }
+  else if (act === 'ms-st') { s.st = tog(s.st, v); s.idx = 0; }
+  else if (act === 'ms-g') { s.g = v; s.idx = 0; }
+  else if (act === 'ms-all') { msPool().list.forEach(r => { if (v === '1') delete s.off[r.id]; else s.off[r.id] = true; }); s.idx = 0; }
+  else if (act === 'ms-idx') { const n = msTargets().items.length; s.idx = n ? (s.idx + +v + n) % n : 0; }
+  else if (act === 'ms-tpl') {
+    s.tpl = v; s.idx = 0;
+    if (v.startsWith('saved:')) { const x = msSaved().find(y => 'saved:' + y.id === v); if (x) { s.text = x.text; s.name = x.label; } }
+    else if (v === 'custom') s.name = '';
+    if (v === 'short') A.sx = null;
+  }
+  else if (act === 'ms-edit') {
+    const T = msTargets(); const cur = T.items[Math.min(s.idx, T.items.length - 1)]; if (!cur) return;
+    s.text = cur.text.split(cur.r.name).join('{이름}'); s.tpl = 'custom'; s.name = '';
+    toast('이름은 {이름}으로 바꿨어요 · 일정·장소는 이 분 기준이니 확인해 주세요');
+  }
+  else if (act === 'ms-ph') {
+    const ta = document.getElementById('ms-text'); if (!ta) return;
+    const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+    s.text = ta.value.slice(0, a) + v + ta.value.slice(b); ta.value = s.text; ta.focus(); ta.setSelectionRange(a + v.length, a + v.length); msLive(); return;
+  }
+  else if (act === 'ms-save') {
+    const name = (s.name || '').trim(); if (!name) return toast('문구 이름을 먼저 적어주세요');
+    if (!s.text.trim()) return toast('문구가 비어 있어요');
+    const ex = msSaved().find(x => x.label === name); const id = ex ? ex.id : 't' + Date.now().toString(36);
+    if (ex && !(await confirmBox(`'${name}' 문구를 덮어쓸까요?`, '같은 이름의 저장 문구가 있어요.', '덮어쓰기'))) return;
+    try { await IonStore.update('apply', { [`smsTpl/${id}`]: { label: name, text: s.text, at: Date.now() } }); s.tpl = 'saved:' + id; toast('문구를 저장했어요'); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  }
+  else if (act === 'ms-del') {
+    const id = s.tpl.slice(6); const x = msSaved().find(y => y.id === id); if (!x) return;
+    if (!(await confirmBox(`'${x.label}' 문구를 지울까요?`, '저장한 문구만 지워지고, 이미 보낸 문자에는 영향이 없어요.', '지우기', true))) return;
+    try { await IonStore.update('apply', { [`smsTpl/${id}`]: null }); s.tpl = 'custom'; s.name = ''; toast('지웠어요'); } catch (e) { toast('지우지 못했어요'); }
+  }
+  else if (act === 'ms-phones') { const T = msTargets(); return copyText(T.items.map(x => x.r.phone).join('\n'), `${T.items.length}명 번호를 복사했어요`); }
+  else if (act === 'ms-one') { const T = msTargets(); if (!T.items.length) return; A.msRun = { items: T.items, label: T.label }; return msOne(0); }
+  else if (act === 'ms-send') return msSend();
+  render();
+}
+async function msSend() {
+  const T = msTargets(); const eng = msEngine(); if (!eng.ok) return toast(eng.why); if (!T.items.length) return;
+  const bad = T.items.find(x => x.why); if (bad) return toast(bad.why);
+  if (T.items.some(x => /\{[^{}\s]{1,6}\}/.test(x.text))) { if (!(await confirmBox('문구에 바뀌지 않은 {자리표시}가 있어요', '오타일 수 있어요. 그대로 보낼까요?', '그대로 보내기'))) return; }
+  const names = T.items.slice(0, 5).map(x => x.r.name).join(', ') + (T.items.length > 5 ? ` 외 ${T.items.length - 5}명` : '');
+  if (!(await confirmBox(`${T.items.length}명에게 '${T.label}' 문자를 보낼까요?`, `${names}\n\n각자 이름·일정이 들어간 문구로 솔라피에서 보내요.${eng.test ? '\n\n지금은 시험 모드라 실제로는 안 가요.' : '\n\n보낸 뒤에는 되돌릴 수 없어요.'}`, eng.test ? '시험으로 보내기' : '보내기'))) return;
+  const now = Date.now(), up = {}, k0 = A.ms.tpl;
+  T.items.forEach((x, i) => {
+    const r = x.r;
+    up[`smsQueue/ms${now.toString(36)}${i}`] = { to: digits(r.phone), name: r.name, text: x.text, kind: 'msgtab', label: T.label, appId: r.id, at: now + i };
+    up[`apps/${r.id}/log`] = addLog(r, `${T.label} 솔라피(문자탭)${eng.test ? ' 시험' : ''}`);
+    if (!eng.test && MS_AUTO_KINDS.includes(k0)) up[`apps/${r.id}/sms/${k0}`] = now;   // 자동 문자와 겹치지 않게
+  });
+  try { await IonStore.update('apply', up); toast(`${T.items.length}명 발송 대기열에 넣었어요 · 1~2분 안에 나가요`); } catch (e) { toast('저장하지 못했어요: ' + e.message); }
+  render();
+}
+function msOne(i) {
+  const run = A.msRun, m = document.getElementById('modal'); if (!run) return;
+  if (i >= run.items.length) { m.innerHTML = ''; toast(`${run.items.length}명 모두 처리했어요`); A.msRun = null; return; }
+  const { r, text } = run.items[i];
+  const smsHref = t => `sms:${digits(r.phone)}${IOS ? '&' : '?'}body=${encodeURIComponent(t)}`;
+  m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-label="한 명씩 보내기">
+    <div class="between"><span class="round" style="font-size:18px">${esc(run.label)} · ${i + 1} / ${run.items.length}</span><button class="mini" data-x="close">그만하기</button></div>
+    <div class="between"><span class="round" style="font-size:17px">${esc(r.name)} <span class="small">${G[r.gender] || ''} · ${esc(r.cohort)} · ${ION_STATUS[r.status]}</span></span><span class="small">${esc(r.phone)}</span></div>
+    <textarea class="input" id="mo-text" aria-label="보낼 문구" style="min-height:220px">${esc(text)}</textarea>
+    <a class="btn" id="mo-sms" href="${esc(smsHref(text))}">${ICON.msg}문자 앱으로 보내고 다음</a>
+    <div class="row" style="flex-wrap:nowrap"><button class="btn soft" style="flex:1" id="mo-copy">${ICON.copy}카톡용 복사 · 다음</button><button class="btn line" style="flex:1;min-height:48px" id="mo-skip">건너뛰기</button></div></div></div>`;
+  const ta = m.querySelector('#mo-text');
+  ta.addEventListener('input', () => { m.querySelector('#mo-sms').href = smsHref(ta.value); });
+  m.querySelector('[data-x=close]').onclick = () => { m.innerHTML = ''; A.msRun = null; };
+  m.querySelector('#mo-sms').addEventListener('click', () => { logSend(r.id, `${run.label} 문자(문자탭)`); setTimeout(() => msOne(i + 1), 600); });
+  m.querySelector('#mo-copy').onclick = async () => { await copyText(ta.value, `${r.name}님 문구 복사 · 카톡에 붙여넣어 주세요`); logSend(r.id, `${run.label} 카톡(문자탭)`); msOne(i + 1); };
+  m.querySelector('#mo-skip').onclick = () => msOne(i + 1);
+}
+
 /* ---------- 내보내기 ---------- */
 function rosterText(slotId) {
   const rows = apps().filter(r => r.slotId === slotId && r.status === 'confirmed').sort((a, b) => (a.gender === b.gender ? a.at - b.at : a.gender === 'M' ? -1 : 1));
@@ -2574,6 +2786,14 @@ document.addEventListener('submit', async e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.gq !== undefined && A.gd) { const x = A.gd[+t.dataset.gq]; if (!x) return; if (t.dataset.gf === 'on') { if (t.checked) delete x.off; else x.off = true; render(); } else x.q = t.value; return; }
+  if (t.dataset.ms && A.ms) {
+    const f = t.dataset.ms;
+    if (f === 'pick') { if (t.checked) delete A.ms.off[t.dataset.v]; else A.ms.off[t.dataset.v] = true; A.ms.idx = 0; render(); }
+    else if (f === 'q') { A.ms.q = t.value; A.ms.idx = 0; render(); }
+    else if (f === 'text') { A.ms.text = t.value; msLive(); }
+    else if (f === 'name') A.ms.name = t.value;
+    return;
+  }
   if (t.dataset.k === 'q') { A.q = t.value; render(); return; }
   if (t.dataset.k === 'rq') { A.rq = t.value; render(); return; }
   if (t.dataset.pf) { PROMO[t.dataset.pf] = t.value; drawPromo(); return; }
@@ -2614,6 +2834,7 @@ document.addEventListener('click', async e => {
   else if (act === 'settings') openSettings();
   else if (act === 'nav') goView(v);
   else if (act.startsWith('g-')) await gameAct(act, v);
+  else if (act.startsWith('ms-')) await msAct(act, v);
   else if (act === 'reviews') { A.view = 'reviews'; render(); window.scrollTo(0, 0); }
   else if (act === 'rcohort') { A.rCohort = v; render(); }
   else if (act === 'revcopy') copyText(REV_URL(b.dataset.c, b.dataset.t), `${b.dataset.c} ${b.dataset.t} 후기 링크를 복사했어요`);
@@ -2797,7 +3018,7 @@ document.addEventListener('click', async e => {
   else if (act === 'seed') demoSeed();
   else if (act === 'wipe') { if (await confirmBox('데모 데이터를 지울까요?', '이 브라우저의 데모 데이터만 지워져요.', '지우기', true)) IonStore.resetDemo(); }
 });
-window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'ledger', 'game', 'settings'].includes(want)) goView(want); });
+window.addEventListener('hashchange', () => { if (A.phase !== 'main') return; const h = location.hash.replace('#', ''); const cur = A.view === 'list' ? 'apply' : A.view; const want = h || 'apply'; if (want !== cur && ['apply', 'reviews', 'ledger', 'game', 'sms', 'settings'].includes(want)) goView(want); });
 document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.pick; if (!k || !e.target.value) return; if (k === 'cohort') { A.cohort = e.target.value; lsSet('ion_admin_cohort', A.cohort); } else A.rCohort = e.target.value; render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maintain(true); });
 setInterval(() => { if (A.phase === 'main' && A.view === 'list' && document.visibilityState === 'visible' && !document.getElementById('modal').innerHTML) { maintain(); render(); } }, 60000);
