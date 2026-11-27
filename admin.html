@@ -188,7 +188,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261125a"></script>
-<script src="ion-sms.js?v=20261127b"></script>
+<script src="ion-sms.js?v=20261127c"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -2249,7 +2249,7 @@ function sxInit(r, k) {
   if (A.sx && A.sx.cohort === r.cohort) return;
   const o = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId && !x.pool);
   const same = o.find(x => x.date === r.date) || o[0];
-  A.sx = { cohort: r.cohort, to: same ? same.id : '', mode: 'auto', reply: '', fix: '' };
+  A.sx = { cohort: r.cohort, to: same ? same.id : '', toC: '', mode: 'auto', reply: '', fix: '' };
 }
 function sxTarget(r) {
   const x = A.sx || {}, sl = x.to ? slots().find(s => s.id === x.to) : null;
@@ -2259,9 +2259,22 @@ function sxTarget(r) {
   const auto = left > 0 && mine <= other;
   return { sl, mine, other, auto, direct: x.mode === 'direct' ? true : x.mode === 'wait' ? false : auto, ageOk: ionAgeOk(sl, r.birthYear) };
 }
+// 인원미달 안내: 옮겨 갈 다른 기수 후보 (종료되지 않은 기수 · 타임이 있는 기수만)
+const sxCohorts = r => cohortGroups().cur.filter(c => c !== r.cohort && slots().some(s => s.cohort === c));
+function sxCohortInfo(r, c) {
+  if (!c) return null;
+  const ss = slots().filter(s => s.cohort === c); if (!ss.length) return null;
+  const real = ss.filter(s => !s.pool), pool = ss.find(s => s.pool), first = real[0] || pool;
+  const date = (first && first.date) || '';
+  const when = pool ? `${date} (참가 시간은 연령별 배정 후 안내)` : real.length > 1 ? `${date} ${real.map(s => s.time).join(' / ')} 중 연령에 맞는 타임` : `${date} ${(first && first.time) || ''}`.trim();
+  const places = [...new Set(ss.map(s => s.place).filter(Boolean))];
+  const ageOk = ss.some(s => ionAgeOk(s, r.birthYear));
+  return { name: c, when, place: places.length === 1 ? places[0] : '', ageOk, state: cohortState(c).label };
+}
 function sxOf(r) {
   const t = A.sx ? sxTarget(r) : null, x = A.sx || {}, v = A.vx && A.vx.cohort === r.cohort ? A.vx : {};
-  return { venue: { addr: (v.addr || '').trim(), map: (v.map || '').trim(), park: (v.park || '').trim(), memo: (v.memo || '').trim() }, toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
+  const cm = A.sx ? sxCohortInfo(r, x.toC) : null;
+  return { cMove: cm ? { name: cm.name, when: cm.when, place: cm.place, ageOk: cm.ageOk } : null, venue: { addr: (v.addr || '').trim(), map: (v.map || '').trim(), park: (v.park || '').trim(), memo: (v.memo || '').trim() }, toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
 }
 // 빈칸 확인: 비어 있으면 보낼 수 없음 (이유 문구 반환)
 function sxMissing(r, k) {
@@ -2284,14 +2297,17 @@ function sxPanel(r, k) {
     </div>`; }
   if (k !== 'short') return '';
   const x = A.sx, t = sxTarget(r), o = slots().filter(s => s.cohort === r.cohort && s.id !== r.slotId && !s.pool);
+  const oc = sxCohorts(r); if (x.toC && !oc.includes(x.toC)) x.toC = ''; const cm = sxCohortInfo(r, x.toC);
   const chip = (v, l) => `<button class="chipbtn ${x.mode === v ? 'on' : ''}" data-sxm="${v}">${l}</button>`;
   const note = !t ? '옮겨 갈 타임 없이 환불·이월만 안내해요'
     : !t.ageOk ? `${esc(r.name)}님은 ${esc(ionAgeText(t.sl))} 대상이 아니라 이동 항목을 빼고 보내요`
     : `${G[r.gender]} → <b>${t.direct ? '바로 이동' : '대기 등록'}</b>${x.mode === 'auto' ? ' (자동)' : ''} · 그 타임 지금 형제 ${r.gender === 'M' ? t.mine : t.other} · 자매 ${r.gender === 'F' ? t.mine : t.other}`;
   return `<div class="card stack" style="gap:6px;padding:10px">
-    <label class="small stack" style="gap:2px">옮겨 갈 타임<select class="input" id="sx-to"><option value="">없음 (환불·이월만)</option>${o.map(s => `<option value="${esc(s.id)}" ${s.id === x.to ? 'selected' : ''}>${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ' · ' + esc(ionAgeText(s)) : ''}</option>`).join('')}</select></label>
+    <label class="small stack" style="gap:2px">같은 기수 다른 타임<select class="input" id="sx-to"><option value="">없음 (환불·이월만)</option>${o.map(s => `<option value="${esc(s.id)}" ${s.id === x.to ? 'selected' : ''}>${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ' · ' + esc(ionAgeText(s)) : ''}</option>`).join('')}</select></label>
     ${t ? `<div class="chips">${chip('auto', '자동')}${chip('direct', '바로 이동')}${chip('wait', '대기 등록')}</div>` : ''}
     <span class="small">${note}</span>
+    <label class="small stack" style="gap:2px">다른 기수로<select class="input" id="sx-c"><option value="">없음 ('다음 기수 우선 참가로 이월'로 안내)</option>${oc.map(c => { const i = sxCohortInfo(r, c); return `<option value="${esc(c)}" ${c === x.toC ? 'selected' : ''}>${esc(c)} · ${esc(i.when)} · ${esc(i.state)}${i.ageOk ? '' : ' · 대상 연령 밖'}</option>`; }).join('')}</select></label>
+    ${cm ? `<span class="small">${cm.ageOk ? `'다음 기수 이월' 대신 <b>${esc(cm.name)} 참가로 이동</b>으로 안내해요${cm.place ? ` · 장소: ${esc(cm.place)}` : ''}` : `${esc(r.name)}님은 ${esc(cm.name)} 대상 연령이 아니라 기존 '다음 기수 이월' 문구로 보내요`}</span>` : ''}
     <label class="small stack" style="gap:2px">회신 마감<input class="input" id="sx-reply" value="${esc(x.reply)}" placeholder="예: 11/26(목) 18시"></label>
     ${t && t.ageOk && !t.direct ? `<label class="small stack" style="gap:2px">대기 확정 마감<input class="input" id="sx-fix" value="${esc(x.fix)}" placeholder="예: 11/27(금) 12시"></label>` : ''}
   </div>`;
@@ -2301,6 +2317,7 @@ function sxWire(m, again, refresh) {
   ['addr', 'map', 'park', 'memo'].forEach(f => { const el = m.querySelector('#vx-' + f); if (el) el.oninput = () => { A.vx[f] = el.value; vxSave(); refresh(); }; });
   const to = m.querySelector('#sx-to'); if (!to) return;
   to.onchange = () => { A.sx.to = to.value; again(); };
+  const tc = m.querySelector('#sx-c'); if (tc) tc.onchange = () => { A.sx.toC = tc.value; again(); };
   m.querySelectorAll('[data-sxm]').forEach(b => b.onclick = () => { A.sx.mode = b.dataset.sxm; again(); });
   [['#sx-reply', 'reply'], ['#sx-fix', 'fix']].forEach(([q, f]) => { const el = m.querySelector(q); if (el) el.oninput = () => { A.sx[f] = el.value; refresh(); }; });
 }
