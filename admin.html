@@ -272,7 +272,7 @@ const addLog = (r, what) => (r.log ? r.log + ' / ' : '') + dt(Date.now()) + ' ' 
 
 /* ---------- 상태 ---------- */
 let START_HASH = (location.hash || '').replace('#', '');
-const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, unsubS: null, sess: {}, rCohort: '', rTime: '', rStar: '', rShare: false, rq: '', qAll: false };
+const A = { phase: 'loading', authErr: '', busy: false, data: null, view: 'list', cohort: lsGet('ion_admin_cohort') || '', tab: 'pending', q: '', open: {}, unsub: null, lastMaint: 0, draft: null, reviews: {}, unsubR: null, unsubS: null, sess: {}, rCohort: '', rTime: '', rStar: '', rShare: false, rq: '', qAll: false, slotF: '' };
 const apps = () => Object.values((A.data && A.data.apps) || {});
 const slots = () => Object.entries((A.data && A.data.slots) || {}).map(([id, s]) => ({ id, ...s })).sort(ionSlotCmp);   // 날짜·시간순
 const conf = () => (A.data && A.data.config) || {};
@@ -774,8 +774,21 @@ function viewMain() {
   const list = global ? apps().filter(match).sort((a, b) => b.at - a.at)
     : rows.filter(r => (A.tab === 'cancelled' ? ['cancelled', 'refunded'].includes(r.status) : r.status === A.tab)).filter(match)
       .sort((a, b) => A.tab === 'pending' ? a.deadline - b.deadline : A.tab === 'paid' ? (a.paidAt || a.at) - (b.paidAt || b.at) : a.at - b.at);
+  // 타임별 분류: 이 기수의 타임 목록 (접수용 타임 = 미배정) · 선택한 타임만 보기
+  const cs = slots().filter(s => s.cohort === A.cohort).sort((a, b) => (b.pool ? 1 : 0) - (a.pool ? 1 : 0));
+  if (A.slotF && !cs.some(s => s.id === A.slotF)) A.slotF = '';
+  const slotName = s => s ? (s.pool ? '미배정' : (s.time || '시간 미정')) : '타임 없음';
+  const tabList = list;
+  const list2 = !global && A.slotF ? list.filter(r => r.slotId === A.slotF) : list;
+  const groups = !global && !A.slotF && cs.length > 1
+    ? [...cs.map(s => ({ s, rs: list2.filter(r => r.slotId === s.id) })), { s: null, rs: list2.filter(r => !cs.some(s => s.id === r.slotId)) }].filter(g => g.rs.length) : null;
+  const gHead = g => { const m = g.rs.filter(r => r.gender === 'M').length, f = g.rs.filter(r => r.gender === 'F').length;
+    return `<div class="between" style="margin-top:6px;padding:6px 2px;border-bottom:2px solid var(--green)"><span class="round" style="font-size:17px">${esc(slotName(g.s))}${g.s && ionAgeText(g.s) ? ` <span class="small">${ionAgeText(g.s)}</span>` : ''}</span><span class="small">${g.rs.length}명 · 형제 ${m} · 자매 ${f}</span></div>`; };
+  const slotChips = !global && cs.length > 1 ? `<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap" role="group" aria-label="타임별 보기">
+      <button class="chipbtn ${!A.slotF ? 'on' : ''}" data-act="slotf" data-v="" aria-pressed="${!A.slotF}">모든 타임 ${tabList.length}</button>
+      ${cs.map(s => `<button class="chipbtn ${A.slotF === s.id ? 'on' : ''}" data-act="slotf" data-v="${esc(s.id)}" aria-pressed="${A.slotF === s.id}">${esc(slotName(s))} ${tabList.filter(r => r.slotId === s.id).length}</button>`).join('')}</div>` : '';
   const elsewhere = q && !A.qAll ? apps().filter(r => r.cohort !== A.cohort && match(r)).length : 0;
-  A.curList = list.map(r => r.id);
+  A.curList = list2.map(r => r.id);
   return `<div class="wrap">
     ${appHead('apply')}
     ${conf().open === false ? '<div class="small" style="margin:2px 0 8px">· 지금 <b>모집 닫힘</b> 상태예요 (설정에서 변경)</div>' : ''}
@@ -791,8 +804,9 @@ function viewMain() {
     ${global ? `<div class="small" style="margin-top:12px">전체 기수 검색 결과 <b>${list.length}건</b> · 상태와 상관없이 모두 보여요</div>`
       : `<div class="tabs" style="margin-top:12px">${['pending', 'paid', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>`}
     ${!global && A.tab === 'cancelled' && list.length ? `<div class="between" style="margin-top:12px"><span class="small">취소·환불 내역은 정원에 영향이 없어요. 필요 없으면 영구삭제하세요.</span><button class="mini del" data-act="purgeall">${esc(A.cohort)} 취소·환불 ${list.length}건 모두 삭제</button></div>` : ''}
-    ${list.length ? `<div class="row" style="margin-top:12px"><button class="mini go" data-act="bulk">📨 이 목록 ${list.length}명 문자 탭에서 보내기</button><button class="mini" data-act="table">📋 명단 표로 보기</button></div>` : ''}
-    <div class="stack" style="margin-top:12px;gap:10px">${list.length ? list.map(r => card(r, global)).join('') : `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>`}</div>
+    ${slotChips}
+    ${list2.length ? `<div class="row" style="margin-top:12px"><button class="mini go" data-act="bulk">📨 이 목록 ${list2.length}명 문자 탭에서 보내기</button><button class="mini" data-act="table">📋 명단 표로 보기</button></div>` : ''}
+    <div class="stack" style="margin-top:12px;gap:10px">${!list2.length ? `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>` : groups ? groups.map(g => gHead(g) + g.rs.map(r => card(r, global)).join('')).join('') : list2.map(r => card(r, global)).join('')}</div>
     <div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="csv">${ICON.down}${esc(A.cohort)} 엑셀(CSV) 내려받기</button>
       ${DEMO ? '<button class="mini" data-act="seed">예시 데이터</button><button class="mini del" data-act="wipe">데모 초기화</button>' : ''}</div>
     <div class="spacer" style="min-height:20px"></div>
@@ -2350,7 +2364,7 @@ function openTable(sortKey) {
   const m = document.getElementById('modal');
   const cols = TCOLS.filter(([k]) => ['name', 'status', 'phone'].includes(k) || rows.some(r => r[k] !== undefined && r[k] !== ''));
   m.innerHTML = `<div class="modal-bg" data-close="1"><div class="modal wide" role="dialog" aria-modal="true" aria-label="신청자 명단 표">
-    <div class="between"><div class="stack" style="gap:2px"><span class="round" style="font-size:19px">${esc(A.qAll && A.q.trim() ? '전체 기수 검색 결과' : `${A.cohort} · ${A.tab === 'cancelled' ? '취소·환불' : ION_STATUS[A.tab]}`)} ${rows.length}명</span>
+    <div class="between"><div class="stack" style="gap:2px"><span class="round" style="font-size:19px">${esc(A.qAll && A.q.trim() ? '전체 기수 검색 결과' : `${A.cohort} · ${A.tab === 'cancelled' ? '취소·환불' : ION_STATUS[A.tab]}${(() => { const s = A.slotF && slots().find(x => x.id === A.slotF); return s ? ' · ' + (s.pool ? '미배정' : s.time) : ''; })()}`)} ${rows.length}명</span>
       <span class="small">제목을 누르면 정렬 · 줄을 누르면 상세 · 옆으로 밀어서 더 보기</span></div><button class="btn line sm" data-close="1" style="flex-shrink:0">닫기</button></div>
     <div class="atbl-wrap"><table class="atbl"><thead><tr>${cols.map(([k, l]) => `<th scope="col" data-sort="${k}">${l}${A.tSort === k ? ' ▾' : ''}</th>`).join('')}</tr></thead>
       <tbody>${rows.map(r => `<tr data-row="${r.id}">${cols.map(([k]) => `<td class="${k === 'name' ? 'nm' : ''}" title="${esc(cellOf(r, k))}">${esc(cellOf(r, k))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div>`;
@@ -3043,7 +3057,8 @@ document.addEventListener('click', async e => {
   }
   else if (act === 'delslot') { A.draft.slots.splice(Number(v), 1); render(); }
   else if (act === 'save') saveSettings();
-  else if (act === 'cohort') { A.cohort = v; lsSet('ion_admin_cohort', v); render(); }
+  else if (act === 'cohort') { A.cohort = v; A.slotF = ''; lsSet('ion_admin_cohort', v); render(); }
+  else if (act === 'slotf') { A.slotF = v; render(); }
   else if (act === 'tab') { A.tab = v; render(); }
   else if (act === 'toggle') { A.open[v] = !A.open[v]; render(); }
   else if (act === 'msg') { A._moveFrom = ''; A._moveCross = false; openMsg(v); }
