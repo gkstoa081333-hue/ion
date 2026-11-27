@@ -188,7 +188,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261125a"></script>
-<script src="ion-sms.js?v=20261127c"></script>
+<script src="ion-sms.js?v=20261127d"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -2249,7 +2249,7 @@ function sxInit(r, k) {
   if (A.sx && A.sx.cohort === r.cohort) return;
   const o = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId && !x.pool);
   const same = o.find(x => x.date === r.date) || o[0];
-  A.sx = { cohort: r.cohort, to: same ? same.id : '', toC: '', mode: 'auto', reply: '', fix: '' };
+  A.sx = { cohort: r.cohort, to: same ? same.id : '', toCs: [], mode: 'auto', reply: '', fix: '' };
 }
 function sxTarget(r) {
   const x = A.sx || {}, sl = x.to ? slots().find(s => s.id === x.to) : null;
@@ -2273,8 +2273,8 @@ function sxCohortInfo(r, c) {
 }
 function sxOf(r) {
   const t = A.sx ? sxTarget(r) : null, x = A.sx || {}, v = A.vx && A.vx.cohort === r.cohort ? A.vx : {};
-  const cm = A.sx ? sxCohortInfo(r, x.toC) : null;
-  return { cMove: cm ? { name: cm.name, when: cm.when, place: cm.place, ageOk: cm.ageOk } : null, venue: { addr: (v.addr || '').trim(), map: (v.map || '').trim(), park: (v.park || '').trim(), memo: (v.memo || '').trim() }, toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
+  const cms = A.sx ? (x.toCs || []).map(c => sxCohortInfo(r, c)).filter(Boolean) : [];
+  return { cMoves: cms.map(cm => ({ name: cm.name, when: cm.when, place: cm.place, ageOk: cm.ageOk })), venue: { addr: (v.addr || '').trim(), map: (v.map || '').trim(), park: (v.park || '').trim(), memo: (v.memo || '').trim() }, toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
 }
 // 빈칸 확인: 비어 있으면 보낼 수 없음 (이유 문구 반환)
 function sxMissing(r, k) {
@@ -2297,7 +2297,8 @@ function sxPanel(r, k) {
     </div>`; }
   if (k !== 'short') return '';
   const x = A.sx, t = sxTarget(r), o = slots().filter(s => s.cohort === r.cohort && s.id !== r.slotId && !s.pool);
-  const oc = sxCohorts(r); if (x.toC && !oc.includes(x.toC)) x.toC = ''; const cm = sxCohortInfo(r, x.toC);
+  const oc = sxCohorts(r); x.toCs = (x.toCs || []).filter(c => oc.includes(c)).sort((a, b) => oc.indexOf(a) - oc.indexOf(b));
+  const cms = x.toCs.map(c => sxCohortInfo(r, c)), okC = cms.filter(i => i.ageOk), badC = cms.filter(i => !i.ageOk);
   const chip = (v, l) => `<button class="chipbtn ${x.mode === v ? 'on' : ''}" data-sxm="${v}">${l}</button>`;
   const note = !t ? '옮겨 갈 타임 없이 환불·이월만 안내해요'
     : !t.ageOk ? `${esc(r.name)}님은 ${esc(ionAgeText(t.sl))} 대상이 아니라 이동 항목을 빼고 보내요`
@@ -2306,8 +2307,9 @@ function sxPanel(r, k) {
     <label class="small stack" style="gap:2px">같은 기수 다른 타임<select class="input" id="sx-to"><option value="">없음 (환불·이월만)</option>${o.map(s => `<option value="${esc(s.id)}" ${s.id === x.to ? 'selected' : ''}>${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ' · ' + esc(ionAgeText(s)) : ''}</option>`).join('')}</select></label>
     ${t ? `<div class="chips">${chip('auto', '자동')}${chip('direct', '바로 이동')}${chip('wait', '대기 등록')}</div>` : ''}
     <span class="small">${note}</span>
-    <label class="small stack" style="gap:2px">다른 기수로<select class="input" id="sx-c"><option value="">없음 ('다음 기수 우선 참가로 이월'로 안내)</option>${oc.map(c => { const i = sxCohortInfo(r, c); return `<option value="${esc(c)}" ${c === x.toC ? 'selected' : ''}>${esc(c)} · ${esc(i.when)} · ${esc(i.state)}${i.ageOk ? '' : ' · 대상 연령 밖'}</option>`; }).join('')}</select></label>
-    ${cm ? `<span class="small">${cm.ageOk ? `'다음 기수 이월' 대신 <b>${esc(cm.name)} 참가로 이동</b>으로 안내해요${cm.place ? ` · 장소: ${esc(cm.place)}` : ''}` : `${esc(r.name)}님은 ${esc(cm.name)} 대상 연령이 아니라 기존 '다음 기수 이월' 문구로 보내요`}</span>` : ''}
+    <div class="stack" style="gap:4px"><span class="small">다른 기수로 (여러 개 고르면 받는 분이 골라요)</span>
+      ${oc.length ? `<div class="chips" role="group" aria-label="다른 기수로">${oc.map(c => { const i = sxCohortInfo(r, c), on = x.toCs.includes(c); return `<button class="chipbtn ${on ? 'on' : ''}" data-sxc="${esc(c)}" aria-pressed="${on}" title="${esc(i.when)}">${esc(c)} ${esc(String(i.when).split(' ')[0])}${i.ageOk ? '' : ' · 연령 밖'}</button>`; }).join('')}</div>` : '<span class="small">열려 있는 다른 기수가 없어요</span>'}
+      <span class="small">${!cms.length ? "안 고르면 '다음 기수 우선 참가로 이월'로 안내해요" : okC.length ? `'다음 기수 이월' 대신 <b>${okC.map(i => esc(i.name)).join(' · ')}</b>를 각각 번호로 안내해요` : `대상 연령이 맞는 기수가 없어 기존 '다음 기수 이월' 문구로 보내요`}${badC.length && okC.length ? ` · ${badC.map(i => esc(i.name)).join(', ')}는 대상 연령 밖이라 빼요` : ''}</span></div>
     <label class="small stack" style="gap:2px">회신 마감<input class="input" id="sx-reply" value="${esc(x.reply)}" placeholder="예: 11/26(목) 18시"></label>
     ${t && t.ageOk && !t.direct ? `<label class="small stack" style="gap:2px">대기 확정 마감<input class="input" id="sx-fix" value="${esc(x.fix)}" placeholder="예: 11/27(금) 12시"></label>` : ''}
   </div>`;
@@ -2317,7 +2319,7 @@ function sxWire(m, again, refresh) {
   ['addr', 'map', 'park', 'memo'].forEach(f => { const el = m.querySelector('#vx-' + f); if (el) el.oninput = () => { A.vx[f] = el.value; vxSave(); refresh(); }; });
   const to = m.querySelector('#sx-to'); if (!to) return;
   to.onchange = () => { A.sx.to = to.value; again(); };
-  const tc = m.querySelector('#sx-c'); if (tc) tc.onchange = () => { A.sx.toC = tc.value; again(); };
+  m.querySelectorAll('[data-sxc]').forEach(b => b.onclick = () => { const c = b.dataset.sxc, l = A.sx.toCs || []; A.sx.toCs = l.includes(c) ? l.filter(y => y !== c) : [...l, c]; again(); });
   m.querySelectorAll('[data-sxm]').forEach(b => b.onclick = () => { A.sx.mode = b.dataset.sxm; again(); });
   [['#sx-reply', 'reply'], ['#sx-fix', 'fix']].forEach(([q, f]) => { const el = m.querySelector(q); if (el) el.oninput = () => { A.sx[f] = el.value; refresh(); }; });
 }

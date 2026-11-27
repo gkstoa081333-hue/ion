@@ -76,14 +76,16 @@ ${r.status === 'waiting' ? '지금은 대기 ' + x.waitNo + '번이고, 자리�
 문의: 카카오톡 오픈채팅
 ${x.chat || ''}` },
   // ↓ 운영진 수동 발송 전용 (자동 발송 엔진은 쓰지 않음). x.ex = 관리자 문자 창의 추가 입력값
-  //   ex = { cMove: { name, when, place, ageOk }|null (다른 기수로 이동), toHour: '15시'|'', direct: true(바로 이동)|false(대기 등록), ageOk, replyBy: '11/26(목) 18시', fixBy: '11/27(금) 12시' }
+  //   ex = { cMoves: [{ name, when, place, ageOk }] (다른 기수로 이동, 여러 개 가능), toHour: '15시'|'', direct: true(바로 이동)|false(대기 등록), ageOk, replyBy: '11/26(목) 18시', fixBy: '11/27(금) 12시' }
   short: { label: '인원미달 안내', for: ['pending', 'paid', 'confirmed', 'waiting'], manual: true, make: (r, x) => {
     const e = x.ex || {}, opts = [];
     if (e.toHour && e.ageOk !== false) opts.push(e.direct
       ? `같은 날 ${e.toHour} 타임으로 이동 (장소 동일)`
       : `같은 날 ${e.toHour} 타임 대기 등록\n - 성비가 맞춰지면 신청 순서대로 확정 연락드립니다.\n - ${e.fixBy || ''}까지 확정되지 않으면 전액 환불해 드립니다.`);
-    const cm = e.cMove && e.cMove.ageOk !== false ? e.cMove : null;
-    opts.push('참가비 전액 환불', cm ? `${cm.name} 참가로 이동 (참가비 그대로 적용)\n - 일정: ${cm.when}${cm.place ? '\n - 장소: ' + cm.place : ''}` : '다음 기수 우선 참가로 이월');
+    const cms = (e.cMoves || []).filter(c => c && c.ageOk !== false);
+    opts.push('참가비 전액 환불');
+    if (cms.length) cms.forEach(cm => opts.push(`${cm.name} 참가로 이동 (참가비 그대로 적용)\n - 일정: ${cm.when}${cm.place ? '\n - 장소: ' + cm.place : ''}`));
+    else opts.push('다음 기수 우선 참가로 이월');
     return `[이온 크리스천 소개팅] ${r.cohort} ${x.hour} 타임 안내
 
 안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
@@ -93,7 +95,7 @@ ${x.date} ${x.hour} 타임에 신청해 주셔서 감사합니다.
 
 아래 중 원하시는 방법을 번호로 회신해 주세요.
 
-${opts.map((o, i) => '①②③'[i] + ' ' + o).join('\n')}
+${opts.map((o, i) => '①②③④⑤⑥⑦⑧'[i] + ' ' + o).join('\n')}
 
 ※ ${e.replyBy || ''}까지 회신이 없으시면 전액 환불로 처리합니다.
 ※ 환불을 원하시면 은행/계좌번호/예금주를 함께 보내주세요.
@@ -159,5 +161,5 @@ ${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
   ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move', 'assign', 'venue'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261127c' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261127d' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
