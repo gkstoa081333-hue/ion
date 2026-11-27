@@ -188,7 +188,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="ion-store.js?v=20261125a"></script>
-<script src="ion-sms.js?v=20261127a"></script>
+<script src="ion-sms.js?v=20261127b"></script>
 <script>
 /* =====================================================================
    이온 신청관리 (운영진 전용 · 휴대폰용)
@@ -733,6 +733,7 @@ function render() {
   else if (aid) { const el = document.getElementById(aid); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) {} } }
   if (A.view === 'promo' && A.phase === 'main') setTimeout(drawPromo, 0);
   if (A.view === 'sms' && A.phase === 'main' && A.ms && A.ms.tpl === 'short') sxWire($app, render, render);
+  if (A.view === 'sms' && A.phase === 'main' && A.ms && A.ms.tpl === 'venue') sxWire($app, () => {}, () => { const el = document.activeElement, id = el && el.id, pos = el && el.selectionStart; render(); const n = id && document.getElementById(id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } });
 }
 
 function viewLogin() {
@@ -2236,7 +2237,15 @@ function ctx(r) {
    A.sx = { to: 타임id|'', mode: 'auto'|'direct'|'wait', reply, fix } · 창을 닫아도 유지(단체 문자에서 한 번만 입력)
    자동: 옮겨 갈 타임에서 내 성별이 상대 성별보다 적거나 같고 정원이 남으면 '바로 이동', 아니면 '대기 등록'
    대상 연령 밖이면 이동 항목을 빼고 보냄 */
-function sxInit(r) {
+/* ---------- 장소 확정 안내: 주소·지도·주차·메모 (기수별로 이 기기에 저장, 비우면 문자에서 줄 생략) ---------- */
+function vxInit(r) {
+  if (A.vx && A.vx.cohort === r.cohort) return;
+  let v = {}; try { v = JSON.parse(lsGet('ion_vx_' + r.cohort) || '{}') || {}; } catch (e) {}
+  A.vx = { cohort: r.cohort, addr: v.addr || '', map: v.map || '', park: v.park || '', memo: v.memo || '' };
+}
+function vxSave() { const v = A.vx; if (v) lsSet('ion_vx_' + v.cohort, JSON.stringify({ addr: v.addr, map: v.map, park: v.park, memo: v.memo })); }
+function sxInit(r, k) {
+  if (k === 'venue') return vxInit(r);
   if (A.sx && A.sx.cohort === r.cohort) return;
   const o = slots().filter(x => x.cohort === r.cohort && x.id !== r.slotId && !x.pool);
   const same = o.find(x => x.date === r.date) || o[0];
@@ -2251,11 +2260,12 @@ function sxTarget(r) {
   return { sl, mine, other, auto, direct: x.mode === 'direct' ? true : x.mode === 'wait' ? false : auto, ageOk: ionAgeOk(sl, r.birthYear) };
 }
 function sxOf(r) {
-  const t = A.sx ? sxTarget(r) : null, x = A.sx || {};
-  return { toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
+  const t = A.sx ? sxTarget(r) : null, x = A.sx || {}, v = A.vx && A.vx.cohort === r.cohort ? A.vx : {};
+  return { venue: { addr: (v.addr || '').trim(), map: (v.map || '').trim(), park: (v.park || '').trim(), memo: (v.memo || '').trim() }, toHour: t ? ION_SMS.ctx({}, {}, t.sl).hour : '', direct: t ? t.direct : true, ageOk: t ? t.ageOk : true, replyBy: (x.reply || '').trim(), fixBy: (x.fix || '').trim() };
 }
 // 빈칸 확인: 비어 있으면 보낼 수 없음 (이유 문구 반환)
 function sxMissing(r, k) {
+  if (k === 'venue') { const sl = slots().find(x => x.id === r.slotId) || {}; return (sl.place || r.place) ? '' : '장소가 비어 있어요: 설정 › 해당 기수 타임 편집에서 장소를 먼저 입력해 주세요'; }
   if (k !== 'short') return '';
   const e = sxOf(r), need = [];
   if (!e.replyBy) need.push('회신 마감');
@@ -2263,6 +2273,15 @@ function sxMissing(r, k) {
   return need.length ? `빈칸을 채워야 보낼 수 있어요: ${need.join(', ')}` : '';
 }
 function sxPanel(r, k) {
+  if (k === 'venue') { vxInit(r); const v = A.vx, sl = slots().find(x => x.id === r.slotId) || {};
+    const f = (id, l, ph, val) => `<label class="small stack" style="gap:2px">${l}<input class="input" id="vx-${id}" value="${esc(val)}" placeholder="${ph}"></label>`;
+    return `<div class="card stack" style="gap:6px;padding:10px">
+      <span class="small">장소 이름은 설정의 타임 장소(<b>${esc(sl.place || r.place || '비어 있음')}</b>)를 써요. 아래는 선택 입력이고, 비우면 문자에서 빠져요. ${esc(r.cohort)} 기준으로 이 기기에 저장돼요.</span>
+      ${f('addr', '주소 · 층', '예: 대전 유성구 학하동 ○○로 12, 2층', v.addr)}
+      ${f('map', '지도 링크', '예: https://naver.me/xxxx', v.map)}
+      ${f('park', '주차', '예: 건물 뒤 공영주차장 (2시간 무료)', v.park)}
+      <label class="small stack" style="gap:2px">추가 안내 (선택)<textarea class="input" id="vx-memo" style="min-height:60px" placeholder="예: 입구에서 '이온'이라고 말씀해 주세요">${esc(v.memo)}</textarea></label>
+    </div>`; }
   if (k !== 'short') return '';
   const x = A.sx, t = sxTarget(r), o = slots().filter(s => s.cohort === r.cohort && s.id !== r.slotId && !s.pool);
   const chip = (v, l) => `<button class="chipbtn ${x.mode === v ? 'on' : ''}" data-sxm="${v}">${l}</button>`;
@@ -2279,6 +2298,7 @@ function sxPanel(r, k) {
 }
 // 타임·방식을 바꾸면 창을 다시 그리고(again), 마감 칸은 입력하는 대로 문구만 바로 바꿈(refresh) — 입력 중 포커스 유지
 function sxWire(m, again, refresh) {
+  ['addr', 'map', 'park', 'memo'].forEach(f => { const el = m.querySelector('#vx-' + f); if (el) el.oninput = () => { A.vx[f] = el.value; vxSave(); refresh(); }; });
   const to = m.querySelector('#sx-to'); if (!to) return;
   to.onchange = () => { A.sx.to = to.value; again(); };
   m.querySelectorAll('[data-sxm]').forEach(b => b.onclick = () => { A.sx.mode = b.dataset.sxm; again(); });
@@ -2296,7 +2316,7 @@ function openMsg(id, pick) {
   const r = (A.data.apps || {})[id]; if (!r) return;
   const keys = Object.keys(TPL).filter(k => TPL[k].for.includes(r.status));
   const k = pick || (r.status === 'pending' && String(r.log).includes('승격') && !String(r.log).includes('자리 확보') ? 'promote' : keys[0]);
-  if (k === 'short') sxInit(r);
+  if (k === 'short' || k === 'venue') sxInit(r, k);
   const text = TPL[k].make(r, ctx(r)), why = sxMissing(r, k);
   const smsHref = t => `sms:${digits(r.phone)}${IOS ? '&' : '?'}body=${encodeURIComponent(t)}`;
   const m = document.getElementById('modal');
@@ -2326,7 +2346,7 @@ function openBulk(ids, tplKey, i = 0) {
   const m = document.getElementById('modal');
   if (i >= targets.length) { m.innerHTML = ''; toast(`${targets.length}명 모두 처리했어요`); return; }
   const r = targets[i]; if (i === 0) A.bulkLast = null;
-  if (k === 'short') sxInit(r);
+  if (k === 'short' || k === 'venue') sxInit(r, k);
   const why = sxMissing(r, k);
   // '직접 쓰기'는 앞사람에게 쓴 문구를 이름만 바꿔 이어서 사용
   const text = k === 'free' && A.bulkLast ? A.bulkLast.text.split(A.bulkLast.name).join(r.name) : TPL[k].make(r, ctx(r));
@@ -2603,7 +2623,7 @@ function msTargets() {
   const k = s.tpl, tp = msIsTpl(k);
   const fit = tp ? sel.filter(r => TPL[k].for.includes(r.status) && (k !== 'assign' || !inPool(r))) : sel;
   const items = fit.map(r => {
-    if (tp && k === 'short') sxInit(r);
+    if (tp && (k === 'short' || k === 'venue')) sxInit(r, k);
     return { r, text: tp ? TPL[k].make(r, ctx(r)) : msFill(s.text, r), why: tp ? sxMissing(r, k) : '' };
   });
   return { all: list, sel, items, skipped: sel.length - fit.length, label: tp ? TPL[k].label : k.startsWith('saved:') ? ((msSaved().find(x => 'saved:' + x.id === k) || {}).label || '저장 문구') : '직접 쓰기' };
@@ -2662,6 +2682,7 @@ function viewSms() {
       <div class="field"><span class="lab">직접 쓰기 · 저장한 문구</span><div class="chips cw">${chip(s.tpl === 'custom', 'data-act="ms-tpl" data-v="custom"', '✏️ 직접 쓰기')}${msSaved().map(x => chip(s.tpl === 'saved:' + x.id, `data-act="ms-tpl" data-v="saved:${esc(x.id)}"`, '⭐ ' + esc(x.label))).join('')}</div></div>
       <div class="field"><span class="lab">기본 안내 (사람마다 일정·금액 자동)</span><div class="chips cw">${tplKeys.map(k => chip(s.tpl === k, `data-act="ms-tpl" data-v="${k}"`, TPL[k].label)).join('')}</div></div>
       ${tp ? `${T.skipped ? `<span class="small">'${esc(T.label)}'은 상태가 맞는 ${T.items.length}명에게만 보내요 (${T.skipped}명 제외)</span>` : ''}
+        ${s.tpl === 'venue' ? (s.cohorts.length === 1 && cur ? sxPanel(cur.r, 'venue') : '<span class="small" style="color:var(--danger)">장소 확정 안내는 기수를 하나만 골라주세요</span>') : ''}
         ${s.tpl === 'short' ? (s.cohorts.length === 1 && cur ? sxPanel(cur.r, 'short') : '<span class="small" style="color:var(--danger)">인원미달 안내는 기수를 하나만 골라주세요</span>') : ''}
         <button class="mini" data-act="ms-edit" ${cur ? '' : 'disabled'} style="align-self:flex-start">✏️ 이 문구를 바탕으로 직접 고치기</button>`
       : `<textarea class="input" id="ms-text" data-ms="text" aria-label="보낼 문구" style="min-height:200px">${esc(s.text)}</textarea>

@@ -126,6 +126,21 @@ ${opts.map((o, i) => '①②③'[i] + ' ' + o).join('\n')}
 신청 때 동의해 주신 대로 배정된 시간에 꼭 참석 부탁드려요.${r.status === 'paid' ? `\n타임별 최소 인원(${x.min}대${x.min})이 모이면 참가 확정 문자를 보내드릴게요.` : r.status === 'pending' ? `\n입금 기한(${x.deadline})까지 입금해 주셔야 자리가 유지돼요.` : ''}
 
 그날 반갑게 뵙겠습니다. 🌿` },
+  // 장소 확정 후 일시·장소 안내 — x.ex.venue = { addr, map, park, memo } (관리자 문자 창에서 입력, 비우면 줄 생략)
+  venue: { label: '장소 확정 안내', for: ['paid', 'confirmed'], manual: true, make: (r, x) => { const v = (x.ex && x.ex.venue) || {};
+    const line = (k, t) => t ? `\n▶ ${k}: ${t}` : '';
+    return `[이온 크리스천 소개팅] 장소 확정 안내
+
+안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
+${r.cohort} 진행 장소가 확정되어 안내드려요.
+
+▶ 일시: ${x.date} ${x.time}
+▶ 장소: ${x.place}${line('주소', v.addr)}${line('지도', v.map)}${line('주차', v.park)}
+▶ 도착: 시작 10분 전까지
+${v.memo ? '\n' + v.memo + '\n' : ''}
+${r.status === 'paid' ? `타임별 최소 인원(${x.min}대${x.min})이 모이면 참가 확정 문자를 보내드릴게요.\n` : ''}늦거나 참석이 어려우시면 이 번호로 꼭 연락 주세요.
+
+그날 반갑게 뵙겠습니다. 🌿`; } },
   refundDone: { label: '환불 완료', for: ['refunded', 'cancelled'], manual: true, make: (r, x) => `[이온 크리스천 소개팅] 환불 완료 안내
 
 안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
@@ -141,7 +156,7 @@ ${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸
 다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
 };
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
-  ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move', 'assign'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
+  ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move', 'assign', 'venue'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261127a' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261127b' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
