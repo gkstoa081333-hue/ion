@@ -199,7 +199,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261127a';
+const BUILD = '20261127b';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -762,8 +762,7 @@ function viewMain() {
     ${cohortPicker(A.cohort, 'cohort')}
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:-4px 0 12px">
       <button class="mini go" style="justify-content:center" data-act="dash">📈 운영 대시보드</button>
-      <button class="mini" style="justify-content:center" data-act="promo">📣 홍보 이미지 만들기</button>
-      <button class="mini" style="justify-content:center;grid-column:1/-1" data-act="repromo">💌 재참여 홍보 문자 · 지난 기수 참가자에게 다음 모집 알리기</button></div>
+      <button class="mini" style="justify-content:center" data-act="promo">📣 홍보 이미지 만들기</button></div>
     ${viewStatus()}
     <div class="row" style="margin-top:14px;flex-wrap:nowrap"><input class="input" style="flex-grow:1" data-k="q" value="${esc(A.q)}" placeholder="이름 · 입금자명 · 전화번호로 찾기" aria-label="검색" inputmode="search">
       <button class="chipbtn ${A.qAll ? 'on' : ''}" data-act="qall" aria-pressed="${A.qAll}">전체 기수</button></div>
@@ -771,7 +770,7 @@ function viewMain() {
     ${global ? `<div class="small" style="margin-top:12px">전체 기수 검색 결과 <b>${list.length}건</b> · 상태와 상관없이 모두 보여요</div>`
       : `<div class="tabs" style="margin-top:12px">${['pending', 'paid', 'confirmed', 'waiting', 'cancelled'].map(t => `<button class="tab ${A.tab === t ? 'on' : ''}" data-act="tab" data-v="${t}">${t === 'cancelled' ? '취소·환불' : ION_STATUS[t]} ${cnt(t)}</button>`).join('')}</div>`}
     ${!global && A.tab === 'cancelled' && list.length ? `<div class="between" style="margin-top:12px"><span class="small">취소·환불 내역은 정원에 영향이 없어요. 필요 없으면 영구삭제하세요.</span><button class="mini del" data-act="purgeall">${esc(A.cohort)} 취소·환불 ${list.length}건 모두 삭제</button></div>` : ''}
-    ${list.length ? `<div class="row" style="margin-top:12px"><button class="mini go" data-act="bulk">📨 이 목록 ${list.length}명에게 문자 보내기</button><button class="mini" data-act="table">📋 명단 표로 보기</button></div>` : ''}
+    ${list.length ? `<div class="row" style="margin-top:12px"><button class="mini go" data-act="bulk">📨 이 목록 ${list.length}명 문자 탭에서 보내기</button><button class="mini" data-act="table">📋 명단 표로 보기</button></div>` : ''}
     <div class="stack" style="margin-top:12px;gap:10px">${list.length ? list.map(r => card(r, global)).join('') : `<div class="card empty">${q ? '검색 결과가 없어요' : '해당하는 신청이 없어요'}</div>`}</div>
     <div class="row" style="margin-top:18px;justify-content:center"><button class="mini" data-act="csv">${ICON.down}${esc(A.cohort)} 엑셀(CSV) 내려받기</button>
       ${DEMO ? '<button class="mini" data-act="seed">예시 데이터</button><button class="mini del" data-act="wipe">데모 초기화</button>' : ''}</div>
@@ -1071,12 +1070,12 @@ function ledgerCSV() {
    크기: 피드 1080×1350 · 스토리 1080×1920 · 정사각 1080×1080
    ===================================================================== */
 const PROMO = { kind: 'open', style: 'ion', size: 'story', title: '', sub: '', note: '', cta: '', photos: [], layout: 'frame' };
-const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['teaser', '결과 예고'], ['scene', '현장 사진'], ['cover', '결과 표지'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트'], ['dealend', '할인 마감 임박'], ['early', '얼리버드 오픈'], ['earlyleft', '얼리버드 잔여석']];
+const PROMO_KINDS = [['open', '모집 시작'], ['status', '현황'], ['full', '마감'], ['review', '후기'], ['wait', '대기 접수'], ['scene', '현장 사진'], ['result', '매칭 결과'], ['invite', '초대장'], ['schedule', '일정 안내'], ['details', '참가 안내'], ['apply', '신청 안내'], ['deal', '할인 이벤트'], ['dealend', '할인 마감 임박'], ['early', '얼리버드 오픈'], ['earlyleft', '얼리버드 잔여석']];
 // 종류는 묶음별로 나눠 보여줌 (고른 묶음의 종류만 표시)
-const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['early', '얼리버드', ['early', 'earlyleft']], ['deal', '할인', ['deal', 'dealend']], ['after', '행사 후', ['teaser', 'cover', 'result', 'scene', 'review']]];
+const PROMO_GROUPS = [['card', '카드뉴스', ['invite', 'schedule', 'details', 'apply']], ['recruit', '모집 소식', ['open', 'status', 'full', 'wait']], ['early', '얼리버드', ['early', 'earlyleft']], ['deal', '할인', ['deal', 'dealend']], ['after', '행사 후', ['result', 'scene', 'review']]];
 const promoGroupOf = k => PROMO_GROUPS.find(g => g[2].includes(k)) || PROMO_GROUPS[0];
 const PROMO_STYLES = [['ion', '이온 스토리'], ['sig', '시그니처'], ['dots', '점'], ['soft', '파스텔'], ['inv', '초대장']];
-const PROMO_ION_ONLY = ['teaser', 'scene', 'cover', 'result'];   // 이온 스토리 스타일 전용 종류
+const PROMO_ION_ONLY = ['scene', 'result'];   // 이온 스토리 스타일 전용 종류
 const PROMO_INV_ONLY = ['invite', 'schedule', 'details', 'apply'];   // 초대장 스타일 전용 종류 (카드뉴스 01~04)
 const PROMO_DEAL_ONLY = ['deal', 'dealend', 'early', 'earlyleft'];
 const PROMO_EARLY = ['early', 'earlyleft'];   // 얼리버드 종류: 얼리버드 할인만 모아서 그림 · earlyleft 는 남은 자리 숫자까지
@@ -2062,9 +2061,7 @@ function viewSettings() {
         <button class="btn soft" data-act="backup">${ICON.down}전체 백업 받기</button></div>
       ${notifyCard()}
       ${autoSmsCard()}
-      <div class="card stack" style="gap:8px"><span class="round" style="font-size:16px">지난 기수 명단 넣기</span>
-        <span class="small">신청 페이지 없이 진행했던 기수(예: 1기) 참가자를 붙여넣어요. 넣어두면 재참여 할인 칩과 '이전 기수에서 만난 사람' 겹침 경고가 이 명단까지 확인해요.</span>
-        <button class="btn soft" data-act="import-past">명단 붙여넣기</button></div>` : ''}
+` : ''}
       ${installHint()}
       <div class="row" style="justify-content:center"><a class="mini" href="apply.html" target="_blank" rel="noopener">신청 페이지 새 창으로 보기</a><button class="mini" data-act="copyapply">${ICON.copy}신청 링크 복사</button></div>
       <p class="small center">설정을 바꾼 뒤에는 <b>저장하기</b>를 눌러야 신청 페이지에 반영돼요.</p>
@@ -2589,6 +2586,7 @@ function viewSms() {
   const tplKeys = Object.keys(TPL).filter(k => k !== 'free');
   return `<div class="wrap">
     ${appHead('sms')}
+    <button class="mini" style="justify-content:center;width:100%;margin-bottom:10px" data-act="repromo">💌 재참여 홍보 문자 · 지난 기수 참가자에게 다음 모집 알리기</button>
     <div class="card stack" style="gap:12px">
       <span class="round" style="font-size:17px">① 받는 사람 고르기</span>
       <div class="field"><span class="lab">기수 (여러 개 선택 가능)</span><div class="chips cw">
@@ -2645,6 +2643,15 @@ function viewSms() {
   </div>`;
 }
 // 글자 수 (솔라피: 90바이트 넘으면 장문 LMS)
+// 신청 탭의 지금 목록(기수·상태 탭 또는 전체 기수 검색)을 문자 탭 필터로 옮겨서 열기
+function msFromList() {
+  const ids = A.curList || []; const rows = ids.map(id => (A.data.apps || {})[id]).filter(Boolean);
+  const global = !!(A.q.trim() && A.qAll);
+  const st = global ? MS_ST.map(x => x[0]) : [A.tab];
+  const cohorts = global ? [...new Set(rows.map(r => r.cohort))] : [A.cohort];
+  A.ms = { cohorts, slot: '', st, g: '', q: A.q.trim(), off: {}, tpl: 'custom', text: (A.ms && A.ms.text) || MS_DEFAULT, idx: 0, name: '' };
+  A.sx = null; goView('sms');
+}
 function msLen(t) { let b = 0; for (const ch of String(t)) b += ch.charCodeAt(0) > 127 ? 2 : 1; return `${String(t).length}자 · ${b <= 90 ? '단문(SMS)' : b <= 2000 ? '장문(LMS)' : '<b style="color:var(--danger)">너무 길어요 (2000바이트 초과)</b>'}`; }
 function msLive() {   // 직접 쓰기 중: 화면 전체를 다시 그리지 않고 미리보기만 갱신
   const T = msTargets(); const i = Math.min(A.ms.idx, Math.max(0, T.items.length - 1)); const cur = T.items[i];
@@ -2927,7 +2934,7 @@ document.addEventListener('click', async e => {
     try { await IonStore.update('apply', up);
       toast(`${r.name}님 참가비 ${won(fee)}원${paidAlready ? '으로 정산에 반영했어요' : '으로 바꿨어요'}${r.status === 'pending' ? ' · 입금 안내를 다시 보내주세요' : ''}`);
       if (r.status === 'pending') setTimeout(() => openMsg(v, 'pay'), 300); } catch (e) { toast('바꾸지 못했어요: ' + e.message); } }
-  else if (act === 'bulk') openBulk(A.curList || []);
+  else if (act === 'bulk') msFromList();
   else if (act === 'repromo') openRepromo();
   else if (act === 'dash') { A.view = 'dash'; render(); window.scrollTo(0, 0); }
   else if (act === 'dash-back' || act === 'promo-back') { A.view = 'list'; render(); window.scrollTo(0, 0); }
