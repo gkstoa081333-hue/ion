@@ -163,7 +163,7 @@ const OPT = {
   source: ['인스타그램', '지인 소개', '교회 광고', '기타']
 };
 /* 동의 문구 — 문구를 바꾸면 CONSENT_VER 날짜도 함께 바꿔 주세요 (신청서에 어떤 판의 문구에 동의했는지 저장됨) */
-const CONSENT_VER = '2026-11-13-2';
+const CONSENT_VER = '2026-11-27';
 const PRIVACY = `· 수집 항목: 이름, 성별, 출생 연도, 연락처, 거주 지역, 알게 된 경로, 입금자명 (선택: 직업, 요청사항)
 · 이용 목적: 참가 신청 확인, 입금 확인, 타임 배정, 행사 안내, 매칭 진행 및 결과 전달, 취소·환불 처리, 참여 후기 요청, 재참가 확인 및 이전에 만난 분과 같은 타임 배정 방지
 · 보유 기간: 이름·성별·출생 연도·연락처·참여 기수는 마지막 참여일부터 3년, 그 밖의 항목은 해당 행사 종료 후 6개월. 기간이 지나면 지체 없이 파기하며, 다른 법령에 보존 의무가 있는 정보는 그 기간 동안 보관합니다.
@@ -238,7 +238,9 @@ async function loadConfig() {
     .sort((a, b) => ionSlotCmp(a[1], b[1]))
     .map(([id, s]) => {
       const c = (counts || {})[id] || {};
-      return { id, ...s, left: { M: Math.max(0, (s.cap?.M || 0) - (c.M || 0)), F: Math.max(0, (s.cap?.F || 0) - (c.F || 0)) } };
+      // 연령별 배정 기수(접수용 타임): 실제 타임(비공개)의 시간대를 함께 안내
+      const times = s.pool ? Object.values(slots || {}).filter(x => x && !x.pool && x.cohort === s.cohort).sort(ionSlotCmp).map(x => x.time).filter(Boolean) : [];
+      return { id, ...s, times, left: { M: Math.max(0, (s.cap?.M || 0) - (c.M || 0)), F: Math.max(0, (s.cap?.F || 0) - (c.F || 0)) } };
     });
   return { ...config, slots: list };
 }
@@ -295,7 +297,7 @@ async function createApplication(d) {
     church: d.church, churchAddr: d.churchAddr, pastor: d.pastor, denom: d.denom, faithYears: d.faithYears, attend: d.attend, serve: d.serve, faithNote: d.faithNote, source: d.source,
     fee: price.fee, discount: price.rep, dealDisc: price.deal, dealLabel: price.dealLabel, ...(price.dealId ? { dealId: price.dealId } : {}), repeatClaim: d.repeat === '이전 기수에 참여했어요',
     note: d.note, newsAgree: d.mktOk ? '동의합니다' : '받지 않을게요', payName, deadline, phoneKey, log: '', memo: '',
-    consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, single: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0 }
+    consents: { ver: CONSENT_VER, refund: d.consentAt, privacy: d.consentAt, faith: d.consentAt, single: d.consentAt, share: d.consentAt, marketing: d.mktOk ? d.consentAt : 0, ...(d.timeOk ? { time: d.consentAt } : {}) }
   });
   return { id, status, payName, deadline, fee: price.fee, dealLabel: price.dealLabel, account: cfg.account, cohort: slot.cohort, date: slot.date, time: slot.time };
 }
@@ -340,6 +342,13 @@ const SEAT_SOON = 2;
 function seatState(left) { return left <= 0 ? 'full' : left <= SEAT_SOON ? 'soon' : 'open'; }
 function seatText(left) { return { open: '모집 중', soon: '마감 임박', full: '마감·대기' }[seatState(left)]; }
 
+// 화면에 보일 시간: 연령별 배정 기수는 '12:00~14:00 · 15:00~17:00 중 배정'
+function stime(s) { return s && s.pool ? `${(s.times || []).join(' · ') || '시간 추후 안내'} 중 연령별 배정` : (s && s.time) || ''; }
+const poolSel = () => { const s = S.cfg.slots.find(x => x.id === S.d.slotId); return s && s.pool ? s : null; };
+const TIME_TERMS = s => `· 이번 기수는 신청을 먼저 받고, 연령대에 맞춰 참가 시간을 배정해 문자로 안내드려요.
+· 참석 가능 시간대: ${s.date} ${(s.times || []).join(' / ')}
+· 위 시간대 중 어느 시간에 배정되어도 참석할 수 있는 분만 신청해 주세요.
+· 시간 배정 안내 이후에는 확정 전이어도 배정 시간을 이유로 한 취소에 기간별 환불 규정을 적용합니다. (최소 인원 미달·운영진 사정으로 진행이 어려우면 전액 환불)`;
 function groupSlots() {
   const g = {};
   S.cfg.slots.forEach(s => { (g[s.cohort] = g[s.cohort] || { date: s.date, place: s.place, slots: [] }).slots.push(s); });
@@ -352,7 +361,7 @@ function viewIntro() {
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
       ${g.slots.map(s => `<div class="slotrow">
-        <div class="sl-t"><span>${esc(s.time)}</span>${ionAgeText(s) ? `<b>${ionAgeText(s)}</b>` : ''}</div>
+        <div class="sl-t"><span>${esc(stime(s))}</span>${ionAgeText(s) ? `<b>${ionAgeText(s)}</b>` : ''}</div>
         <div class="sl-s">형제 <b class="${seatState(s.left.M)}">${seatText(s.left.M)}</b><span class="dot">·</span>자매 <b class="${seatState(s.left.F)}">${seatText(s.left.F)}</b></div></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
@@ -441,7 +450,7 @@ function viewStep1() {
       const dl = g ? ionBestDeal(S.cfg, s, g) : null;
       const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ${seatState(left) === 'soon' ? 'wait' : 'ok'}">${seatText(left)}</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
       return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
-        <span><span class="t">${esc(s.time)}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${+dl.limit > 0 ? '선착순 ' : ''}${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
+        <span><span class="t">${esc(stime(s))}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${+dl.limit > 0 ? '선착순 ' : ''}${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
     }).join('')}`).join('');
   return `<div class="wrap">${head('기본 정보를 알려주세요', '운영진만 확인하고, 다른 참가자에게는 공개되지 않아요.')}
     <form class="stack" style="gap:20px" data-form="step" autocomplete="on" novalidate>
@@ -484,11 +493,11 @@ function agreeRow(key, label, terms, required = true) {
 }
 function viewStep3() {
   const s = S.cfg.slots.find(x => x.id === S.d.slotId) || {};
-  const all = S.d.refundOk && S.d.privacyOk && S.d.faithOk && S.d.singleOk && S.d.shareOk;
+  const all = S.d.refundOk && S.d.privacyOk && S.d.faithOk && S.d.singleOk && S.d.shareOk && (!poolSel() || S.d.timeOk);
   return `<div class="wrap">${head('마지막으로 확인해 주세요')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       <div class="card" style="padding:6px 18px">
-        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(s.time)}${ionAgeText(s) ? ` (${ionAgeText(s)})` : ''}</span></div>
+        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(stime(s))}${ionAgeText(s) ? ` (${ionAgeText(s)})` : ''}</span></div>
         <div class="kv"><span>이름</span><span>${esc(S.d.name)} (${GENDER[S.d.gender]}, ${esc(S.d.birthYear)}년생)</span></div>
         <div class="kv"><span>연락처</span><span>${esc(fmtPhone(S.d.phone))}</span></div>
         <div class="kv"><span>참가비</span><span>${priceText(myPrice())}</span></div>
@@ -497,6 +506,7 @@ function viewStep3() {
         <textarea id="f-note" class="input" data-k="note" maxlength="500" placeholder="자유롭게 적어주세요 (선택)">${esc(S.d.note)}</textarea></div>
       <div class="agree">
         <div class="agree-row agree-all"><input type="checkbox" id="a-all" data-act="all" ${all ? 'checked' : ''}><label for="a-all">필수 항목 모두 동의</label></div>
+        ${poolSel() ? agreeRow('timeOk', `참석 가능 시간대(${(poolSel().times || []).join(' / ')}) 중 배정된 시간에 참석합니다`, TIME_TERMS(poolSel())) : ''}
         ${agreeRow('refundOk', '입금 계좌 안내 및 환불 규정 확인', S.cfg.refund)}
         ${agreeRow('privacyOk', '개인정보 수집 및 이용 동의', PRIVACY)}
         ${agreeRow('faithOk', '신앙 정보(민감정보) 수집 동의', FAITH)}
@@ -609,7 +619,7 @@ function check(step) {
     if (!d.slotId) return '신청할 기수·타임을 선택해 주세요.';
     if (!/^[가-힣a-zA-Z\s]{2,20}$/.test(d.name.trim())) return '이름을 확인해 주세요. (한글·영문 2자 이상)';
     if (!d.birthYear) return '출생 연도를 선택해 주세요.';
-    { const s = S.cfg.slots.find(x => x.id === d.slotId); if (s && !ionAgeOk(s, d.birthYear)) return `선택한 ${s.time} 타임은 ${ionAgeText(s)} 대상이에요. 다른 타임을 골라주세요.`; }
+    { const s = S.cfg.slots.find(x => x.id === d.slotId); if (s && !ionAgeOk(s, d.birthYear)) return `선택한 ${s.pool ? s.cohort : s.time + ' 타임'}은 ${ionAgeText(s)} 대상이에요. 다른 타임을 골라주세요.`; }
     if (!/^01\d{8,9}$/.test(digits(d.phone))) return '연락처를 확인해 주세요. (010으로 시작하는 번호)';
     if (!val('region')) return '거주 지역을 입력해 주세요.';
     if (!d.repeat) return '이온 참여 경험을 선택해 주세요.';
@@ -623,6 +633,7 @@ function check(step) {
   }
   if (step === 2) {
     if (!(d.refundOk && d.privacyOk && d.faithOk && d.singleOk && d.shareOk)) return '필수 동의 항목을 모두 체크해 주세요.';
+    if (poolSel() && !d.timeOk) return '참석 가능 시간대 확인에 동의해 주세요.';
   }
   return '';
 }
@@ -662,7 +673,7 @@ document.addEventListener('click', e => {
   else if (act === 'slot') { S.d.slotId = v; render(); }
   else if (act === 'opt') { S.d[b.dataset.k] = v; render(); }
   else if (act === 'terms') { S.open[v] = !S.open[v]; render(); }
-  else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'singleOk', 'shareOk'].forEach(k => { S.d[k] = on; }); render(); }
+  else if (act === 'all') { const on = b.checked; ['refundOk', 'privacyOk', 'faithOk', 'singleOk', 'shareOk', ...(poolSel() ? ['timeOk'] : [])].forEach(k => { S.d[k] = on; }); render(); }
   else if (act === 'copy') copyText(v);
   else if (act === 'cancelreq') { S.phase = 'cancel'; render(); window.scrollTo(0, 0); }
   else if (act === 'cancelback') { S.phase = 'done'; render(); window.scrollTo(0, 0); }

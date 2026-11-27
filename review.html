@@ -180,7 +180,7 @@ async function load() {
   S.phase = 'form'; render();
 }
 const cohorts = () => { const o = []; S.slots.forEach(s => { if (!o.includes(s.cohort)) o.push(s.cohort); }); if (S.d.cohort && !o.includes(S.d.cohort)) o.unshift(S.d.cohort); return o; };
-const times = () => S.slots.filter(s => s.cohort === S.d.cohort).map(s => s.time);
+const times = () => S.slots.filter(s => s.cohort === S.d.cohort && !s.pool).map(s => s.time);   // 접수용(연령별 배정) 타임은 제외
 
 function demoBanner() { return DEMO ? '<div class="demo">데모 모드 · 이 브라우저에만 저장돼요</div>' : ''; }
 function render() {

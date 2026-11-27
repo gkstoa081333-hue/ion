@@ -651,6 +651,7 @@ function slotIsoDate(txt) {
 function sessionSyncUpdates(slots, sessions, removedSlotIds) {
   const up = {};
   Object.entries(slots || {}).forEach(([id, s]) => {
+    if (s && s.pool) return;   // 접수용(연령별 배정) 타임은 매칭 타임을 만들지 않음
     const sid = 'slot-' + id; const cur = (sessions || {})[sid];
     const pub = { cohort: s.cohort, date: slotIsoDate(s.date), slot: s.time };
     if (!cur || !cur.pub) up[sid + '/pub'] = { ...pub, status: 'ready', M: 0, F: 0, createdAt: Date.now(), applySlot: id };

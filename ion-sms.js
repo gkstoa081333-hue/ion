@@ -15,11 +15,13 @@
   // r: 신청서, cfg: apply/config, sl: 신청한 타임(apply/slots/{id}), ex: { waitNo, from }
   function ctx(r, cfg, sl, ex) {
     sl = sl || {}; ex = ex || {}; cfg = cfg || {};
-    const date = sl.date || r.date, time = sl.time || r.time, place = sl.place || r.place;
+    const date = sl.date || r.date, place = sl.place || r.place;
+    const pool = !!sl.pool;   // 접수용 타임(연령별 배정 전): 시간 대신 '배정 후 안내'
+    const time = pool ? '시간은 연령별 배정 후 안내' : (sl.time || r.time);
     const fee = r.fee != null ? +r.fee : +cfg.fee || 0;
-    return { chat: cfg.openchat || '', from: ex.from || '', cross: !!ex.cross, when: `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
+    return { chat: cfg.openchat || '', from: ex.from || '', cross: !!ex.cross, pool, when: pool ? `${sl.cohort || r.cohort} ${date} (참가 시간은 연령별 배정 후 안내)` : `${sl.cohort || r.cohort} ${date} ${time}`, place: place || '추후 안내', account: cfg.account || '', fee: won(fee),
       feeNote: (() => { const n = [+r.dealDisc > 0 ? `${r.dealLabel || '이벤트 할인'} -${won(r.dealDisc)}원` : '', +r.discount > 0 ? `재참여 할인 -${won(r.discount)}원` : ''].filter(Boolean); return n.length ? ` (${n.join(', ')} 적용)` : ''; })(), deadline: dt(r.deadline, true) + '까지', waitNo: ex.waitNo || 1,
-      date: date || '', time: time || '', hour: hourOf(time), min: Number(cfg.minPer) || 4, ex: ex.sx || {} };
+      date: date || '', time: time || '', hour: pool ? '배정 시간' : hourOf(time), min: Number(cfg.minPer) || 4, ex: ex.sx || {} };
   }
 const T = {
   pay: { label: '입금 안내', for: ['pending'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${x.when} 신청 감사합니다 🙂
@@ -45,7 +47,7 @@ const T = {
 
 타임별 최소 인원(${x.min}대${x.min})이 모이면 바로 참가 확정 문자를 보내드릴게요.
 인원이 모이지 않아 진행이 어려우면 다른 타임 이동 또는 참가비 전액 환불로 안내드려요.
-확정 전에 취소하셔도 참가비는 전액 환불됩니다.` },
+${x.pool ? '참가 시간 배정 안내 전에' : '확정 전에'} 취소하셔도 참가비는 전액 환불됩니다.` },
   confirm: { label: '참가 확정', for: ['confirmed'], make: (r, x) => `[이온 크리스천 소개팅] ${r.name}님, ${r.paidAt && (+r.confirmedAt || Date.now()) - r.paidAt > 10 * 60e3 ? '기다려 주셔서 감사해요! 인원이 모여 참가가 확정되었어요' : '입금 확인되어 참가가 확정되었어요'} 🎉
 
 일정: ${x.when}
@@ -111,6 +113,19 @@ ${opts.map((o, i) => '①②③'[i] + ' ' + o).join('\n')}
 ※ 참석이 어려우시면 오늘 중으로 꼭 알려주세요.
 
 그날 반갑게 뵙겠습니다. 🌿` },
+  // 연령별 배정 기수: 모집 후 운영진이 시간을 배정하고 보내는 일정 안내
+  assign: { label: '일정 안내', for: ['pending', 'paid', 'confirmed'], manual: true, make: (r, x) => `[이온 크리스천 소개팅] ${r.cohort} 참가 시간 안내
+
+안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
+연령대에 맞춰 참가 시간을 배정해 드렸어요.
+
+▶ 일시: ${x.date} ${x.time}
+▶ 장소: ${x.place}
+▶ 도착: 시작 10분 전까지
+
+신청 때 동의해 주신 대로 배정된 시간에 꼭 참석 부탁드려요.${r.status === 'paid' ? `\n타임별 최소 인원(${x.min}대${x.min})이 모이면 참가 확정 문자를 보내드릴게요.` : r.status === 'pending' ? `\n입금 기한(${x.deadline})까지 입금해 주셔야 자리가 유지돼요.` : ''}
+
+그날 반갑게 뵙겠습니다. 🌿` },
   refundDone: { label: '환불 완료', for: ['refunded', 'cancelled'], manual: true, make: (r, x) => `[이온 크리스천 소개팅] 환불 완료 안내
 
 안녕하세요 ${r.name}님, 이온 크리스천 소개팅입니다.
@@ -126,7 +141,7 @@ ${r.cohort} 참가비 ${x.fee}원을 말씀해 주신 계좌로 환불해 드렸
 다시 참여를 원하시면 신청 페이지에서 새로 신청해 주세요. 감사합니다.` }
 };
   // 안내 문자 끝에 오픈채팅 문의 링크 자동 추가
-  ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
+  ['pay', 'promote', 'paid', 'confirm', 'd1', 'wait', 'move', 'assign'].forEach(k => { const f = T[k].make; T[k].make = (r, x) => f(r, x) + (x.chat ? `\n\n문의: 카카오톡 오픈채팅\n${x.chat}` : ''); });
   const render = (kind, r, cfg, sl, ex) => T[kind].make(r, ctx(r, cfg, sl, ex));
-  root.ION_SMS = { T, ctx, dt, render, version: '20261125c' };
+  root.ION_SMS = { T, ctx, dt, render, version: '20261127a' };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
