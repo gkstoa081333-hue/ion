@@ -343,7 +343,8 @@ function seatState(left) { return left <= 0 ? 'full' : left <= SEAT_SOON ? 'soon
 function seatText(left) { return { open: '모집 중', soon: '마감 임박', full: '마감·대기' }[seatState(left)]; }
 
 // 화면에 보일 시간: 연령별 배정 기수는 '12:00~14:00 · 15:00~17:00 중 배정'
-function stime(s) { return s && s.pool ? `${(s.times || []).join(' · ') || '시간 추후 안내'} 중 연령별 배정` : (s && s.time) || ''; }
+function stime(s) { return s && s.pool ? `${(s.times || []).join(' · ') || '시간 추후 안내'}` : (s && s.time) || ''; }
+const POOL_NOTE = '신청자 모집 후 연령별로 분배해 참가 시간을 안내드려요';
 const poolSel = () => { const s = S.cfg.slots.find(x => x.id === S.d.slotId); return s && s.pool ? s : null; };
 const TIME_TERMS = s => `· 이번 기수는 신청을 먼저 받고, 연령대에 맞춰 참가 시간을 배정해 문자로 안내드려요.
 · 참석 가능 시간대: ${s.date} ${(s.times || []).join(' / ')}
@@ -361,7 +362,7 @@ function viewIntro() {
     <div class="card hero stack" style="gap:10px">
       <div class="between"><span class="round" style="font-size:20px">${esc(cohort)} · ${esc(g.date)}</span><span class="small">${esc(g.place)}</span></div>
       ${g.slots.map(s => `<div class="slotrow">
-        <div class="sl-t"><span>${esc(stime(s))}</span>${ionAgeText(s) ? `<b>${ionAgeText(s)}</b>` : ''}</div>
+        <div class="sl-t"><span>${esc(stime(s))}</span>${ionAgeText(s) ? `<b>${ionAgeText(s)}</b>` : ''}</div>${s.pool ? `<div class="small" style="opacity:.85;margin-top:2px">${POOL_NOTE}</div>` : ''}
         <div class="sl-s">형제 <b class="${seatState(s.left.M)}">${seatText(s.left.M)}</b><span class="dot">·</span>자매 <b class="${seatState(s.left.F)}">${seatText(s.left.F)}</b></div></div>`).join('')}
     </div>`).join('');
   return `<div class="wrap dark">
@@ -450,7 +451,7 @@ function viewStep1() {
       const dl = g ? ionBestDeal(S.cfg, s, g) : null;
       const chip = !g ? '<span class="chip mute">성별 먼저</span>' : !ageOk ? '<span class="chip mute">대상 연령 아님</span>' : left > 0 ? `<span class="chip ${seatState(left) === 'soon' ? 'wait' : 'ok'}">${seatText(left)}</span>` : '<span class="chip wait">마감 · 대기 신청</span>';
       return `<button type="button" class="slot ${S.d.slotId === s.id ? 'on' : ''}" data-act="slot" data-v="${s.id}" ${g ? '' : 'disabled'} aria-pressed="${S.d.slotId === s.id}">
-        <span><span class="t">${esc(stime(s))}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${+dl.limit > 0 ? '선착순 ' : ''}${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
+        <span><span class="t">${esc(stime(s))}</span><span class="s" style="display:block">${esc(cohort)} ${esc(s.date)}${ionAgeText(s) ? ` · <b>${ionAgeText(s)}</b>` : ''}${s.pool ? `<br>${POOL_NOTE}` : ''}${dl ? ` · <b style="color:var(--gold-t)">🎁 ${+dl.limit > 0 ? '선착순 ' : ''}${won(dl.amount)}원 할인</b>` : ''}</span></span>${chip}</button>`;
     }).join('')}`).join('');
   return `<div class="wrap">${head('기본 정보를 알려주세요', '운영진만 확인하고, 다른 참가자에게는 공개되지 않아요.')}
     <form class="stack" style="gap:20px" data-form="step" autocomplete="on" novalidate>
@@ -497,7 +498,7 @@ function viewStep3() {
   return `<div class="wrap">${head('마지막으로 확인해 주세요')}
     <form class="stack" style="gap:20px" data-form="step" novalidate>
       <div class="card" style="padding:6px 18px">
-        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(stime(s))}${ionAgeText(s) ? ` (${ionAgeText(s)})` : ''}</span></div>
+        <div class="kv"><span>신청</span><span>${esc(s.cohort)} · ${esc(s.date)} ${esc(stime(s))}${ionAgeText(s) ? ` (${ionAgeText(s)})` : ''}${s.pool ? '<br><span class="small">모집 후 연령별로 분배해 시간 안내</span>' : ''}</span></div>
         <div class="kv"><span>이름</span><span>${esc(S.d.name)} (${GENDER[S.d.gender]}, ${esc(S.d.birthYear)}년생)</span></div>
         <div class="kv"><span>연락처</span><span>${esc(fmtPhone(S.d.phone))}</span></div>
         <div class="kv"><span>참가비</span><span>${priceText(myPrice())}</span></div>

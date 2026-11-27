@@ -199,7 +199,7 @@ textarea.input{height:auto;min-height:150px;padding:14px 16px;line-height:1.6;re
    ===================================================================== */
 
 /* ---------- 새 버전 자동 반영: 홈 화면 앱이 예전 페이지를 붙잡고 있으면 최신으로 새로고침 ---------- */
-const BUILD = '20261127c';
+const BUILD = '20261127d';
 (async () => { try {
   const txt = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
   const m = txt.match(/const BUILD = '(\w+)'/);
@@ -2954,10 +2954,11 @@ document.addEventListener('click', async e => {
       ss.splice(ss.indexOf(pl), 1); mine.filter(x => !x.pool).forEach(x => { x.public = open; }); toast('연령별 배정 방식을 껐어요 · 저장하기를 눌러야 반영돼요');
     } else {
       const real = mine.filter(x => !x.pool); const first = real[0] || {};
-      const ys = k => real.map(x => Number(x[k])).filter(Boolean);
+      // 전체 대상 연령: 지금까지 받아온 최소·최대 연령 유지 (모든 기수 타임 기준, 없으면 80~02년생)
+      const ys = k => ss.concat(slots()).map(x => Number(x[k])).filter(Boolean);
       const sum = k => real.reduce((t, x) => t + (Number(x.cap?.[k]) || 0), 0);
       ss.splice(ss.indexOf(first) >= 0 ? ss.indexOf(first) : ss.length, 0, { _new: true, _orig: first._orig ?? v, id: 's' + Date.now().toString(36), pool: true, cohort: v, date: first.date || '', time: '연령별 배정', place: first.place || '',
-        cap: { M: sum('M') || 12, F: sum('F') || 12 }, public: open, ageFrom: ys('ageFrom').length ? Math.min(...ys('ageFrom')) : '', ageTo: ys('ageTo').length ? Math.max(...ys('ageTo')) : '' });
+        cap: { M: sum('M') || 12, F: sum('F') || 12 }, public: open, ageFrom: ys('ageFrom').length ? Math.min(...ys('ageFrom')) : 1980, ageTo: ys('ageTo').length ? Math.max(...ys('ageTo')) : 2002 });
       real.forEach(x => { x.public = false; });
       A.openG = A.openG || {}; A.openG[v] = true; toast('접수용 타임을 만들었어요 · 정원·연령 확인 후 저장하기');
     }
