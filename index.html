@@ -831,21 +831,31 @@ function rosterList(s) {
 }
 
 /* ---------- 신청관리(apply) 확정자 바로 불러오기 ---------- */
+/* 신청관리 명단을 실시간으로 지켜봄 → 타임 변경·취소·새 확정이 매칭 명단에 바로 반영 */
+function stopApplyWatch() { (A.unsubApply || []).forEach(f => { try { f(); } catch (e) {} }); A.unsubApply = null; }
 async function loadApply() {
-  A.applyLoading = true;
-  try { const [slots, apps] = await Promise.all([DB.get('apply/slots'), DB.get('apply/apps')]); A.applyCache = { slots: slots || {}, apps: apps || {} }; }
-  catch (e) { console.error(e); A.applyCache = { slots: {}, apps: {}, err: true }; }
-  A.applyLoading = false; renderA(); autoImport();
+  A.applyLoading = true; stopApplyWatch();
+  const got = { slots: null, apps: null };
+  const fail = e => { console.error(e); A.applyCache = { slots: {}, apps: {}, err: true }; A.applyLoading = false; renderA(); };
+  const on = (k, v) => { got[k] = v || {}; if (got.slots && got.apps) { A.applyCache = { slots: got.slots, apps: got.apps }; A.applyLoading = false; renderA(); autoImport(); } };
+  try { A.unsubApply = [DB.watch('apply/slots', v => on('slots', v), fail), DB.watch('apply/apps', v => on('apps', v), fail)]; }
+  catch (e) { fail(e); }
 }
 async function autoImport() {
   const s = A.cur; if (!s || !s.pub || !s.pub.applySlot || !A.applyCache || A.applyCache.err) return;
-  if (s.pub.status !== 'ready' || Object.keys(s.votes || {}).length) return;
-  A.autoDone = A.autoDone || {}; if (A.autoDone[A.sid]) return; A.autoDone[A.sid] = true;
+  if (s.pub.status !== 'ready' || Object.keys(s.votes || {}).length || A.syncing) return;
   const have = new Set(rosterList(s).map(p => digits(p.phone)));
   const add = applyConfirmed(s.pub.applySlot).filter(r => !have.has(digits(r.phone))).map(r => ({ gender: r.gender, name: r.name, phone: r.phone }));
-  if (!add.length) return;
-  try { await writeRoster([...rosterList(s), ...add]); toast(`신청 확정자 ${add.length}명을 명단에 자동으로 넣었어요`); }
-  catch (e) { console.error(e); toast(e.message && e.message.length < 60 ? e.message : '자동 등록에 실패했어요'); }
+  // 다른 타임으로 옮겼거나 취소·환불된 분은 자동으로 빼기 (출석 체크를 시작했으면 번호가 바뀌지 않게 안내만)
+  const attOn = Object.keys((s.pub && s.pub.att) || {}).length > 0;
+  const gone = attOn ? [] : cancelledInRoster(s); const goneSet = new Set(gone.map(p => p.id));
+  if (!add.length && !gone.length) return;
+  A.syncing = true;
+  try {
+    await writeRoster([...rosterList(s).filter(p => !goneSet.has(p.id)), ...add]);
+    toast([add.length ? `새 확정자 ${add.length}명 추가` : '', gone.length ? `${gone.map(p => p.name).join(', ')}님 제외(타임 변경·취소)` : ''].filter(Boolean).join(' · ') + ' · 번호를 확인해 주세요');
+  } catch (e) { console.error(e); toast(e.message && e.message.length < 60 ? e.message : '자동 등록에 실패했어요'); }
+  finally { A.syncing = false; }
 }
 function cancelledInRoster(s) {
   if (!A.applyCache || !s.pub || !s.pub.applySlot) return [];
@@ -1057,11 +1067,11 @@ function drawQR() {
 function openSession(sid) {
   if (A.unsubCur) A.unsubCur();
   A.sid = sid; A.view = 'session'; A.tab = 'people'; A.cur = (A.sessions || {})[sid] || null;
-  A.applyCache = null; // 열 때마다 최신 신청 명단으로
+  A.applyCache = null; stopApplyWatch(); // 열 때마다 최신 신청 명단으로 (열려 있는 동안 실시간)
   A.unsubCur = DB.watch(`sessions/${sid}`, v => { A.cur = v; renderA(); });
   renderA(); window.scrollTo(0, 0);
 }
-function goHome() { if (A.unsubCur) A.unsubCur(); A.unsubCur = null; A.view = 'home'; A.sid = null; A.cur = null; renderA(); window.scrollTo(0, 0); }
+function goHome() { if (A.unsubCur) A.unsubCur(); A.unsubCur = null; stopApplyWatch(); A.applyCache = null; A.view = 'home'; A.sid = null; A.cur = null; renderA(); window.scrollTo(0, 0); }
 
 /* 명단 전체를 다시 써서 번호·본인확인 키·인원수를 항상 맞춤 */
 async function writeRoster(list) {
@@ -1205,7 +1215,7 @@ document.addEventListener('click', async e => {
       case 'open-follow': openSession(b.dataset.sid); A.tab = 'result'; renderA(); return;
       case 'past-open': A.pastOpen = A.pastOpen === b.dataset.v ? '' : b.dataset.v; renderA(); return;
       case 'past-more': A.pastN = (A.pastN || 5) + 10; renderA(); return;
-      case 'import-refresh': A.applyCache = null; return loadApply();
+      case 'import-refresh': stopApplyWatch(); A.applyCache = null; return loadApply();
       case 'import': {
         const list = applyConfirmed(b.dataset.slot); const have = new Set(rosterList(A.cur).map(p => digits(p.phone)));
         const add = list.filter(r => !have.has(digits(r.phone))).map(r => ({ gender: r.gender, name: r.name, phone: r.phone }));
